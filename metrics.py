@@ -1,100 +1,104 @@
-"""Pure calculations; dollar prices are in [0, 1], quantities are contracts."""
-from decimal import Decimal, InvalidOperation
-from datetime import datetime
-from statistics import mean
 import math
+from typing import Dict, Any, Optional
+import numpy as np
+import pandas as pd
 
-def number(value):
-    if value is None or value == '' or isinstance(value, bool):
-        return None
-    try:
-        n = float(value)
-        return n if math.isfinite(n) else None
-    except (ValueError, TypeError):
-        return None
 
-def timestamp(value):
-    return int(datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp())
+class GamingLodgingMetricsEngine:
+    """
+    Quantitative Analytics & Equity Research Metrics Engine.
+    Translates raw prediction market microstructure data into actionable
+    Gaming (OSB Hold/Vig/Handle) and Lodging (RevPAR/Demand) financial metrics.
+    """
 
-def valid_quote(bid, ask):
-    # Boundary quotes are retained: a zero bid can be a real endpoint value.
-    return bid is not None and ask is not None and 0 <= bid <= ask <= 1
+    @staticmethod
+    def american_odds_to_implied_prob(odds: Optional[float]) -> Optional[float]:
+        """Converts traditional sportsbook American odds (-110, +240) to raw implied probability."""
+        if odds is None or pd.isna(odds) or odds == 0:
+            return None
+        if odds > 0:
+            return 100.0 / (odds + 100.0)
+        return abs(odds) / (abs(odds) + 100.0)
 
-def book_metrics(payload, contracts=100):
-    if contracts <= 0:
-        raise ValueError('contracts must be positive')
-    book = payload.get('orderbook_fp')
-    if not isinstance(book, dict):
-        raise ValueError('Missing fixed-point orderbook_fp')
-    def levels(key):
-        out = {}
-        for row in book.get(key) or []:
-            if not isinstance(row, list) or len(row) != 2:
-                raise ValueError('Invalid order-book level')
-            try:
-                p, q = map(Decimal, row)
-            except (InvalidOperation, TypeError):
-                raise ValueError('Invalid decimal level') from None
-            if not p.is_finite() or not q.is_finite() or not 0 <= p <= 1 or q < 0:
-                raise ValueError('Invalid level value')
-            if q:
-                out[p] = out.get(p, Decimal(0)) + q
+    @staticmethod
+    def compute_microstructure_metrics(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Computes institutional microstructure and OSB comparison metrics:
+        - Mid-Market Implied Probability (%)
+        - Bid-Ask Spread (bps) & Effective Exchange Take Rate
+        - Traditional OSB Vig vs. Exchange Spread Savings (bps) -> "OSB Pricing Dislocation"
+        - Volume-to-Open-Interest Velocity Ratio (Turnover)
+        - Shannon Informational Entropy (Uncertainty index)
+        """
+        out = df.copy()
+
+        # 1. Mid-price Implied Probability (Kalshi prices are 1-99 cents = % probability)
+        out["mid_prob_pct"] = (out["yes_bid"] + out["yes_ask"]) / 2.0
+        out["kalshi_spread_pct"] = out["yes_ask"] - out["yes_bid"]
+        out["kalshi_overround_pct"] = (out["yes_ask"] + out["no_ask"]) - 100.0
+
+        # 2. Liquidity & Turnover Velocity
+        out["turnover_velocity_ratio"] = np.where(
+            out["open_interest"] > 0,
+            (out["volume_24h"] / out["open_interest"]).round(4),
+            0.0
+        )
+
+        # 3. OSB Comparison: Vig Compression & Handle Cannibalization Risk Score
+        out["osb_implied_prob_pct"] = out["traditional_osb_american_odds"].apply(
+            lambda x: round(GamingLodgingMetricsEngine.american_odds_to_implied_prob(x) * 100, 2)
+            if GamingLodgingMetricsEngine.american_odds_to_implied_prob(x) is not None else np.nan
+        )
+
+        # Price Dislocation: How much better price retail/sharp flow gets on Kalshi vs. OSB
+        out["vig_savings_vs_osb_bps"] = np.where(
+            out["traditional_osb_overround_pct"].notna(),
+            ((out["traditional_osb_overround_pct"] - out["kalshi_spread_pct"]) * 100).round(0),
+            np.nan
+        )
+
+        # 4. Shannon Entropy (H = -p*log2(p) - (1-p)*log2(1-p)) -> measures market consensus certainty
+        def _entropy(p_pct: float) -> float:
+            p = np.clip(p_pct / 100.0, 1e-6, 1 - 1e-6)
+            return round(-(p * math.log2(p) + (1 - p) * math.log2(1 - p)), 4)
+
+        out["consensus_entropy"] = out["mid_prob_pct"].apply(_entropy)
+
         return out
-    yes, no = levels('yes_dollars'), levels('no_dollars')
-    bids = sorted(yes.items(), reverse=True)
-    asks = sorted((Decimal(1)-p, q) for p, q in no.items())
-    bid = bids[0][0] if bids else None
-    ask = asks[0][0] if asks else None
-    crossed = bid is not None and ask is not None and bid > ask
-    quote_ok = bid is not None and ask is not None and not crossed
-    # Hypothetical static-book buy: no routing, execution or fee assumption.
-    remaining, cost, filled = Decimal(str(contracts)), Decimal(0), Decimal(0)
-    if not crossed:
-        for price, qty in asks:
-            take = min(remaining, qty)
-            cost += take * price
-            filled += take
-            remaining -= take
-            if remaining == 0:
-                break
-    depth = sum(q for p, q in asks if p <= ask+Decimal('.02')) if ask is not None and not crossed else None
-    return {
-        'book_bid': float(bid) if bid is not None else None,
-        'book_ask': float(ask) if ask is not None else None,
-        'book_spread_cents': float((ask-bid)*100) if quote_ok else None,
-        'book_midpoint': float((ask+bid)/2) if quote_ok else None,
-        'ask_depth_2c': float(depth) if depth is not None else None,
-        'sim_requested': contracts, 'sim_filled': float(filled),
-        'sim_fill_ratio': float(filled/Decimal(str(contracts))),
-        'sim_cost': float(cost), 'sim_vwap': float(cost/filled) if filled else None,
-        'sim_slippage_cents': float((cost/filled-ask)*100) if filled else None,
-        'book_state': 'crossed' if crossed else 'two-sided' if quote_ok else 'one-sided' if bids or asks else 'empty',
-    }
 
-def preclose_quote(candles, cutoff, max_age=7200):
-    eligible = []
-    for c in candles:
-        t = c.get('end_period_ts')
-        b = number(c.get('yes_bid', {}).get('close_dollars'))
-        a = number(c.get('yes_ask', {}).get('close_dollars'))
-        if isinstance(t, int) and 0 <= cutoff-t <= max_age and valid_quote(b, a):
-            eligible.append((t, b, a))
-    if not eligible:
-        return None
-    t, b, a = max(eligible, key=lambda row: row[0])
-    return {'quote_ts':t,'probability':(b+a)/2,'spread_cents':(a-b)*100,'quote_age_minutes':(cutoff-t)/60}
+    @staticmethod
+    def build_osb_sensitivity_table(
+        base_annual_handle_bn: float = 48.0,
+        base_structural_hold_pct: float = 10.5,
+        ebitda_flowthrough_pct: float = 52.0
+    ) -> pd.DataFrame:
+        """
+        Generates a 3-Statement Equity Research Sensitivity Table modeling the impact of
+        Prediction Market (Kalshi/Polymarket) handle cannibalization and structural hold
+        compression on a Tier-1 OSB Operator (e.g., DraftKings / FanDuel).
+        """
+        handle_cannibalization_scenarios = [0.0, -2.5, -5.0, -7.5, -10.0]  # % Handle lost to exchanges
+        hold_compression_bps = [0, -25, -50, -75, -100]  # bps compression in net gaming hold
 
-def brier(p, y):
-    if not 0 <= p <= 1 or y not in (0, 1):
-        raise ValueError('Invalid probability or binary outcome')
-    return (p-y)**2
+        rows = []
+        base_ggr_mm = base_annual_handle_bn * 1000 * (base_structural_hold_pct / 100.0)
 
-def reliability(rows):
-    bins = []
-    for i in range(10):
-        group = [r for r in rows if min(9, int(r['probability']*10)) == i]
-        if group:
-            bins.append({'bin':f'{i*10}–{(i+1)*10}%', 'n':len(group),
-                'mean_probability':mean(r['probability'] for r in group),
-                'observed_yes_rate':mean(r['outcome'] for r in group)})
-    return bins
+        for h_shock in handle_cannibalization_scenarios:
+            shocked_handle_bn = base_annual_handle_bn * (1.0 + h_shock / 100.0)
+            for hold_shock_bps in hold_compression_bps:
+                shocked_hold_pct = base_structural_hold_pct + (hold_shock_bps / 100.0)
+                implied_ggr_mm = shocked_handle_bn * 1000 * (shocked_hold_pct / 100.0)
+                ggr_delta_mm = implied_ggr_mm - base_ggr_mm
+                ebitda_impact_mm = ggr_delta_mm * (ebitda_flowthrough_pct / 100.0)
+
+                rows.append({
+                    "Handle_Shock_Pct": f"{h_shock:+.1f}%",
+                    "Hold_Compression_Bps": f"{hold_shock_bps:+d} bps",
+                    "Implied_Handle_Bn": round(shocked_handle_bn, 2),
+                    "Effective_Net_Hold_Pct": round(shocked_hold_pct, 2),
+                    "Implied_GGR_MM": round(implied_ggr_mm, 1),
+                    "GGR_Variance_vs_Base_MM": round(ggr_delta_mm, 1),
+                    "Adj_EBITDA_Impact_MM": round(ebitda_impact_mm, 1),
+                })
+
+        return pd.DataFrame(rows)
