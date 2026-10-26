@@ -2,7 +2,7 @@
 
 # High-Frequency Prediction Market & Gaming/Lodging Equity Research Pipeline
 
-An institutional-grade alternative data pipeline and financial modeling toolkit that ingests real-time orderbook liquidity, implied probabilities, and trade volume velocity from the **Kalshi REST API v2** to generate actionable insights for **Gaming, Lodging & Leisure Equity Research**.
+An institutional-grade alternative data pipeline and financial modeling toolkit that ingests real-time orderbook liquidity, implied probabilities, and trade volume velocity from the **Kalshi REST API v2** to generate actionable insights for Equity Research.
 
 ## Institutional Investment Thesis & Sector Read-Through
 As CFTC-regulated prediction exchanges scale into sports and macro event contracts, institutional investors face two critical questions across **Gaming & Lodging** coverage:
