@@ -2,7 +2,7 @@
 
 I built Kalshi Market Lab to make the research before an event-contract trade easier to inspect: what the contract actually resolves on, what evidence supports an estimate, how much depth is available, and what a position could cost after fees.
 
-[Figma app workspace](https://www.figma.com/make/l70tt532rm4WDOZ5PFQIiK) · [Resume entries](docs/RESUME.md) · [Security and data handling](docs/SECURITY.md)
+[Figma app workspace](https://www.figma.com/make/l70tt532rm4WDOZ5PFQIiK) · [Security and data handling](docs/SECURITY.md)
 
 **Public app URL:** pending final deployment verification. The Figma link opens the app workspace; I have not used it as evidence that a public deployment is healthy.
 
