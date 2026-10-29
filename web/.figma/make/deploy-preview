@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export NODE_ENV=production
+npm run build
+[[ -d ".next/standalone" ]] || {
+  echo "Expected Next.js standalone build output at .next/standalone" >&2
+  exit 1
+}
+figma make deploy-preview --build-dir .next --adapter nextjs

@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: kalshi-readonly-connector
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://app-djn6yih5d4aak4yaopvc76jj62rn4pw5ymm5tkgcepwxueuhzeyy.makeproxy-c.figma.site

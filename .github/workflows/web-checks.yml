@@ -1,0 +1,41 @@
+name: Web checks
+
+on:
+  push:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-checks.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test research and paper execution
+        run: npm test
+      - name: Build production server
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
