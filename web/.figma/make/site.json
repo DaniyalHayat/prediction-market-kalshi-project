@@ -1,0 +1,12 @@
+{
+  "title": "Kalshi Market Lab - Live Liquidity & Insights",
+  "description": "Helps users identify and fix errors with clear guidance to resolve issues and get back on track.",
+  "language": "en",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

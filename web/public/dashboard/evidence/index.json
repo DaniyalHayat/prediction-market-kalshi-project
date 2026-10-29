@@ -1,0 +1,74 @@
+{
+  "classification": "Historical prospective-paper validation artifacts; never merged automatically into live cohort scores. Losses are retained.",
+  "archived_at": "2026-10-28T05:48:28.493824+00:00",
+  "runs": [
+    {
+      "id": "c5f9b6d2-4467-4d26-8246-2e9af891224a",
+      "path": "c5f9b6d2-4467-4d26-8246-2e9af891224a.json",
+      "recorded_at": "2026-10-28T05:41:27.738Z",
+      "strategy_version": "forward-2.1.0",
+      "categories": [
+        "crypto",
+        "weather",
+        "labor",
+        "inflation",
+        "travel"
+      ],
+      "control_entries": 5,
+      "control_net_pnl": -2.615499999999998,
+      "audit_hash": "b94674af5775a5f97384702c247936846dc99c7538cb63790e82e49497022882",
+      "sha256": "78864687f6e9b1690a4b8abf4f785b8dec6ee384e5b0fa5a0be4cf07479872fe"
+    },
+    {
+      "id": "9554f0cf-e7bc-4310-bba8-ff4119f6b0fc",
+      "path": "9554f0cf-e7bc-4310-bba8-ff4119f6b0fc.json",
+      "recorded_at": "2026-10-28T05:40:22.222Z",
+      "strategy_version": "forward-2.1.0",
+      "categories": [
+        "crypto",
+        "weather",
+        "labor",
+        "inflation",
+        "travel"
+      ],
+      "control_entries": 5,
+      "control_net_pnl": -2.759999999999999,
+      "audit_hash": "43a3091226ac93b743a02da598c25cec5a5f40afa9cece7ada136664caa902ca",
+      "sha256": "56203b73ba958cd4858e49a7acbe2aad0f7668422fc5c1405818468f43421329"
+    },
+    {
+      "id": "a89094e6-c6e2-4fe2-9e65-328405b3c8fb",
+      "path": "a89094e6-c6e2-4fe2-9e65-328405b3c8fb.json",
+      "recorded_at": "2026-10-28T05:39:16.580Z",
+      "strategy_version": "forward-2.1.0",
+      "categories": [
+        "crypto",
+        "weather",
+        "labor",
+        "inflation",
+        "travel"
+      ],
+      "control_entries": 5,
+      "control_net_pnl": -3.4499999999999993,
+      "audit_hash": "f64abdc4722b7b876503a5eb0fa30ffa9e63ad641d23285d90e7eaec6726fddb",
+      "sha256": "ebc4455e67b08cd8218e6817bfab0c0048199de2a7948c2f2ed329805d63336e"
+    },
+    {
+      "id": "f051fa2d-c5bc-4eb0-ad4d-30b50df80e2b",
+      "path": "f051fa2d-c5bc-4eb0-ad4d-30b50df80e2b.json",
+      "recorded_at": "2026-10-28T05:28:56.847Z",
+      "strategy_version": "forward-2.0.0",
+      "categories": [
+        "crypto",
+        "weather",
+        "labor",
+        "inflation",
+        "travel"
+      ],
+      "control_entries": 5,
+      "control_net_pnl": -2.249999999999999,
+      "audit_hash": "916444a52bc1e3caade112ac05657e9041c5210b1b2c47981f572da19bb22bb0",
+      "sha256": "3671c95eb34a25b9c64112f20f01a1501548e44ab6a860ecf0b58215c8c0e3b6"
+    }
+  ]
+}

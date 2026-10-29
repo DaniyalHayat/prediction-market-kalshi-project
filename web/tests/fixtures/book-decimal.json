@@ -1,0 +1,24 @@
+{
+  "description": "Synthetic offline order book; expected metrics independently calculated with Python decimal.Decimal, rounded to 12 decimal places. Not live market data.",
+  "contracts": 100,
+  "raw": {
+    "orderbook_fp": {
+      "yes_dollars": [["0.37", "20"], ["0.38", "80"]],
+      "no_dollars": [["0.55", "10"], ["0.60", "10"], ["0.59", "40"], ["0.60", "25"]]
+    }
+  },
+  "metrics": {
+    "book_bid": 0.38,
+    "book_ask": 0.4,
+    "book_spread_cents": 2,
+    "book_midpoint": 0.39,
+    "ask_depth_2c": 75,
+    "sim_requested": 100,
+    "sim_filled": 85,
+    "sim_fill_ratio": 0.85,
+    "sim_cost": 34.9,
+    "sim_vwap": 0.410588235294,
+    "sim_slippage_cents": 1.058823529412,
+    "book_state": "two-sided"
+  }
+}

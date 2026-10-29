@@ -1,0 +1,45 @@
+# Dependencies, builds and local runtimes
+node_modules/
+.next/
+out/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local secrets; retain documented empty examples
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# Private research and browser-journal exports
+.research/
+private-cohorts/
+private_cohorts/
+cohorts-private/
+private-exports/
+paper-journals/
+kalshi-paper-journal.*
+warehouse/
+data/private/
+*.duckdb
+*.duckdb.wal
+
+# Transient diagnostics and caches
+.cache/
+cache/
+logs/
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+
+# Generated extraction used only for local syntax inspection
+web/tests/rendered-content-syntax.js
