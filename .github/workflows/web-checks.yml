@@ -4,10 +4,16 @@ on:
   push:
     paths:
       - 'web/**'
+      - '*.py'
+      - 'requirements.txt'
+      - 'tests/**'
       - '.github/workflows/web-checks.yml'
   pull_request:
     paths:
       - 'web/**'
+      - '*.py'
+      - 'requirements.txt'
+      - 'tests/**'
       - '.github/workflows/web-checks.yml'
   workflow_dispatch:
 
@@ -15,6 +21,14 @@ permissions:
   contents: read
 
 jobs:
+  python-scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
