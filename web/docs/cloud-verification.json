@@ -1,0 +1,21 @@
+{
+  "verified_at": "2026-11-04T10:25:51.682418+00:00",
+  "base": "https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws",
+  "health_seconds": 0.596,
+  "cloud_storage": true,
+  "native_stream": {
+    "ticker": "KXBTC15M-26NOV040530-30",
+    "quotes": 3,
+    "first_sequence": 276,
+    "last_sequence": 731,
+    "transport": "exchange-websocket",
+    "last_observed_at": "2026-11-04T10:25:51.821Z"
+  },
+  "private_journal": {
+    "forecast_id": "4e9cd12c-cd9d-4a7b-b4a1-550fa00ee569",
+    "freeze_hash": "7b34e97875da147efd8864cf4e1ea911f231ab2d04770f76428fb983dda64eff",
+    "status": "pending",
+    "owner_isolation_verified": true,
+    "purpose": "Prospective integration smoke test with an explicitly arbitrary 50% input; not a research performance result"
+  }
+}

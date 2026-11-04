@@ -6,6 +6,7 @@ import { request, book, marketDetails, trades, validateTicker, number } from "..
 import { researchReport } from "../intelligence/index.mjs";
 import { categoryById } from "../intelligence/catalog.mjs";
 import { STRATEGY_VERSION, STRATEGIES, bookState, normalizeCandles, minuteRidge, irregularOU, relativeValueSurface, signalTargets, freezeDecision, scoreMarkout, summarizeForward } from "./signals.mjs";
+import {cloudEnabled,store} from '../cloud/store.mjs';
 
 export const BALANCED_UNIVERSE=["crypto","weather","labor","inflation","travel"];
 const directory=join(tmpdir(),"kalshi-quant-forward-v2");
@@ -71,6 +72,7 @@ async function archive(id,type,content,previous=null) {
   await fs.mkdir(directory,{recursive:true,mode:0o700});
   const entry={type,recorded_at:new Date().toISOString(),previous,content};
   entry.hash=digest(entry);
+  if(cloudEnabled()){await store().appendAudit(id,entry);return entry;}
   const path=join(directory,`${id}.jsonl`);
   if(type==="freeze")await fs.writeFile(path,JSON.stringify(entry)+"\n",{flag:"wx",mode:0o600});
   else await fs.appendFile(path,JSON.stringify(entry)+"\n",{mode:0o600});
@@ -80,6 +82,11 @@ export async function readForward(id) {
   if(!/^[a-f0-9-]{36}$/.test(id))throw new ForwardError("Invalid cohort ID");
   const path=join(directory,`${id}.jsonl`);
   let text;
+  if(cloudEnabled()) {
+    const entries=await store().readAudit(id);
+    if(!entries.length)throw new ForwardError('Cohort not found',404);
+    return forwardDocument(id,entries);
+  }
   try {
     const info=await fs.stat(path);
     if(info.size>4000000)throw new ForwardError("Cohort exceeds archive bound",503);
@@ -89,13 +96,17 @@ export async function readForward(id) {
     throw error;
   }
   const entries=text.trim().split("\n").map(line=>JSON.parse(line));
+  return forwardDocument(id,entries);
+}
+function forwardDocument(id,entries) {
   const previous=verifyAuditEntries(entries);
   const frozen=entries[0].content,result=entries.find(row=>row.type==="markout")?.content || null;
   return {id,status:result ? "completed" : "pending",frozen,result,server_time:new Date().toISOString(),
     audit_headers:entries.map(({content,...header})=>header),
     protocol_hash:digest({version:frozen.strategy_version,protocol:frozen.protocol}),
     audit:{entries:entries.length,freeze_hash:entries[0].hash,last_hash:previous,verified:true},
-    storage:"Bounded, server-local hash-chained files; may be unavailable after deployment or on another instance. Export for durable independent review."};
+    storage:cloudEnabled()?'Versioned private S3 archive with transactional DynamoDB chain heads and conditional append.':
+      "Bounded, server-local hash-chained files; may be unavailable after deployment or on another instance. Export for durable independent review."};
 }
 export function verifyAuditEntries(entries) {
   if(!entries.length || entries[0].type!=="freeze" || entries.length>2 || entries.length===2 && entries[1].type!=="markout")throw new ForwardError("Invalid audit event sequence",409);
@@ -114,7 +125,7 @@ export async function startForward(input={}) {
   state.starting=true;
   try {
     await fs.mkdir(directory,{recursive:true,mode:0o700});
-    if((await fs.readdir(directory)).filter(file=>file.endsWith(".jsonl")).length>=60)throw new ForwardError("Server-local archive is full. Export and rotate the local archive before starting another cohort.",503);
+    if(!cloudEnabled() && (await fs.readdir(directory)).filter(file=>file.endsWith(".jsonl")).length>=60)throw new ForwardError("Server-local archive is full. Export and rotate the local archive before starting another cohort.",503);
     const reportResults=await mapLimit(protocol.categories,2,async id=>{
       try{return {report:await researchReport(id)};}catch(error){return {error:{category:id,error:error.message}};}
     });
@@ -171,7 +182,13 @@ async function collectCheckpoint(id) {
   if(Date.now()<Date.parse(before.frozen.due_at))throw new ForwardError(`Future prices not yet observable; checkpoint is due at ${before.frozen.due_at}`,409);
   const lockPath=join(directory,`${id}.lock`);
   let lock;
-  try{lock=await fs.open(lockPath,"wx",0o600);}
+  try{
+    if(cloudEnabled()) {
+      const release=await store().lease('checkpoint#'+id,120);
+      if(!release)throw new ForwardError('Another worker is collecting this checkpoint',409);
+      lock={close:release};
+    } else lock=await fs.open(lockPath,"wx",0o600);
+  }
   catch(error){
     if(error.code!=="EEXIST")throw error;
     // Another process on the same host may own the lock. Read its one result,
@@ -203,7 +220,8 @@ async function collectCheckpoint(id) {
 }
 export async function listForward() {
   await fs.mkdir(directory,{recursive:true,mode:0o700});
-  const names=(await fs.readdir(directory)).filter(name=>/^[a-f0-9-]{36}\.jsonl$/.test(name));
+  const names=cloudEnabled()?(await store().auditIds()).map(id=>id+'.jsonl'):
+    (await fs.readdir(directory)).filter(name=>/^[a-f0-9-]{36}\.jsonl$/.test(name));
   const runs=[],compact=[];
   for(const name of names) {
     try {
@@ -217,7 +235,8 @@ export async function listForward() {
     }catch(error){runs.push({id:name.slice(0,-6),status:"integrity error",error:error.message});}
   }
   runs.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
-  return {runs,aggregates:aggregateForwardRuns(compact),storage:"Server-local only; not a shared hosted database",as_of:new Date().toISOString()};
+  return {runs,aggregates:aggregateForwardRuns(compact),storage:cloudEnabled()?'Durable DynamoDB index and private versioned S3 archives':
+    "Server-local only; not a shared hosted database",as_of:new Date().toISOString()};
 }
 export function aggregateForwardRuns(runs) {
   const groups=new Map();

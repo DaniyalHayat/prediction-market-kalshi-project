@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Market-data research with native exchange streaming, private forecast journals, durable archives and bounded usage.
+Parameters:
+  CodeKey:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|code/[a-f0-9]{64}\.zip$'
+  SecretParameter:
+    Type: String
+    Default: /portfolio/kalshi/stream-credentials
+    AllowedPattern: '^/portfolio/kalshi/[a-zA-Z0-9_-]+$'
+Conditions:
+  HasCode: !Not [!Equals [!Ref CodeKey, '']]
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Private deployment artifacts, content-addressed public market evidence and private forecast archives.
+        must: [No public ACLs, No private keys, Versioned archives, TLS only]
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ObjectOwnership: BucketOwnerEnforced}]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      VersioningConfiguration: {Status: Enabled}
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireCache
+            Status: Enabled
+            Prefix: cache/
+            ExpirationInDays: 7
+            NoncurrentVersionExpiration: {NoncurrentDays: 1}
+          - Id: ExpireOldCodeVersions
+            Status: Enabled
+            Prefix: code/
+            NoncurrentVersionExpiration: {NoncurrentDays: 7}
+            AbortIncompleteMultipartUpload: {DaysAfterInitiation: 1}
+          - Id: ExpireMarketSamples
+            Status: Enabled
+            Prefix: streams/
+            ExpirationInDays: 90
+            NoncurrentVersionExpiration: {NoncurrentDays: 1}
+      Tags: [{Key: Project, Value: portfolio-market-lab}]
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: [!GetAtt DataBucket.Arn, !Sub '${DataBucket.Arn}/*']
+            Condition: {Bool: {'aws:SecureTransport': 'false'}}
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: [s3:GetObject, s3:GetObjectVersion]
+            Resource: !Sub '${DataBucket.Arn}/code/*'
+            Condition: {StringEquals: {'aws:SourceAccount': !Ref 'AWS::AccountId'}}
+  MarketTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Shared cache, conditional quotas, checkpoint ownership, audit heads and token-scoped journals.
+        must: [Conditional writes, Explicit expiry checks, No plaintext exchange secrets]
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      OnDemandThroughput: {MaxReadRequestUnits: 50, MaxWriteRequestUnits: 30}
+      AttributeDefinitions:
+        - {AttributeName: pk, AttributeType: S}
+        - {AttributeName: sk, AttributeType: S}
+        - {AttributeName: pending_pk, AttributeType: S}
+        - {AttributeName: pending_sk, AttributeType: S}
+      KeySchema:
+        - {AttributeName: pk, KeyType: HASH}
+        - {AttributeName: sk, KeyType: RANGE}
+      GlobalSecondaryIndexes:
+        - IndexName: pending
+          KeySchema:
+            - {AttributeName: pending_pk, KeyType: HASH}
+            - {AttributeName: pending_sk, KeyType: RANGE}
+          Projection: {ProjectionType: ALL}
+          OnDemandThroughput: {MaxReadRequestUnits: 10, MaxWriteRequestUnits: 10}
+      TimeToLiveSpecification: {AttributeName: expires_epoch, Enabled: true}
+      SSESpecification: {SSEEnabled: true}
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: false}
+      Tags: [{Key: Project, Value: portfolio-market-lab}]
+  WebLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/portfolio/${AWS::StackName}/web'
+      RetentionInDays: 3
+  WorkerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/portfolio/${AWS::StackName}/worker'
+      RetentionInDays: 3
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-monthly'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: 10, Unit: USD}
+        CostTypes: {IncludeCredit: false, IncludeRefund: false, IncludeTax: true}
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: project-data
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query, dynamodb:ConditionCheckItem]
+                Resource: [!GetAtt MarketTable.Arn, !Sub '${MarketTable.Arn}/index/pending']
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: [!Sub '${DataBucket.Arn}/cache/*', !Sub '${DataBucket.Arn}/forward/*', !Sub '${DataBucket.Arn}/forecasts/*', !Sub '${DataBucket.Arn}/streams/*']
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SecretParameter}'
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: [!GetAtt WebLogs.Arn, !GetAtt WorkerLogs.Arn]
+              - Effect: Allow
+                Action: budgets:ViewBudget
+                Resource: !Sub 'arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/${AWS::StackName}-monthly'
+              - Effect: Allow
+                Action: lambda:UpdateWebFunctionEndpoint
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:web-function/${AWS::StackName}/endpoint/public'
+  WebFunction:
+    Type: AWS::Lambda::WebFunction
+    Condition: HasCode
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      Tags: [{Key: Project, Value: portfolio-market-lab}]
+  WebRevision:
+    Type: AWS::Lambda::WebFunctionRevision
+    Condition: HasCode
+    DependsOn: [WebFunction, BucketPolicy]
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      BuildConfig:
+        CodeConfig:
+          S3Object: {Bucket: !Ref DataBucket, Key: !Ref CodeKey}
+        RuntimeConfig: {Runtime: nodejs24.x}
+      ServiceConfig:
+        ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+        TimeoutSeconds: 900
+        MaxConcurrencyPerEnvironment: 16
+        EnvironmentVariables:
+          MARKET_TABLE: !Ref MarketTable
+          MARKET_BUCKET: !Ref DataBucket
+          KALSHI_SECRET_PARAMETER: !Ref SecretParameter
+          MARKET_PUBLIC_DIR: /var/task/public
+          NODE_OPTIONS: --max-old-space-size=160
+        TelemetryConfig:
+          LoggingConfig: {LogGroup: !Ref WebLogs, ApplicationLogLevel: WARN, SystemLogLevel: WARN}
+  Endpoint:
+    Type: AWS::Lambda::WebFunctionEndpoint
+    Condition: HasCode
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      EndpointName: public
+      EndpointType: HomeRegion
+      AuthType: ApplicationManaged
+      RevisionWeights: [{RevisionId: !GetAtt WebRevision.RevisionId, Weight: 100}]
+      ScalingConfig: {MaxEnvironments: 2}
+      ThrottleConfig: {RateLimit: 100}
+  Worker:
+    Type: AWS::Lambda::Function
+    Condition: HasCode
+    Properties:
+      Runtime: nodejs22.x
+      Handler: worker.handler
+      Role: !GetAtt ExecutionRole.Arn
+      Code: {S3Bucket: !Ref DataBucket, S3Key: !Ref CodeKey}
+      Timeout: 60
+      MemorySize: 256
+      LoggingConfig: {LogGroup: !Ref WorkerLogs}
+      Environment:
+        Variables:
+          MARKET_TABLE: !Ref MarketTable
+          MARKET_BUCKET: !Ref DataBucket
+          ACCOUNT_ID: !Ref AWS::AccountId
+          BUDGET_NAME: !Sub '${AWS::StackName}-monthly'
+          WEB_FUNCTION_NAME: !Ref AWS::StackName
+      Tags: [{Key: Project, Value: portfolio-market-lab}]
+  FailureQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+  ScheduleRole:
+    Type: AWS::IAM::Role
+    Condition: HasCode
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: scheduler.amazonaws.com}
+            Action: sts:AssumeRole
+            Condition: {StringEquals: {'aws:SourceAccount': !Ref 'AWS::AccountId'}}
+      Policies:
+        - PolicyName: invoke-one-worker
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - {Effect: Allow, Action: 'lambda:InvokeFunction', Resource: !GetAtt Worker.Arn}
+              - {Effect: Allow, Action: 'sqs:SendMessage', Resource: !GetAtt FailureQueue.Arn}
+  SettlementSchedule:
+    Type: AWS::Scheduler::Schedule
+    Condition: HasCode
+    Properties:
+      Description: Score at most six closed forecasts per hour and check the monthly cost allowance.
+      FlexibleTimeWindow: {Mode: 'OFF'}
+      ScheduleExpression: rate(1 hour)
+      Target:
+        Arn: !GetAtt Worker.Arn
+        RoleArn: !GetAtt ScheduleRole.Arn
+        DeadLetterConfig: {Arn: !GetAtt FailureQueue.Arn}
+        RetryPolicy: {MaximumEventAgeInSeconds: 3600, MaximumRetryAttempts: 1}
+Outputs:
+  BucketName: {Value: !Ref DataBucket}
+  TableName: {Value: !Ref MarketTable}
+  RoleArn: {Value: !GetAtt ExecutionRole.Arn}
+  EndpointDomain:
+    Condition: HasCode
+    Value: !GetAtt Endpoint.DomainName
+  WorkerName:
+    Condition: HasCode
+    Value: !Ref Worker

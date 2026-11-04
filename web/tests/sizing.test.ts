@@ -20,3 +20,9 @@ test('fractional depth and fees cannot exceed budget',()=>{
   const result=sizePaperPosition({...fixture,levels:[{price:.4,quantity:2.5},{price:.6,quantity:3.5}],feeCoefficient:.07},now);
   assert.ok(result.contracts<=6 && result.cost<=30);
 });
+test('per-level fee rounding cannot admit a position that exceeds the loss budget',()=>{
+  const result=sizePaperPosition({...fixture,bankroll:1000,budget:8.49,probabilityLow:.9,probabilityHigh:.95,
+    levels:[{price:.4,quantity:5.5},{price:.41,quantity:14.5}],feeCoefficient:.07},now);
+  assert.equal(result.contracts,19);
+  assert.ok(result.cost<=8.49);
+});

@@ -1,0 +1,27 @@
+{
+  "verified_at": "2026-11-04T11:32:14.874Z",
+  "endpoint": "https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws",
+  "state": "Active",
+  "revision": "rev-uoexb",
+  "max_environments": 2,
+  "endpoint_rate_per_second": 100,
+  "hourly_worker_invoke": {
+    "status": 200,
+    "observed_budget_cost_usd": 0,
+    "endpoint_rate_update_succeeded": true,
+    "endpoint_updated_at": "2026-11-04T11:31:23.768305+00:00"
+  },
+  "browser": {
+    "original_dashboard_rendered": true,
+    "workbench_native_stream_rendered": true,
+    "ticker": "KXBTC15M-26NOV040645-45",
+    "observed_stream_timestamp": "2026-11-04T11:32:02.609Z"
+  },
+  "xlsx_export": {
+    "status": 200,
+    "bytes": 35616,
+    "worksheets": 4,
+    "zip_structure_verified": true
+  },
+  "billing_limit_note": "The worker stops new requests when delayed reported account spending reaches $8. Quotas and scaling limits reduce exposure; this is not an absolute $10 invoice cap."
+}
