@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fitBasketball,fitSoccer,evaluateSports,teamForm,lowMinutesSplit} from '../lib/workspace/sports-math.mjs';
 import {parseGames,parseMinutes,matchGame,sportsContractDate,bookmakerComparison} from '../lib/workspace/sports.mjs';
-import {parseApple,rankPersistence} from '../lib/workspace/music.mjs';
-import {workspaceMarkets,inferCategory} from '../lib/workspace/catalog.mjs';
+import {parseApple,rankPersistence,musicIdentity} from '../lib/workspace/music.mjs';
+import {workspaceMarkets,inferCategory,selectSeries,WORKSPACE_CATEGORIES} from '../lib/workspace/catalog.mjs';
 import {screenSportsForecast,workspaceResearch,workspaceOpinions,candleRows} from '../lib/workspace/router.mjs';
 const NOW=Date.now(),ticker='KXNBAGAME-26NOV07SASPOR-SAS';
 const market={ticker,event_ticker:'KXNBAGAME-26NOV07SASPOR',title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',
@@ -116,4 +116,15 @@ test('opinion batches bound work, preserve identity and isolate source errors',a
   const result=await workspaceOpinions('ONE-X,TWO-X,THREE-X',{research:async(t,options)=>{assert.equal(options.fast,true);active++;maximum=Math.max(maximum,active);await new Promise(r=>setTimeout(r,5));active--;if(t==='TWO-X')throw new Error('upstream');return {ticker:t,opinion:{side:'PASS',reason:'Evidence only'},forecast:{probability:null}};}});
   assert.deepEqual(result.opinions.map(o=>o.ticker),['ONE-X','TWO-X','THREE-X']);assert.equal(maximum,2);assert.equal(result.opinions[1].supported_allocation,0);
   await assert.rejects(workspaceOpinions(Array.from({length:9},(_,i)=>'SERIES-'+i).join(',')),/one to eight/);
+});
+test('active Billboard music series remains in the bounded Culture sample before high-volume film markets',()=>{
+  const category=WORKSPACE_CATEGORIES.find(c=>c.id==='culture'),rows=[
+    {ticker:'KXRANKLIST1SONG',title:'Billboard Hot 100 #1 song',category:'Entertainment',categories:[],volume:10},
+    ...Array.from({length:12},(_,i)=>({ticker:'FILM'+i,title:'Film market',category:'Entertainment',categories:[],volume:100000-i}))];
+  assert.equal(selectSeries(category,rows,8)[0].ticker,'KXRANKLIST1SONG');
+  assert.ok(!category.preferred.includes('KXSPOTIFYD'));assert.ok(!category.preferred.includes('KXTOPARTIST'));
+});
+test('a Billboard song outcome cannot become a Spotify artist search identity',()=>{
+  assert.equal(musicIdentity({ticker:'KXRANKLIST1SONG-26NOV28-THR',title:'Which song will be #1 on Billboard Hot 100?',yes_sub_title:'Thriller',rules_primary:'If Thriller is the number one song, then Yes.'}).artist,null);
+  assert.equal(musicIdentity({title:'Who will be the top Spotify artist this year?',yes_sub_title:'BTS',custom_strike:{Artist:'BTS'}}).artist,'BTS');
 });

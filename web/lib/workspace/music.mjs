@@ -53,10 +53,17 @@ export async function spotifyReferences(query){
     policy:'Display-only Spotify catalog references; excluded from all model packets, AI prompts and warehouse analytics.'};
 }
 export function musicContract(market){return /spotify|apple music|billboard|most.streamed|top.song|top.artist/i.test([market.title,market.rules_primary].join(' '));}
+export function musicIdentity(market){
+  const structured=market.custom_strike?.Artist;
+  if(typeof structured==='string'&&structured.trim())return {artist:structured.trim(),kind:'artist'};
+  const artistContract=/\bartist\b/i.test([market.title,market.rules_primary].join(' '))&&!/\b(?:song|track)\b/i.test(market.title||'');
+  return artistContract&&typeof market.yes_sub_title==='string'?{artist:market.yes_sub_title.trim(),kind:'artist'}:{artist:null,kind:'unverified_song_or_other'};
+}
 export async function musicResearch(market,{includeSpotify=true}={}){
   if(!musicContract(market))return null;
-  const artist=String(market.custom_strike?.Artist||market.yes_sub_title||'').trim();
-  const [apple,spotify]=await Promise.all([appleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&artist?spotifyReferences(artist).catch(error=>({status:'unavailable',references:[],reason:error.message})):null]);
+  const {artist}=musicIdentity(market);
+  const [apple,spotify]=await Promise.all([appleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&artist?spotifyReferences(artist).catch(error=>({status:'unavailable',references:[],reason:error.message})):
+    {status:'not_queried',references:[],reason:'Artist references require a verified artist identity. A song outcome is not used as an artist-search query.'}]);
   const matched=artist?apple.tracks?.filter(t=>(t.artist+' '+t.name).toLowerCase().includes(artist.toLowerCase())):[],history=matched?.length===1?await chartHistory('apple-music','us-songs','ordinal_rank_snapshot',matched[0].id):[];
   return {scope:'Dated source references',apple,spotify,matched_tracks:artist?matched:[],history,
     comparability:/spotify/i.test(market.rules_primary||market.title)?'This contract resolves on Spotify. Apple song ranks are cross-platform context and cannot establish Spotify artist streams or the contract outcome.':

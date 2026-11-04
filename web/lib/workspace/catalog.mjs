@@ -9,7 +9,7 @@ export const WORKSPACE_CATEGORIES = [
   {id:'weather',name:'Weather',preferred:['KXHIGHNY','KXHIGHCHI','KXHIGHMIA','KXHIGHLAX']},
   {id:'science',name:'Tech & science',sourceCategories:['Science and Technology'],preferred:['KXLLM1','KXTOPMODEL','KXSPACEXCOUNT']},
   {id:'climate',name:'Climate',sourceCategories:['Climate and Weather'],preferred:['KXHURRICANE','KXRAINNYC']},
-  {id:'culture',name:'Culture',sourceCategories:['Culture','Entertainment'],preferred:['KXTOPARTIST','KXSPOTIFYD','KXRT','KXNETFLIXRANKSHOW']}
+  {id:'culture',name:'Culture',sourceCategories:['Culture','Entertainment'],preferred:['KXRANKLIST1SONG','KXRT','KXNETFLIXRANKSHOW']}
 ];
 const seriesCache=new Map();
 export async function seriesCatalog(id='sports') {
