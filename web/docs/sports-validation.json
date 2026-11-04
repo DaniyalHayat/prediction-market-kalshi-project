@@ -1,0 +1,218 @@
+{
+  "verified_at": "2026-11-04T23:23:08.277Z",
+  "classification": "Observed public-data retrieval and retrospective model validation; no trading-return claim",
+  "reproduce": {
+    "command": "node tests/verify-sports-live.mjs",
+    "unit_tests": "node --test tests/workspace-research.test.mjs",
+    "source_code": [
+      "lib/workspace/sports.mjs",
+      "lib/workspace/sports-math.mjs"
+    ],
+    "live_data_note": "ESPN and Apple responses can change. A fresh run is not guaranteed to reproduce these exact historical numbers. Input hashes identify the captured normalized payload, not proof of provider immutability."
+  },
+  "leagues": [
+    {
+      "league": "nba",
+      "coverage": {
+        "schedules_expected": 90,
+        "schedules_returned": 90,
+        "completed_games": 2569,
+        "partial": false
+      },
+      "validation": {
+        "n": 514,
+        "brier": 0.20253365335994408,
+        "baseline_brier": 0.24661173849668985,
+        "brier_skill": 0.17873474071201767,
+        "log_loss": 0.593588772050556,
+        "mean_loss_improvement": 0.044078085136744966,
+        "improvement_95_lower": 0.03448188958276087,
+        "weekly_blocks": 12,
+        "unmatched_games": 0,
+        "coverage": 1,
+        "passed": true,
+        "train_end": "2026-02-20T00:00:00.000Z",
+        "test_start": "2026-02-20T00:30:00.000Z",
+        "test_end": "2026-11-03T03:00:00.000Z",
+        "calibration": [
+          {
+            "n": 67,
+            "predicted": 0.3442420088655011,
+            "actual": 0.208955223880597
+          },
+          {
+            "n": 263,
+            "predicted": 0.5031947402985851,
+            "actual": 0.4714828897338403
+          },
+          {
+            "n": 181,
+            "predicted": 0.6792454085402715,
+            "actual": 0.8121546961325967
+          },
+          {
+            "n": 3,
+            "predicted": 0.8195899316831575,
+            "actual": 1
+          }
+        ],
+        "brier_definition": "Binary home-win Brier score",
+        "protocol": "Chronological final 20% holdout with a frozen earlier-game fit and strictly separated timestamps. Paired loss uncertainty uses 1,000 seeded resamples of complete UTC-week blocks. Repeated-team dependence across weeks and regime changes remain unmodeled."
+      },
+      "normalized_games_sha256": "71fc9378433f28f65464da122c8b94752d471dacb34ff71cc52a62f6b73bb23f",
+      "limitation": "Provider content can change; rerunning live verification may produce a different data hash. Availability and bookmaker prices are excluded from fitted models.",
+      "source_count": 90,
+      "source_manifest_sha256": "2498a8022ec6176bad7af8645b7016e72eb6660ecf24a19d09b3628a661da3c5",
+      "source_examples": [
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/schedule?season=2025",
+          "as_of": "2026-11-04T23:23:08.464Z",
+          "sha256": "17510ee250b8199e5f0314ae794198be46a384b7513408b65b906a4986c81fa9"
+        },
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/schedule?season=2026",
+          "as_of": "2026-11-04T23:23:08.472Z",
+          "sha256": "e4e9b002bcacdd2454c943893b25d2e1663a5ff84c03822762812345c336d27d"
+        },
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/27/schedule?season=2027",
+          "as_of": "2026-11-04T23:23:10.412Z",
+          "sha256": "365f818027db44e16c396d28c5bf7c845069d4a69baf3421cdb47d7dd139aa13"
+        }
+      ]
+    },
+    {
+      "league": "epl",
+      "coverage": {
+        "schedules_expected": 60,
+        "schedules_returned": 60,
+        "completed_games": 832,
+        "partial": false
+      },
+      "validation": {
+        "n": 150,
+        "brier": 0.30632693957131296,
+        "baseline_brier": 0.32734889856219446,
+        "brier_skill": 0.06421881693573939,
+        "log_loss": 1.0266004991984807,
+        "mean_loss_improvement": 0.021021958990882196,
+        "improvement_95_lower": 0.011195815779724075,
+        "weekly_blocks": 18,
+        "unmatched_games": 17,
+        "coverage": 0.8982035928143712,
+        "passed": false,
+        "train_end": "2026-03-16T20:00:00.000Z",
+        "test_start": "2026-03-20T20:00:00.000Z",
+        "test_end": "2026-11-02T20:00:00.000Z",
+        "calibration": [
+          {
+            "n": 4,
+            "predicted": 0.18482267099563618,
+            "actual": 0
+          },
+          {
+            "n": 67,
+            "predicted": 0.3367323024449802,
+            "actual": 0.3283582089552239
+          },
+          {
+            "n": 72,
+            "predicted": 0.48458003950424444,
+            "actual": 0.5
+          },
+          {
+            "n": 7,
+            "predicted": 0.6586837511298468,
+            "actual": 0.8571428571428571
+          }
+        ],
+        "brier_definition": "Half the sum of squared home/draw/away outcome errors",
+        "protocol": "Chronological final 20% holdout with a frozen earlier-game fit and strictly separated timestamps. Paired loss uncertainty uses 1,000 seeded resamples of complete UTC-week blocks. Repeated-team dependence across weeks and regime changes remain unmodeled."
+      },
+      "normalized_games_sha256": "2793562ebd6eb8f5aab57d1c13d4baeda6bd397d0e914e71b635596a1a7863d3",
+      "limitation": "Provider content can change; rerunning live verification may produce a different data hash. Availability and bookmaker prices are excluded from fitted models.",
+      "source_count": 60,
+      "source_manifest_sha256": "596a96ad046935527ebe724df688fe877cdc387fd43c9f44ded0230f9f36d08a",
+      "source_examples": [
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/349/schedule?season=2024",
+          "as_of": "2026-11-04T23:23:10.766Z",
+          "sha256": "525f96adfe72b6f5221bc1c9a4b2ca1999591b1714a8aa07472bf0666af4fbba"
+        },
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/349/schedule?season=2025",
+          "as_of": "2026-11-04T23:23:10.782Z",
+          "sha256": "97a58839098bc6ded4460d49ac8f26613da54647b461dc633dccee49fa6a163b"
+        },
+        {
+          "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/367/schedule?season=2026",
+          "as_of": "2026-11-04T23:23:11.793Z",
+          "sha256": "05e492b54d2c0560fd7ba0dfd07368e629a573ad0efc669da7776865891c3b75"
+        }
+      ]
+    }
+  ],
+  "matched_contracts": [
+    {
+      "ticker": "KXNBAGAME-26NOV07SASPOR-SAS",
+      "event_id": "401909944",
+      "teams": [
+        "Portland Trail Blazers",
+        "San Antonio Spurs"
+      ],
+      "reason": null,
+      "model_name": "Recency-weighted regularized Bradley–Terry",
+      "probability": 0.5415974037098552,
+      "range": [
+        0.3648749588114508,
+        0.7084395502732752
+      ],
+      "range_kind": "95% penalized Laplace parameter interval; excludes roster changes and model misspecification",
+      "eligible": true,
+      "source_as_of": "2026-11-04T23:23:10.681Z",
+      "bookmaker": null
+    },
+    {
+      "ticker": "KXEPLGAME-26NOV08BRIBRE-TIE",
+      "event_id": "401879244",
+      "teams": [
+        "Brighton & Hove Albion",
+        "Brentford"
+      ],
+      "reason": null,
+      "model_name": "Regularized independent Poisson attack/defense",
+      "probability": 0.23342031864308108,
+      "range": [
+        0.13866449887457366,
+        0.3053473833113148
+      ],
+      "range_kind": "Parameter sensitivity range from penalized attack/defense rates; not a calibrated prediction interval",
+      "eligible": false,
+      "source_as_of": "2026-11-04T23:23:12.168Z",
+      "bookmaker": {
+        "provider": "DraftKings",
+        "probabilities": {
+          "home": 0.4920946194386567,
+          "draw": 0.2505208971687707,
+          "away": 0.2573844833925726
+        },
+        "overround": 0.06444879321591657,
+        "note": "Reported bookmaker moneyline with proportional margin removal. Market-implied comparison, not an independent forecast or an executable quote. Quote time was not supplied."
+      }
+    }
+  ],
+  "apple": {
+    "status": "available",
+    "source_url": "https://rss.marketingtools.apple.com/api/v2/us/music/most-played/100/songs.json",
+    "source_updated": "2026-11-04T23:23:12.000Z",
+    "as_of": "2026-11-04T23:23:13.205Z",
+    "rows": 100,
+    "scope": "US · Apple Music most-played songs"
+  },
+  "limitations": [
+    "The NBA validation passes only the programmed retrospective loss and coverage gate. It is not a calibration, execution or profitability certificate.",
+    "EPL coverage excludes 17 previously unseen-team holdout games. Its gate fails and the app withholds a YES/NO screen.",
+    "Availability, observed-minutes splits and bookmaker prices are contextual evidence and are excluded from fitted matchup models.",
+    "No bankroll-specific position size, actual order, trading return or causal injury effect was established."
+  ]
+}

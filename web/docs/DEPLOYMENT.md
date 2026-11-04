@@ -1,0 +1,35 @@
+# Hosted market workspace
+
+The current application is **Predictir** at https://predictir.dev. Vercel serves the Next.js interface and an authenticated proxy. Railway maintains the exchange WebSocket, shared caches and ingestion worker. Supabase in US East (Ohio) stores typed observations, private journal records and compressed evidence objects.
+
+## Reproduce
+
+Use Node 26.12.1 and `npm ci` in `web/`. Run `npm test`, `npm run typecheck` and `npm run build`. For actual Postgres integration checks, set `MARKET_TEST_DATABASE_URL` to a disposable database whose name ends in `_test`. `node tests/verify-sports-live.mjs` retrieves the public schedules again; results will change as games and source corrections arrive. `node tools/benchmark_books.mjs` reproduces the local indexed-book comparison.
+
+Apply numbered SQL migrations with `DATABASE_URL` and `DATABASE_CA_CERT` set, using `node tools/migrate.mjs`. Hosted runtime credentials use a separate login with access only to the `market_lab` schema, statement timeouts and a small connection pool. The backend account cannot migrate the database. Application tables have RLS and no anonymous policies. The schema is not exposed through the public Data API.
+
+Supabase's official CA is supplied through `DATABASE_CA_CERT`; certificate and hostname verification remain enabled. Download the CA from the project's Database Settings. The CA used on November 4, 2026 has SHA-256 fingerprint `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`.
+
+## Runtime settings
+
+Vercel needs `MARKET_BACKEND_URL`, `MARKET_EDGE_SECRET`, `ASSISTANT_SERVICE_SECRET` and optional public `NEXT_PUBLIC_GA_MEASUREMENT_ID`. Gateway authentication uses Vercel's deployment OIDC token. The verified available explanation model is `google/gemini-2.5-flash-lite`. Statistical estimates are calculated by the research service, not by the language model.
+
+Railway needs the same two application secrets; backend-only `DATABASE_URL`, `DATABASE_CA_CERT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional Kalshi streaming credentials, Spotify client credentials and X bearer token. Never use a `NEXT_PUBLIC_` prefix for credentials. A Supabase management access token is a setup credential and is not installed in either runtime. `PORT=8780` starts the backend; `MARKET_PIPELINE_ENABLED=1` enables the durable jobs.
+
+The private evidence bucket is `market-lab-evidence`. No public object policy exists. Archives use immutable content hashes and gzip; cache hits preserve original source retrieval timestamps. The worker uses unique scheduled keys, transactional claims, leases, retries with backoff and idempotent dataset publication. Completion requires ownership of the unexpired claim. Failed jobs remain inspectable.
+
+## Cost controls
+
+The app limits global and per-visitor work, streaming slots, body sizes, source queues and paid reads. The assistant conservatively reserves $0.025 before a request against a $3 monthly allowance and allows at most 20 requests per visitor daily. X reserves at most 1,000 post reads per month (about $5 at the checked resource price, plus the bounded cached user lookups). Evidence compression has a 1 GB monthly write allowance. Allowances fail closed on storage outages.
+
+Vercel has a $5 additional metered-usage budget with automatic production pause; provider checks are periodic. Supabase's included-usage Spend Cap is enabled and automatic preview database branching is disabled. Compute and other opted-in add-ons are outside that cap. Railway's trial stops at its credits; its $10 workspace hard-limit command requires an active paid subscription and was rejected on this trial. Set that limit before upgrading the Railway plan. No new paid add-ons or automatic credit top-ups were purchased during deployment.
+
+## Access and telemetry
+
+The active Vercel firewall denies CN, IN, RU, BY, UA, MD, EE, LV, LT, AM, AZ, GE, KZ, KG, TJ, TM, UZ, AL, BA, BG, HR, GR, XK, ME, MK, RO, RS, SI, CZ, HU, PL and SK. This makes the requested former Soviet, Balkan and Eastern European scope explicit. It controls IP-geolocated visitor access; the database is hosted in the United States. The backend requires the private proxy secret and rejects untrusted/unknown country headers, preventing direct Railway URL access from bypassing the application restriction. MCP and internal budget routes require a separate service credential.
+
+The API firewall limits 120 requests per minute per IP. The backend also enforces global and visitor limits, caps active streams, bounds payloads and rejects redirected or HTML data responses. Database queries use bound parameters. Source URLs are allowlisted. The MCP service exposes only bounded public-data reads for the selected contract. Neither the assistant nor Analytics receives private journal tokens, chat transcripts as telemetry, bankroll entries or provider credentials.
+
+GA4 stream `G-NJN43KL0FQ` belongs to this website. Enhanced measurement is off. The app loads the tag after consent, excludes advertising signals, strips query strings and fragments, and sends only public market/category interactions. Analytics settings allow revocation. DNT and Global Privacy Control keep collection off.
+
+Old AWS deployment data has not been deleted. Existing forecasts on that deployment remain there; the new Supabase journal begins with its own prospective records. Importing a journal access token does not copy historical AWS records into Supabase. No historical prediction is backfilled or silently scored as prospective.
