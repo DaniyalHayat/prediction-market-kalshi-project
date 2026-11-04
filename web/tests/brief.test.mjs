@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { marketBrief, parseHeadlines, parseGoogleNewsRss, fetchHeadlines, newsQuery } from '../lib/intelligence/brief.mjs';
+import { marketBrief, parseHeadlines, parseGoogleNewsRss, fetchHeadlines, newsQuery, sportsNewsContext,filterSportsHeadlines } from '../lib/intelligence/brief.mjs';
 
 const NOW = Date.parse('2026-10-28T12:00:00Z');
 const ticker = 'KXCPI-26NOV-T0.2';
@@ -126,4 +126,32 @@ test('invalid brief inputs are rejected before any provider requests', async () 
   const deps = dependencies({ marketDetails: async () => assert.fail('network called') });
   await assert.rejects(marketBrief('../portfolio/balance', {}, deps));
   await assert.rejects(marketBrief(ticker, { contracts: 0 }, deps));
+});
+test('NBA headlines qualify the exact franchise and reject city news, NFL and the other Los Angeles team',()=>{
+  const selected={ticker:'KXNBAGAME-26NOV04MINPHI-PHI',title:'Philadelphia wins'};
+  assert.match(newsQuery(selected),/Philadelphia 76ers/);assert.match(newsQuery(selected),/NBA/);
+  const result=filterSportsHeadlines({status:'live',articles:[
+    {title:'Philadelphia wedding venues announce new packages'},
+    {title:'Philadelphia Eagles injury report before NFL game'},
+    {title:'Philadelphia salon robbery investigation'},
+    {title:'Philadelphia housing prices rise'},
+    {title:'76ers injury report: Embiid status against Minnesota'},
+    {title:'Sixers prepare for Timberwolves matchup'}]},sportsNewsContext(selected));
+  assert.equal(result.articles.length,2);assert.equal(result.filtered_out,4);
+  const la=sportsNewsContext({ticker:'KXNBAGAME-26NOV04LALDEN-LAL',title:'Los Angeles wins'});
+  assert.equal(filterSportsHeadlines({status:'live',articles:[{title:'NBA: Los Angeles Clippers beat Denver'},{title:'Lakers injury report before Nuggets game'}]},la).articles.length,1);
+  const jazz=sportsNewsContext({ticker:'KXNBAGAME-26NOV04UTADEN-UTA',title:'Utah wins'});
+  assert.equal(filterSportsHeadlines({status:'live',articles:[{title:'Utah Jazz festival announces its lineup'}]},jazz).articles.length,0);
+});
+test('EPL draw news uses both named clubs and an explicit football qualifier',()=>{
+  const selected={ticker:'KXEPLGAME-26NOV08BRIBRE-TIE',title:'Tie is the result',rules_primary:'If Tie is the result of the Brighton vs Brentford professional EPL soccer game originally scheduled for Nov 8, 2026 after 90 minutes plus stoppage time, then the market resolves to Yes.'};
+  const query=newsQuery(selected);assert.match(query,/Premier League/);assert.match(query,/Brighton/);assert.match(query,/Brentford/);
+  const result=filterSportsHeadlines({status:'live',articles:[{title:'Brighton housing applications rise'},{title:'Brentford salon opens'},{title:'Brighton vs Brentford Premier League match preview'}]},sportsNewsContext(selected));
+  assert.equal(result.articles.length,1);assert.match(result.articles[0].title,/Premier League/);
+  assert.equal(newsQuery({...selected,rules_primary:'Unrecognized soccer contract rules'}),null);
+});
+test('unqualified sports headlines are withheld without a provider request',async()=>{
+  let called=false;const t='KXNFLGAME-26NOV08PHINY-PHI';
+  const deps=dependencies({marketDetails:async()=>({market:{...market,ticker:t,title:'Philadelphia wins',rules_primary:'Professional football game',event_ticker:'KXNFLGAME-26NOV08PHINY'},as_of:new Date(NOW).toISOString()}),headlines:async()=>{called=true;return {status:'live',articles:[{title:'Philadelphia wedding venues'}]};}});
+  const result=await marketBrief(t,{},deps);assert.equal(called,false);assert.equal(result.news.status,'not_queried');assert.equal(result.news.articles.length,0);
 });

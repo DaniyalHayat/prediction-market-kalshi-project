@@ -22,8 +22,47 @@ function gdeltTime(value) {
   const date = new Date(text);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 19) === text.slice(0, 19) ? date.toISOString() : null;
 }
+const NBA_NEWS_TEAMS={ATL:'Atlanta Hawks',BOS:'Boston Celtics',BKN:'Brooklyn Nets',CHA:'Charlotte Hornets',CHI:'Chicago Bulls',CLE:'Cleveland Cavaliers',
+  DAL:'Dallas Mavericks',DEN:'Denver Nuggets',DET:'Detroit Pistons',GS:'Golden State Warriors',GSW:'Golden State Warriors',HOU:'Houston Rockets',IND:'Indiana Pacers',
+  LAC:'LA Clippers',LAL:'Los Angeles Lakers',MEM:'Memphis Grizzlies',MIA:'Miami Heat',MIL:'Milwaukee Bucks',MIN:'Minnesota Timberwolves',NO:'New Orleans Pelicans',NOP:'New Orleans Pelicans',
+  NY:'New York Knicks',NYK:'New York Knicks',OKC:'Oklahoma City Thunder',ORL:'Orlando Magic',PHI:'Philadelphia 76ers',PHX:'Phoenix Suns',POR:'Portland Trail Blazers',
+  SAC:'Sacramento Kings',SA:'San Antonio Spurs',SAS:'San Antonio Spurs',TOR:'Toronto Raptors',UTA:'Utah Jazz',UTAH:'Utah Jazz',WAS:'Washington Wizards',WSH:'Washington Wizards'};
+const newsText=value=>clean(value,1000).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const hasPhrase=(text,phrase)=>(' '+text+' ').includes(' '+newsText(phrase)+' ');
+export function sportsNewsContext(market,category) {
+  const ticker=market.ticker||'';
+  if(ticker.startsWith('KXNBAGAME-')){
+    const team=NBA_NEWS_TEAMS[ticker.split('-').at(-1)];
+    if(!team)return {unsupported:true};
+    const nickname=team.endsWith('Trail Blazers')?'Trail Blazers':team.split(' ').at(-1);
+    const aliases=[team,nickname,...(team==='Philadelphia 76ers'?['Sixers']:[])];
+    return {league:'NBA',teams:[team],aliases,query:'"NBA" ('+aliases.map(s=>'"'+s+'"').join(' OR ')+') sourcelang:english'};
+  }
+  if(ticker.startsWith('KXEPLGAME-')){
+    const matchup=clean(market.rules_primary).match(/\bthe ([A-Za-z0-9 &'’.-]{2,90}?) (?:vs\.?|versus|at) ([A-Za-z0-9 &'’.-]{2,90}?) professional EPL soccer game\b/i);
+    const teams=matchup?.slice(1,3).map(t=>t.trim());
+    if(!teams||new Set(teams.map(newsText)).size!==2)return {unsupported:true};
+    return {league:'EPL',teams,aliases:teams,query:'"Premier League" ('+teams.map(s=>'"'+s+'"').join(' OR ')+') sourcelang:english'};
+  }
+  return category?.id==='sports'||/^KX(?:NBA|NFL|NHL|MLB|EPL|UCL|SPORT)/.test(ticker)||/\b(?:pro basketball|professional.{0,20}soccer|NBA|NFL|NHL|Premier League)\b/i.test(market.rules_primary||'')?{unsupported:true}:null;
+}
+export function filterSportsHeadlines(news,context) {
+  if(!context)return news;
+  if(context.unsupported)return {status:'not_queried',articles:[],reason:'Headlines withheld: an exact supported team and league news topic could not be established.'};
+  const articles=(news?.articles||[]).filter(article=>{
+    const text=newsText(article.title),identity=context.aliases.some(alias=>hasPhrase(text,alias));
+    if(context.league==='NBA'){
+      const canonical=context.teams.some(team=>hasPhrase(text,team)&&!['Miami Heat','Utah Jazz','Orlando Magic'].includes(team));
+      return identity&&(/\b(?:nba|basketball)\b/.test(text)||canonical||/\b(?:76ers|sixers|timberwolves|lakers|celtics|cavaliers|mavericks|clippers|grizzlies|pelicans|raptors|trail blazers|knicks)\b/.test(text));
+    }
+    return identity&&/\b(?:premier league|epl|soccer|football|line ?ups?|starting xi|match preview|match report)\b/.test(text);
+  });
+  return {...news,articles,status:news?.status==='live'&&!articles.length?'empty':news?.status||'unavailable',
+    filtered_out:(news?.articles?.length||0)-articles.length,relevance_scope:context.league+' team-qualified headline metadata; unrelated city reporting is excluded.'};
+}
 
 export function newsQuery(market, category) {
+  const sports=sportsNewsContext(market,category);if(sports)return sports.query||null;
   const fixed = { travel: '"TSA" "passenger"', weather: '"weather" "temperature"',
     inflation: '"US" "inflation"', labor: '"US" "unemployment"',
     crypto: /ETH/.test(market.ticker || '') ? '"Ethereum"' : '"Bitcoin"' };
@@ -209,14 +248,16 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
   const category = CATEGORIES.find(item => item.series.includes(series)) || null;
   const errors = [];
   const attempt = async (label, task) => { try { return await task(); } catch (error) { errors.push({ source: label, error: clean(error.message, 250) }); return null; } };
-  const [profileResult, eventResult, depth, report, news] = await Promise.all([
+  const newsContext=sportsNewsContext(market,category);
+  const [profileResult, eventResult, depth, report, rawNews] = await Promise.all([
     series ? attempt('Official series', () => deps.request('/series/' + encodeURIComponent(series))) : null,
     market.event_ticker && /^[A-Za-z0-9_.-]{1,140}$/.test(market.event_ticker) && !market.event_ticker.includes('..')
       ? attempt('Official event', () => deps.request('/events/' + encodeURIComponent(market.event_ticker))) : null,
     attempt('Order book', () => deps.book(ticker, contracts)),
     category ? attempt('Independent model', () => deps.researchReport(category.id)) : null,
-    attempt('Headlines', () => deps.headlines(newsQuery(market, category))),
+    newsContext?.unsupported?null:attempt('Headlines', () => deps.headlines(newsQuery(market, category))),
   ]);
+  const news=filterSportsHeadlines(rawNews,newsContext);
   const profile = profileResult?.data?.series, event = eventResult?.data?.event;
   const row = report?.markets?.find(value => value.ticker === ticker);
   const modeled = validForecast(row);
