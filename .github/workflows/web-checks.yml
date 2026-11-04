@@ -34,6 +34,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install locked dependencies
         run: npm ci
+      - name: Verify checked-in dashboard artifact hashes
+        run: npm run verify:artifacts
       - name: Test research and paper execution
         run: npm test
       - name: Build production server
@@ -44,4 +46,4 @@ jobs:
       - name: Bundle cloud server and public frontend
         run: node tools/build_cloud.mjs && python tools/package_cloud.py
       - name: Check typed sizing and CMS persistence
-        run: npm run typecheck && npm run cms:verify && npm run verify:artifacts
+        run: npm run typecheck && npm run cms:verify

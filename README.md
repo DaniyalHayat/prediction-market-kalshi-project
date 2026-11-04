@@ -22,9 +22,9 @@ The [previous AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.o
 
 The independent models are research hypotheses. I have not established profitable trading performance, a calibrated probability advantage or an executable arbitrage. Public quotes and available depth can change between retrieval and an actual order.
 
-## Run the complete web app
+## Run the web workspace locally
 
-I use Node.js 22 or newer. From this repository:
+The current production build was tested with Node.js 26.12.1. From this repository:
 
 ```sh
 cd web
@@ -32,7 +32,7 @@ npm ci
 npm run dev -- --port 8768
 ```
 
-Open [the local app](http://localhost:8768/). The web server supplies the dashboard and its same-origin APIs. Public market data can be requested without an account; upstream restrictions, maintenance and rate limits can still make individual feeds unavailable.
+Open [the local app](http://localhost:8768/). Without backend configuration, local public research uses the GET fallback. Native streaming, durable ingestion, private journals and the MCP assistant require the backend and private environment settings in the [deployment guide](web/docs/DEPLOYMENT.md). Public market data can be requested without an account; upstream restrictions, maintenance and rate limits can still make individual feeds unavailable.
 
 For a local production build:
 
@@ -88,7 +88,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-The current verification record contains **81 JavaScript tests, 31 connector tests and 11 Python research-pipeline tests passing**. The checks cover parsing and source mapping, fixed-point depth, fees and partial fills, research calculations, paper-ledger accounting, freshness and ticker matching, and export safety. They establish the tested behavior; public deployment and individual live feeds require separate verification.
+The earlier verification record contained **81 JavaScript tests, 31 connector tests and 11 Python research-pipeline tests passing**. The current web suite additionally covers streaming indexes, transactional PostgreSQL quotas and jobs, MCP transport, sports and music source mapping, selection consistency, paper cash and analytics privacy. The checks establish tested behavior; public deployment and individual live feeds require separate verification.
 
 The production web build also passes. The 11 Python research checks exercise DuckDB SQL ingestion and point-in-time evaluation, chronological event-separated calibration, and frozen forward-audit behavior using test fixtures. A separate temporary-fixture check also verified DuckDB Parquet export and PyArrow/DuckDB readback. I ran these in an ignored local virtual environment with DuckDB 1.5.6, scikit-learn 1.9.1 and PyArrow 24.0.0; the web service does not depend on that environment. The GitHub workflow runs the locked web installation, JavaScript tests and production build on pushes and pull requests that change the app.
 
@@ -96,4 +96,4 @@ Paper trades stay in this browser's storage. Clearing site data removes that jou
 
 ## November 4 implementation and validation
 
-The web application adds TypeScript sizing at `POST /api/paper/size`: integer enumeration maximizes worst-case expected log wealth under supplied probability bounds, fees, visible depth and loss limits. Stale/mismatched quotes are rejected and zero position is allowed. This is conditional simulation, not established real-world optimality. Payload CMS/SQLite implements a local research-note collection with draft/reviewed status and access rules. From `web`, run `npm run cms:verify` for real database CRUD and blocked anonymous reads. This is a local API integration, not a deployed admin site. `npm test` runs 81 JavaScript and four TypeScript checks; `npm run typecheck`, `npm run build`, and `npm run verify:artifacts` check types, production compilation and artifact hashes. No paid services or real orders are involved.
+The web application adds TypeScript sizing at `POST /api/paper/size`: integer enumeration maximizes worst-case expected log wealth under supplied probability bounds, fees, visible depth and loss limits. Stale/mismatched quotes are rejected and zero position is allowed. This is conditional simulation, not established real-world optimality. Payload CMS/SQLite implements a local research-note collection with draft/reviewed status and access rules. From `web`, run `npm run cms:verify` for real database CRUD and blocked anonymous reads. This is a local API integration, not a deployed admin site. `npm test`, `npm run typecheck`, `npm run build`, and `npm run verify:artifacts` check behavior, types, production compilation and artifact hashes. The local checks require no paid services; hosted provider usage is described in the deployment guide. No real orders are involved.

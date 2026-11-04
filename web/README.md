@@ -4,13 +4,13 @@ The current [Kalshi Market Lab](https://predictir.dev) uses the React workspace 
 
 [Current deployment, security and reproduction](docs/DEPLOYMENT.md) · [Ranked integration choices](docs/INTEGRATIONS.md) · [Measured sports evaluation](docs/sports-validation.json). The sections below also describe the earlier standalone workbench and its optional research endpoints.
 
-[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Cloud runtime](docs/cloud-runtime.md) · [Figma frontend](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj)
+[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Legacy AWS runtime](docs/cloud-runtime.md) · [Figma frontend](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj)
 
 The [public AWS app](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) serves this dashboard and its new native-streaming/private-journal workbench. Source import does not establish Figma preview or publication readiness.
 
 ## Run locally
 
-From this directory, with Node.js 22 or newer:
+From this directory, using the production-tested Node.js 26.12.1 runtime:
 
 ```sh
 npm ci
@@ -18,6 +18,8 @@ npm run dev -- --port 8768
 ```
 
 Open [the local app](http://localhost:8768/). For a production build, run `npm run build`, then `npm run start -- --port 8768`.
+
+Local public research can use the GET fallback. Native streaming, durable ingestion, private journals and the MCP assistant require the configured backend and environment settings in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 The same-origin API supports public market lists, exact contract details, fixed-point order books, recent trades, bounded session history and Excel export. Optional signed public-data requests read `KALSHI_API_KEY_ID` and `KALSHI_PRIVATE_KEY` only on the server. The app exposes no account balances, account positions or real-order submission routes. Research-only POST routes freeze and checkpoint simulated forward-test cohorts.
 
