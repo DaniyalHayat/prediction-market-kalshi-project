@@ -2,7 +2,9 @@
 
 I built Kalshi Market Lab to make the research before an event-contract trade easier to inspect: what the contract actually resolves on, what evidence supports an estimate, how much depth is available, and what a position could cost after fees.
 
-[Figma app workspace](https://www.figma.com/make/l70tt532rm4WDOZ5PFQIiK) · [Security and data handling](docs/SECURITY.md)
+[Updated Figma source workspace](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj) · [Security and data handling](docs/SECURITY.md)
+
+The updated Figma source import succeeded, but its preview returned connection error M8. Use the verified hosted app below for execution; updated Figma preview and publication are not claimed.
 
 **[Open Kalshi Market Lab](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/)**. The existing dashboard now links to a focused live-contract workbench with native exchange streaming and private prospective forecast journals. See [AWS architecture, limits and reproduction](web/docs/cloud-runtime.md). Figma import and preview status are separate from the hosted application's verification.
 
@@ -67,7 +69,7 @@ Check [connector health](http://127.0.0.1:8000/health), then set **Connector ori
 
 I do not treat the root scaffold's synthetic fallback as a live observation. Its Gaming/Lodging assumptions do not establish customer migration between exchanges and sportsbooks, actual operator hold, GGR, EBITDA or a lodging RevPAR forecast. The working app's scenario controls are explicitly labeled assumptions.
 
-The web research engine also supports frozen forward-test cohorts and subsequent observations. Those research artifacts can use temporary server storage and may reset on a hosting restart. A cohort or a favorable short-horizon result does not establish a profitable strategy. The detailed [model guide](web/docs/quant-research.md) and [forward protocol](web/docs/forward-research.md) describe the methods and limits.
+The web research engine also supports frozen forward-test cohorts and subsequent observations. The AWS deployment stores these in versioned private S3 with transactional DynamoDB chain heads; a completed cloud freeze/checkpoint is recorded in [the integration receipt](web/docs/forward-cloud-verification.json). Without the documented cloud configuration, cohorts use temporary server storage and may reset on a hosting restart. A cohort or a favorable short-horizon result does not establish a profitable strategy. The detailed [model guide](web/docs/quant-research.md) and [forward protocol](web/docs/forward-research.md) describe the methods and limits.
 
 ## Validation
 
