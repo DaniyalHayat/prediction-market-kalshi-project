@@ -1,6 +1,8 @@
 # Kalshi Market Lab · web runtime
 
-I use this Next.js app to serve the market dashboard, public-data APIs, selected-contract research and browser-local paper trading. This `web/` directory is the complete web project. Its browser assets live in `public/dashboard/`; its server-side adapters and calculations live in `lib/` and `app/api/`.
+The current [Kalshi Market Lab](https://predictir.dev) uses the React workspace in `ui/`, public-data adapters and models in `lib/`, Vercel API routes in `app/api/`, a Railway stream/ingestion server in `cloud/`, and Supabase migrations in `database/`. The earlier standalone dashboard remains in `public/dashboard/`.
+
+[Current deployment, security and reproduction](docs/DEPLOYMENT.md) · [Ranked integration choices](docs/INTEGRATIONS.md) · [Measured sports evaluation](docs/sports-validation.json). The sections below also describe the earlier standalone workbench and its optional research endpoints.
 
 [Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Cloud runtime](docs/cloud-runtime.md) · [Figma frontend](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj)
 

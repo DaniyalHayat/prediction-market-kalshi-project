@@ -6,11 +6,15 @@ I built Kalshi Market Lab to make the research before an event-contract trade ea
 
 The updated Figma source import succeeded, but its preview returned connection error M8. Use the verified hosted app below for execution; updated Figma preview and publication are not claimed.
 
-**[Open Kalshi Market Lab](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/)**. The existing dashboard now links to a focused live-contract workbench with native exchange streaming and private prospective forecast journals. See [AWS architecture, limits and reproduction](web/docs/cloud-runtime.md). Figma import and preview status are separate from the hosted application's verification.
+**[Open Kalshi Market Lab](https://predictir.dev)**. The current workspace runs on Vercel, Railway and Supabase. It includes eight market categories, native streaming, contract-specific research, cost-aware screens, a paper portfolio, private prospective journals, and a read-only MCP research assistant. [Deployment and reproduction](web/docs/DEPLOYMENT.md) · [Integration ranking and costs](web/docs/INTEGRATIONS.md) · [Sports validation](web/docs/sports-validation.json).
+
+The [previous AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) remains available for its existing journal records. It is a separate data store. Figma source/preview status is separate from the current hosted web application.
 
 ## What I built
 
-- A market monitor for Sports, Macro, Travel, Weather and Crypto, with 30-second refreshes while the page is visible, source timestamps, recent trades, spread diagnostics and selected-contract order-book depth.
+- A market workspace for Sports, Economy, Travel, Weather, Crypto, Tech & science, Climate and Culture, with native exchange streaming, bounded REST fallback, source timestamps, spread diagnostics and selected-contract order-book depth.
+- Regularized NBA team-strength and EPL attack/defense research, with chronological evaluation, coverage gates, recent form, head-to-head games and descriptive player-minute comparisons. Apple chart snapshots and attributed public X posts remain distinct from settlement-matched forecasting inputs. Spotify catalog references are display-only.
+- An MCP tool-backed explanation assistant, consent-based GA4 traffic measurement, observed market-price attribution, private journal score attribution, and durable, retryable source ingestion into relational tables and hashed compressed evidence archives.
 - Contract-specific research that brings together resolution rules, source observations, independent model outputs and linked news coverage. The numerical research families use TSA passenger counts, National Weather Service forecasts, FRED economic series and Coinbase candles. Missing evidence and archived source data retain their status and timestamps.
 - An execution workbench for YES and NO contracts: depth-limited fills, slippage caps, fee assumptions, break-even probabilities, outcome P/L and budget-constrained sizing.
 - Browser-local paper trading with a positions ledger and execution journal. Entries consume available asks; closes and marks use available bids with modeled costs. Paper execution requires a matching public book under 90 seconds old, preserves partial fills and saves quote provenance.

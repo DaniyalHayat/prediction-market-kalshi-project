@@ -38,3 +38,5 @@ web/tests/rendered-content-syntax.js
 .figma-export/
 .railway-npm/
 .vercel/
+supabase/.temp/
+supabase/.branches/
