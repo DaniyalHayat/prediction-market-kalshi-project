@@ -51,7 +51,12 @@ export async function listForecasts(token) {
   const pk=ownerKey(token),s=store();
   const r=await s.journalRows(pk);
   const records=r.items,settled=records.filter(r=>r.status==='settled');
+  const grouped=new Map();
+  for(const row of settled){const series=row.frozen.ticker.split('-')[0],items=grouped.get(series)||[];items.push(row);grouped.set(series,items);}
+  const attribution=[...grouped].map(([series,items])=>({series,n:items.length,brier:items.reduce((s,r)=>s+r.score.brier,0)/items.length,
+    baseline_brier:items.every(r=>r.score.market_brier!==null)?items.reduce((s,r)=>s+r.score.market_brier,0)/items.length:null}));
   return {records:records.map(({pk,sk,pending_pk,pending_sk,expires_epoch,...value})=>value),
+    attribution,
     evaluation:{n:settled.length,brier:settled.length?settled.reduce((s,r)=>s+r.score.brier,0)/settled.length:null,
       baseline_brier:settled.length&&settled.every(r=>r.score.market_brier!==null)?settled.reduce((s,r)=>s+r.score.market_brier,0)/settled.length:null,
       note:'Only prospectively frozen, binary-settled records are scored. Pending records are retained; no retrospective predictions are inserted.'},

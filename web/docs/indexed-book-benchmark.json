@@ -1,0 +1,8 @@
+{
+  "fixture": "Seeded 1000-level side, 12000 updates, current best after each update; seven timed repetitions after warmup",
+  "runtime": "v26.12.1",
+  "indexed_median_ms": 0.8105000000000473,
+  "map_scan_median_ms": 213.56500000000005,
+  "ratio": 263.497840838973,
+  "scope": "Local CPU microbenchmark; excludes network, full-depth serialization and exchange latency. Independent Map reference must match final depth."
+}
