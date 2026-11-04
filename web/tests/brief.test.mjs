@@ -135,9 +135,10 @@ test('NBA headlines qualify the exact franchise and reject city news, NFL and th
     {title:'Philadelphia Eagles injury report before NFL game'},
     {title:'Philadelphia salon robbery investigation'},
     {title:'Philadelphia housing prices rise'},
+    {title:'76ers NBA promo code: claim a betting bonus'},
     {title:'76ers injury report: Embiid status against Minnesota'},
     {title:'Sixers prepare for Timberwolves matchup'}]},sportsNewsContext(selected));
-  assert.equal(result.articles.length,2);assert.equal(result.filtered_out,4);
+  assert.equal(result.articles.length,2);assert.equal(result.filtered_out,5);
   const la=sportsNewsContext({ticker:'KXNBAGAME-26NOV04LALDEN-LAL',title:'Los Angeles wins'});
   assert.equal(filterSportsHeadlines({status:'live',articles:[{title:'NBA: Los Angeles Clippers beat Denver'},{title:'Lakers injury report before Nuggets game'}]},la).articles.length,1);
   const jazz=sportsNewsContext({ticker:'KXNBAGAME-26NOV04UTADEN-UTA',title:'Utah wins'});

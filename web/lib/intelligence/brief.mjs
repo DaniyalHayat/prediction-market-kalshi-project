@@ -51,6 +51,7 @@ export function filterSportsHeadlines(news,context) {
   if(context.unsupported)return {status:'not_queried',articles:[],reason:'Headlines withheld: an exact supported team and league news topic could not be established.'};
   const articles=(news?.articles||[]).filter(article=>{
     const text=newsText(article.title),identity=context.aliases.some(alias=>hasPhrase(text,alias));
+    if(/\b(?:promo code|promotional code|sign up bonus|bonus bets|free bets|betting bonus)\b/.test(text))return false;
     if(context.league==='NBA'){
       const canonical=context.teams.some(team=>hasPhrase(text,team)&&!['Miami Heat','Utah Jazz','Orlando Magic'].includes(team));
       return identity&&(/\b(?:nba|basketball)\b/.test(text)||canonical||/\b(?:76ers|sixers|timberwolves|lakers|celtics|cavaliers|mavericks|clippers|grizzlies|pelicans|raptors|trail blazers|knicks)\b/.test(text));
