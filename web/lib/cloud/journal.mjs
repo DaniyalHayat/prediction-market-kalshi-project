@@ -1,5 +1,4 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {QueryCommand,UpdateCommand} from '@aws-sdk/lib-dynamodb';
 import {store} from './store.mjs';
 import {marketDetails,book,validateTicker} from '../live.mjs';
 
@@ -50,36 +49,29 @@ export async function freezeForecast(input,token) {
 }
 export async function listForecasts(token) {
   const pk=ownerKey(token),s=store();
-  const r=await s.client.send(new QueryCommand({...s.base,KeyConditionExpression:'pk = :pk AND begins_with(sk,:prefix)',
-    ExpressionAttributeValues:{':pk':pk,':prefix':'forecast#'},ConsistentRead:true,Limit:100}));
-  const records=r.Items||[],settled=records.filter(r=>r.status==='settled');
+  const r=await s.journalRows(pk);
+  const records=r.items,settled=records.filter(r=>r.status==='settled');
   return {records:records.map(({pk,sk,pending_pk,pending_sk,expires_epoch,...value})=>value),
     evaluation:{n:settled.length,brier:settled.length?settled.reduce((s,r)=>s+r.score.brier,0)/settled.length:null,
       baseline_brier:settled.length&&settled.every(r=>r.score.market_brier!==null)?settled.reduce((s,r)=>s+r.score.market_brier,0)/settled.length:null,
       note:'Only prospectively frozen, binary-settled records are scored. Pending records are retained; no retrospective predictions are inserted.'},
-    partial:Boolean(r.LastEvaluatedKey)};
+    partial:r.partial};
 }
 export async function settleDue(limit=24) {
   const s=store(),now=new Date().toISOString();
-  const r=await s.client.send(new QueryCommand({...s.base,IndexName:'pending',KeyConditionExpression:'pending_pk = :pk AND pending_sk <= :now',
-    ExpressionAttributeValues:{':pk':'pending',':now':now+'~'},Limit:limit}));
+  const rows=await s.pendingRows(now,limit);
   const results=[];
-  for(const row of r.Items||[]) {
+  for(const row of rows) {
     try {
     const {market,as_of,source_url}=await marketDetails(row.frozen.ticker);
     const outcome=binaryOutcome(market);
     if(outcome===null) {
-      await s.client.send(new UpdateCommand({...s.base,Key:{pk:row.pk,sk:row.sk},UpdateExpression:'SET pending_sk = :next',
-        ConditionExpression:'#status = :pending',ExpressionAttributeNames:{'#status':'status'},
-        ExpressionAttributeValues:{':next':new Date(Date.now()+3600000).toISOString()+'#'+row.id,':pending':'pending'}}));
+      await s.reschedule(row,new Date(Date.now()+3600000).toISOString()+'#'+row.id);
       results.push({id:row.id,status:'not_binary_settled'});continue;
     }
     const score=scoreForecast(row.frozen,outcome),settlement={checked_at:now,as_of,source_url,market,score,freeze_hash:row.freeze_hash};
     await s.archive(`forecasts/${row.id}/settlement-${hash(settlement)}.json`,settlement);
-    await s.client.send(new UpdateCommand({...s.base,Key:{pk:row.pk,sk:row.sk},
-      UpdateExpression:'SET #status = :settled, score = :score, settlement_as_of = :asof REMOVE pending_pk, pending_sk',
-      ConditionExpression:'#status = :pending AND freeze_hash = :hash',ExpressionAttributeNames:{'#status':'status'},
-      ExpressionAttributeValues:{':settled':'settled',':score':score,':asof':as_of,':pending':'pending',':hash':row.freeze_hash}}));
+    await s.settle(row,score,as_of);
     results.push({id:row.id,status:'settled'});
     } catch(error) {
       results.push({id:row.id,status:error.name==='ConditionalCheckFailedException'?'already_updated':'retry_pending'});

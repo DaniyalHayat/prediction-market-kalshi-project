@@ -3,12 +3,14 @@ import {DynamoDBClient} from '@aws-sdk/client-dynamodb';
 import {DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand, TransactWriteCommand} from '@aws-sdk/lib-dynamodb';
 import {S3Client, PutObjectCommand, GetObjectCommand} from '@aws-sdk/client-s3';
 import {SSMClient, GetParameterCommand} from '@aws-sdk/client-ssm';
+import {makePostgresStore} from '../postgres-store.mjs';
 
 const config={region:process.env.AWS_REGION || 'us-east-2',maxAttempts:2};
 const sha=value=>createHash('sha256').update(value).digest('hex');
-export const cloudEnabled=()=>Boolean(process.env.MARKET_TABLE);
+export const cloudEnabled=()=>Boolean(process.env.DATABASE_URL || process.env.MARKET_TABLE);
 let active,credentials;
 export function store() {
+  if(!active && process.env.DATABASE_URL)active=makePostgresStore();
   if(!active)active=makeStore(DynamoDBDocumentClient.from(new DynamoDBClient(config),{marshallOptions:{removeUndefinedValues:true}}),
     {table:process.env.MARKET_TABLE,bucket:process.env.MARKET_BUCKET,s3:new S3Client(config)});
   return active;
@@ -110,5 +112,26 @@ export function makeStore(client,{table,bucket,s3,now=Date.now}) {
       ConsistentRead:true,ScanIndexForward:false,Limit:60}));
     return (r.Items||[]).map(i=>i.id);
   }
-  return {get,put,consume,lease,archive,cached,appendAudit,readAudit,auditIds,client,base};
+  async function journalRows(pk) {
+    const r=await client.send(new QueryCommand({...base,KeyConditionExpression:'pk = :pk AND begins_with(sk,:prefix)',
+      ExpressionAttributeValues:{':pk':pk,':prefix':'forecast#'},ConsistentRead:true,Limit:100}));
+    return {items:r.Items||[],partial:Boolean(r.LastEvaluatedKey)};
+  }
+  async function pendingRows(now,limit) {
+    const r=await client.send(new QueryCommand({...base,IndexName:'pending',KeyConditionExpression:'pending_pk = :pk AND pending_sk <= :now',
+      ExpressionAttributeValues:{':pk':'pending',':now':now+'~'},Limit:limit}));
+    return r.Items||[];
+  }
+  async function reschedule(row,next) {
+    await client.send(new UpdateCommand({...base,Key:{pk:row.pk,sk:row.sk},UpdateExpression:'SET pending_sk = :next',
+      ConditionExpression:'#status = :pending',ExpressionAttributeNames:{'#status':'status'},
+      ExpressionAttributeValues:{':next':next,':pending':'pending'}}));
+  }
+  async function settle(row,score,asof) {
+    await client.send(new UpdateCommand({...base,Key:{pk:row.pk,sk:row.sk},
+      UpdateExpression:'SET #status = :settled, score = :score, settlement_as_of = :asof REMOVE pending_pk, pending_sk',
+      ConditionExpression:'#status = :pending AND freeze_hash = :hash',ExpressionAttributeNames:{'#status':'status'},
+      ExpressionAttributeValues:{':settled':'settled',':score':score,':asof':asof,':pending':'pending',':hash':row.freeze_hash}}));
+  }
+  return {kind:'dynamodb',get,put,consume,lease,archive,cached,appendAudit,readAudit,auditIds,journalRows,pendingRows,reschedule,settle,client,base};
 }

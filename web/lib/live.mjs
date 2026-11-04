@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, sign, constants } from "node:crypto";
 import {cloudEnabled,store} from './cloud/store.mjs';
+import {readJSON} from './transport.mjs';
 
 export const BASE = "https://external-api.kalshi.com/trade-api/v2";
 // Optional public-data service; credentials are sent only to the official exchange.
@@ -107,7 +108,7 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
   if(!/^\/(markets(?:\/|$)|series(?:\/|$)|events(?:\/|$))/.test(path) || path.includes('..'))throw new RangeError('Only public market-data paths are supported');
   if(cloudEnabled() && fetcher===fetch) {
     const key=path+'?'+new URLSearchParams(params).toString();
-    const ttl=path.endsWith('/orderbook')?3:path.includes('candlesticks')?60:20;
+    const ttl=path.endsWith('/orderbook')?3:path.startsWith('/series')&&!path.includes('/markets/')?3600:path.includes('candlesticks')?60:20;
     return store().cached(key,ttl,()=>request(path,params,(...args)=>fetch(...args),now));
   }
   const query = new URLSearchParams(params); query.sort();
@@ -137,10 +138,9 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
       }
       throw upstreamError(response.status);
     }
-    const raw = await response.text();
-    if (raw.length > 12e6) throw new Error("Public response exceeded size bound");
+    const {data,raw} = await readJSON(response,{source:'Kalshi'});
     state.cooldowns.delete(url);
-    return { data: JSON.parse(raw), as_of: response.headers.get("x-kalshi-as-of") || utc(), source_url: response.headers.get("x-kalshi-source-url") || url, sha256: response.headers.get("x-kalshi-sha256") || createHash("sha256").update(raw).digest("hex") };
+    return { data, as_of: response.headers.get("x-kalshi-as-of") || utc(), source_url: response.headers.get("x-kalshi-source-url") || url, sha256: response.headers.get("x-kalshi-sha256") || createHash("sha256").update(raw).digest("hex") };
   })();
   state.requestInflight.set(url,task);
   try { return await task; } finally { state.requestInflight.delete(url); }
