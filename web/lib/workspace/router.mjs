@@ -29,11 +29,20 @@ export async function contractHistory(ticker,hours=24) {
   return {ticker,rows,as_of:result.as_of,source_url:result.source_url,scope:'Returned exchange candle closes; missing observations are not filled'};
 }
 
-export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeVerified=false,now=Date.now()}={}) {
+export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeVerified=false,coverage=null,mappingReason=null,now=Date.now()}={}) {
   const reasons=[],candidates=[],valid=Number.isFinite(forecast?.probability)&&Array.isArray(forecast?.interval)&&forecast.interval.length===2&&
     forecast.interval.every(Number.isFinite)&&forecast.interval[0]>=0&&forecast.interval[0]<=forecast.probability&&forecast.interval[1]>=forecast.probability&&forecast.interval[1]<=1;
   if(!valid)reasons.push('The exact event and YES outcome lack a usable independent estimate.');
-  if(valid&&!forecast.eligible)reasons.push('The matchup model has not passed its chronological validation and coverage requirements.');
+  const released=forecast?.eligible&&coverage?.partial!==true&&!mappingReason;
+  if(valid&&!released){
+    if(forecast.validation?.passed!==true)reasons.push('The matchup model has not passed its chronological holdout release requirements.');
+    if(coverage?.partial){
+      const count=Number.isInteger(coverage.schedules_returned)&&Number.isInteger(coverage.schedules_expected)?`only ${coverage.schedules_returned} of ${coverage.schedules_expected} schedule sources are available`:'schedule source coverage is incomplete';
+      reasons.push(`${forecast.validation?.passed===true?'The historical holdout passed, but ':''}${count[0].toLowerCase()+count.slice(1)}. The screen is withheld until source coverage is complete.`);
+    }
+    if(mappingReason)reasons.push(mappingReason);
+    if(!reasons.length)reasons.push('The exact event or source coverage has not met all release requirements.');
+  }
   const age=now-Date.parse(depth?.as_of||''),sourceAge=now-Date.parse(forecast?.source_as_of||'');
   const fresh=Number.isFinite(age)&&age>=-5000&&age<=90000,sourceFresh=Number.isFinite(sourceAge)&&sourceAge>=-60000&&sourceAge<=86400000;
   if(!fresh)reasons.push('A matching order book less than 90 seconds old is required.');
@@ -46,7 +55,7 @@ export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeV
       const execution=executionEstimate(depth.raw,side,1,2,coefficient),probability=side==='yes'?forecast.probability:1-forecast.probability;
       const lower=side==='yes'?forecast.interval[0]:1-forecast.interval[1],cost=execution.breakeven;
       candidates.push({side,probability,lower_probability:lower,execution,expected_edge:cost===null?null:probability-cost,
-        conservative_edge:cost===null?null:lower-cost-.02,eligible:forecast.eligible&&fresh&&sourceFresh&&open&&execution.unfilled===0&&execution.filled===1});
+        conservative_edge:cost===null?null:lower-cost-.02,eligible:released&&fresh&&sourceFresh&&open&&execution.unfilled===0&&execution.filled===1});
     }catch{reasons.push('The public book could not support a valid cost estimate.');}
   }
   const best=candidates.filter(c=>c.eligible&&c.conservative_edge>0).sort((a,b)=>b.conservative_edge-a.conservative_edge)[0];
@@ -77,8 +86,8 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false}={},d
     const errors=[...(brief.errors||[])];
     if(sports?.error)errors.push({source:'Sports evidence',error:sports.reason});
     if(sports?.forecast){
-      forecast={...sports.forecast,evidence:{tier:sports.forecast.eligible?2:1,label:sports.forecast.eligible?'Chronological matchup holdout':'Unvalidated matchup scenario'}};
-      decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient)});
+      forecast={...sports.forecast,evidence:{tier:sports.forecast.eligible?2:1,label:sports.forecast.eligible?'Chronological matchup holdout':sports.forecast.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
+      decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason});
       status='modeled';summary=`The matched-event historical team model estimates ${(forecast.probability*100).toFixed(1)}% YES. Its displayed range is parameter uncertainty or sensitivity, not a calibrated injury-adjusted outcome interval. ${decision.reasons[0]||'The conservative screen clears assumed entry costs; this remains a research hypothesis.'}`;
     }
     const side=['yes','no'].includes(decision.side)?decision.side.toUpperCase():'PASS';

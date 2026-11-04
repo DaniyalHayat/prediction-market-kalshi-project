@@ -71,6 +71,19 @@ test('cost screen uses opposite-side uncertainty bound and fails closed for stal
   }
   assert.equal(screenSportsForecast(market,{...forecast,eligible:false},depth,{now:NOW}).side,'insufficient_edge');
 });
+test('passing holdout with incomplete coverage is withheld with the same precise reason in full and assistant research',async()=>{
+  const coverage={schedules_expected:90,schedules_returned:88,partial:true};
+  const passing={...forecast,eligible:false,validation:{passed:true,n:514,brier_skill:.17}};
+  const decision=screenSportsForecast(market,passing,depth,{now:NOW,coverage});
+  assert.equal(decision.side,'insufficient_edge');assert.match(decision.reasons[0],/historical holdout passed, but only 88 of 90/);assert.ok(!decision.reasons.join(' ').includes('not passed'));
+  assert.equal(screenSportsForecast(market,{...passing,eligible:true},depth,{now:NOW,coverage}).side,'insufficient_edge');
+  const brief={ticker,as_of:new Date().toISOString(),market,forecast:{probability:null},decision:{side:'insufficient_edge',reasons:['No independent model']},sources:[],errors:[],summary:'Evidence only'};
+  const deps={marketDetails:async()=>({market}),book:async()=>depth,marketFees:async()=>({coefficient:.07}),marketBrief:async()=>brief,
+    sportsResearch:async()=>({forecast:passing,coverage}),musicResearch:async()=>null,chartPosts:async()=>({posts:[]})};
+  const values=await Promise.all([{}, {assistant:true}, {fast:true}].map(options=>workspaceResearch(ticker,options,deps)));
+  assert.ok(values.every(value=>value.opinion.side==='PASS'&&value.opinion.reason===decision.reasons[0]));
+  assert.ok(values.every(value=>value.forecast.evidence.label==='Holdout passed; source coverage incomplete'));
+});
 test('Apple identity, chart dates and ordinal rank history remain source-specific',()=>{
   const payload={feed:{country:'us',updated:new Date(NOW).toISOString(),results:[{id:'123',name:'Track',artistName:'Artist',url:'https://music.apple.com/us/song/123'}]}};
   const chart=parseApple(payload,NOW);assert.equal(chart.tracks[0].rank,1);assert.match(chart.note,/does not report stream counts/i);
