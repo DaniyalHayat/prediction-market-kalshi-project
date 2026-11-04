@@ -39,3 +39,5 @@ jobs:
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: '1'
+      - name: Check typed sizing and CMS persistence
+        run: npm run typecheck && npm run cms:verify && npm run verify:artifacts

@@ -5,3 +5,7 @@ node_modules/
 .research/
 __pycache__/
 .venv/
+*.tsbuildinfo
+*.db
+*.db-shm
+*.db-wal
