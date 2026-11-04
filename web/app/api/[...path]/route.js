@@ -3,15 +3,20 @@ import { CATEGORIES, discoverSeries } from "../../../lib/intelligence/catalog.mj
 import { researchReport, analyzeExecution } from "../../../lib/intelligence/index.mjs";
 import { marketCandles, listForward, readForward, startForward, checkpointForward } from "../../../lib/quant/forward.mjs";
 import { marketBrief } from "../../../lib/intelligence/brief.mjs";
+import {workspaceGET} from '../../../lib/workspace/router.mjs';
+import {proxyBackend} from '../../../lib/workspace/proxy.mjs';
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 export async function GET(request, context) {
   const {path} = await context.params, endpoint = path.join("/"), params = new URL(request.url).searchParams;
+  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
   const vertical = params.get("vertical") || "Macro", ticker = params.get("ticker"), contracts = params.has("contracts") ? Number(params.get("contracts")) : 100;
   const headers = {"Cache-Control":"no-store"};
   try {
     let result;
-    if(endpoint==="health") result={status:"ok",mode:"read-only GET",signed_requests:authStatus(),refresh_floor_seconds:20,as_of:utc()};
+    if(endpoint.startsWith('workspace/'))result=await workspaceGET(endpoint,params);
+    else if(endpoint==="health") result={status:"ok",mode:"read-only GET",signed_requests:authStatus(),refresh_floor_seconds:20,as_of:utc()};
     else if(endpoint==="brief") result=await marketBrief(ticker,{contracts});
     else if(endpoint==="intelligence/catalog") result={categories:CATEGORIES,as_of:utc()};
     else if(endpoint==="intelligence/series") result=await discoverSeries();
@@ -35,6 +40,7 @@ export async function GET(request, context) {
 }
 export async function POST(request,context) {
   const {path}=await context.params,endpoint=path.join("/"),headers={"Cache-Control":"no-store"};
+  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
   try {
     if(!["intelligence/forward/start","intelligence/forward/checkpoint"].includes(endpoint))return Response.json({error:"Unknown paper-research path"},{status:404,headers});
     const text=await request.text();
