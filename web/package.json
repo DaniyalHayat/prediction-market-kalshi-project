@@ -11,20 +11,30 @@
     "typecheck": "tsc --noEmit",
     "cms:verify": "tsx cms/verify.ts",
     "cms": "tsx cms/notes.ts",
+    "cloud:build": "node tools/build_cloud.mjs && python tools/package_cloud.py",
+    "figma:export": "node tools/export_figma.mjs",
     "verify:artifacts": "node tools/artifacts.mjs --check"
   },
   "dependencies": {
+    "@aws-sdk/client-budgets": "3.1161.0",
+    "@aws-sdk/client-dynamodb": "3.1161.0",
+    "@aws-sdk/client-lambda-web": "3.1161.0",
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/client-ssm": "3.1161.0",
+    "@aws-sdk/lib-dynamodb": "3.1161.0",
     "@payloadcms/db-sqlite": "3.92.1",
     "exceljs": "4.4.0",
     "next": "16.4.3",
     "payload": "3.92.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "ws": "8.22.1"
   },
   "devDependencies": {
     "@types/node": "22.19.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "esbuild": "0.28.2",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
   }

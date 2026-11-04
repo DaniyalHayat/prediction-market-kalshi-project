@@ -1,0 +1,25 @@
+{
+  "verified_at": "2026-11-04T11:32:14.874Z",
+  "cohort_id": "b52aee95-6aab-4157-84df-2a57e22e77c6",
+  "status": "completed",
+  "audit": {
+    "entries": 2,
+    "freeze_hash": "56609cd5828595344c7530ba1baf14ed02fd6d67c48a20ba06570efe98dd8ef6",
+    "last_hash": "bcf6f40c17acbcb6ac25f603ac7106dc34d8d1ae4630c0e28a3f320b844abd7f",
+    "verified": true
+  },
+  "storage": "Versioned private S3 archive with transactional DynamoDB chain heads and conditional append.",
+  "protocol": {
+    "categories": [
+      "crypto"
+    ],
+    "seconds": 60,
+    "per_category": 1,
+    "contracts": 1,
+    "slippage": 2,
+    "coefficient": 0.07,
+    "min_edge": 0.005
+  },
+  "legs": 1,
+  "classification": "Small prospective integration check of durable archive and checkpoint paths. No forecasting edge or profitable strategy is established."
+}

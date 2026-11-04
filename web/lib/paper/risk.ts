@@ -21,16 +21,19 @@ export function sizePaperPosition(input: SizingInput, now = Date.now()) {
     throw new RangeError('Invalid ask depth');
   const levels = [...input.levels].sort((a,b) => a.price-b.price);
   const cap = Math.min(budget,bankroll*riskFraction), initial = Math.log(bankroll);
-  let best = {contracts:0,cost:0,expectedLogGrowth:0}, spent=0, remaining=levels[0]?.quantity ?? 0, level=0, feeBase=0;
+  let best = {contracts:0,cost:0,expectedLogGrowth:0}, spent=0, remaining=levels[0]?.quantity ?? 0, level=0, fees=0;
+  const feeBases=levels.map(()=>0),roundedFee=(value:number)=>Math.ceil((value-1e-12)*100)/100;
   for (let q=1;q<=maximum;q++) {
     let needed=1;
     while (needed>1e-9 && level<levels.length) {
       const quantity=Math.min(needed,remaining), price=levels[level].price;
-      spent+=quantity*price;feeBase+=quantity*price*(1-price)*fee;needed-=quantity;remaining-=quantity;
+      spent+=quantity*price;
+      const before=roundedFee(feeBases[level]);feeBases[level]+=quantity*price*(1-price)*fee;
+      fees+=roundedFee(feeBases[level])-before;needed-=quantity;remaining-=quantity;
       if (remaining<1e-9) {level++;remaining=levels[level]?.quantity ?? 0;}
     }
     if (needed>1e-9) break;
-    const cost=spent+Math.ceil((feeBase-1e-12)*100)/100;
+    const cost=spent+fees;
     if (cost>cap+1e-9) break;
     const growth=p*Math.log(bankroll+q-cost)+(1-p)*Math.log(bankroll-cost)-initial;
     if (growth>best.expectedLogGrowth+1e-12) best={contracts:q,cost,expectedLogGrowth:growth};

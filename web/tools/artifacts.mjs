@@ -5,7 +5,7 @@ const manifestURL=new URL('data-app-build.json',root);
 const manifest=JSON.parse(await readFile(manifestURL,'utf8'));
 const check=process.argv.includes('--check');
 let mismatch=false;
-for(const kind of ['html','snapshot']) {
+for(const kind of ['html','snapshot',...(manifest.runtime?['runtime']:[])]) {
   const entry=manifest[kind],url=new URL(entry.path,root);
   let bytes=await readFile(url);
   if(!check) {

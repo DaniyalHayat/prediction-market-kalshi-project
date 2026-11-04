@@ -1,4 +1,5 @@
 import { createHash, createPrivateKey, sign, constants } from "node:crypto";
+import {cloudEnabled,store} from './cloud/store.mjs';
 
 export const BASE = "https://external-api.kalshi.com/trade-api/v2";
 // Optional public-data service; credentials are sent only to the official exchange.
@@ -103,6 +104,12 @@ function upstreamError(status, seconds, cooldown = false) {
   return error;
 }
 export async function request(path, params = {}, fetcher = fetch, now = Date.now) {
+  if(!/^\/(markets(?:\/|$)|series(?:\/|$)|events(?:\/|$))/.test(path) || path.includes('..'))throw new RangeError('Only public market-data paths are supported');
+  if(cloudEnabled() && fetcher===fetch) {
+    const key=path+'?'+new URLSearchParams(params).toString();
+    const ttl=path.endsWith('/orderbook')?3:path.includes('candlesticks')?60:20;
+    return store().cached(key,ttl,()=>request(path,params,(...args)=>fetch(...args),now));
+  }
   const query = new URLSearchParams(params); query.sort();
   const url = BASE + path + "?" + query;
   const blocked = [state.cooldowns.get(url), state.providerCooldown].filter(Boolean).sort((a,b)=>b.until-a.until)[0];

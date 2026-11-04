@@ -1,0 +1,20 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule private_encrypted_versioned_buckets when %buckets !empty {
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+  %buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+  %buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+  %buckets.Properties.BucketEncryption.ServerSideEncryptionConfiguration !empty
+}
+let tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+rule tables_have_expiry_and_encryption when %tables !empty {
+  %tables.Properties.TimeToLiveSpecification.Enabled == true
+  %tables.Properties.SSESpecification.SSEEnabled == true
+  %tables.Properties.BillingMode == 'PAY_PER_REQUEST'
+}
+let endpoints = Resources.*[ Type == 'AWS::Lambda::WebFunctionEndpoint' ]
+rule endpoints_have_bounded_scaling when %endpoints !empty {
+  %endpoints.Properties.ScalingConfig.MaxEnvironments == 2
+  %endpoints.Properties.ThrottleConfig.RateLimit == 100
+}

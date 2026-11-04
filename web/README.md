@@ -2,9 +2,9 @@
 
 I use this Next.js app to serve the market dashboard, public-data APIs, selected-contract research and browser-local paper trading. This `web/` directory is the complete web project. Its browser assets live in `public/dashboard/`; its server-side adapters and calculations live in `lib/` and `app/api/`.
 
-[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Resume entries](../docs/RESUME.md) · [Figma app workspace](https://www.figma.com/make/l70tt532rm4WDOZ5PFQIiK)
+[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Cloud runtime](docs/cloud-runtime.md) · [Figma frontend](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj)
 
-The public deployment URL is pending final verification. The Figma workspace link is not a production health check.
+The [public AWS app](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) serves this dashboard and its new native-streaming/private-journal workbench. Source import does not establish Figma preview or publication readiness.
 
 ## Run locally
 
@@ -88,4 +88,4 @@ python -m unittest discover -s tests -p "test_*.py"
 
 The Python command needs the optional research packages. Synthetic fixtures test calculations and audit behavior; they are not production forecasts or a trading track record. The root [project README](../README.md) records the current verification counts.
 
-The scripts in `.figma/make/` install, start and package this Next runtime. Deployment must retain server APIs through the Next adapter. The existing `figma.config.json` documents requested React/JSX Code Connect settings; it does not establish published design-component bindings. See [the connection notes](docs/code-connect.md).
+The existing `.figma/make/` scripts describe a Next runtime using a supported server adapter. The independently exported static frontend instead calls the live AWS backend, including its native-stream and durable-journal routes; it does not pretend those APIs execute inside Figma. The existing `figma.config.json` requests React/JSX Code Connect settings and does not establish published component bindings. See [the connection notes](docs/code-connect.md).

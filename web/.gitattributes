@@ -146,3 +146,6 @@
 *.mat                filter=lfs diff=lfs merge=lfs -text
 
 public/dashboard/** text eol=lf
+public/dashboard/runtime.js -whitespace
+public/lab* text eol=lf
+public/risk-client.js text eol=lf
