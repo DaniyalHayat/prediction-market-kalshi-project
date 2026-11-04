@@ -1,2 +1,4 @@
-export const metadata = { title: "Predictir", description: "Live public market liquidity research" };
+import '../ui/workspace.css';
+import 'uplot/dist/uPlot.min.css';
+export const metadata = { title: "Predictir", description: "Public market research, source-backed analysis and paper trading", metadataBase:new URL('https://predictir.dev') };
 export default function RootLayout({ children }) { return <html lang="en"><body style={{margin: 0}}>{children}</body></html>; }
