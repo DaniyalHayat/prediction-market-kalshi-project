@@ -3,6 +3,29 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "test": "node --test tests/*.test.mjs" },
-  "dependencies": { "exceljs": "4.4.0", "next": "16.4.3", "react": "19.2.3", "react-dom": "19.2.3" }
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --test tests/*.test.mjs && tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "cms:verify": "tsx cms/verify.ts",
+    "cms": "tsx cms/notes.ts",
+    "verify:artifacts": "node tools/artifacts.mjs --check"
+  },
+  "dependencies": {
+    "@payloadcms/db-sqlite": "3.92.1",
+    "exceljs": "4.4.0",
+    "next": "16.4.3",
+    "payload": "3.92.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
 }

@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Dict
 from datetime import datetime
 import pandas as pd
 from .client import KalshiResearchClient
