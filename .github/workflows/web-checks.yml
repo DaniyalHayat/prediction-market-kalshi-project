@@ -20,6 +20,20 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: marketlab
+          POSTGRES_PASSWORD: ci_fixture_only
+          POSTGRES_DB: marketlab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U marketlab -d marketlab_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: web
@@ -38,6 +52,8 @@ jobs:
         run: npm run verify:artifacts
       - name: Test research and paper execution
         run: npm test
+        env:
+          MARKET_TEST_DATABASE_URL: postgresql://marketlab:ci_fixture_only@127.0.0.1:5432/marketlab_test
       - name: Build production server
         run: npm run build
         env:
