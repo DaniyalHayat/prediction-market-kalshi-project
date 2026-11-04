@@ -64,8 +64,13 @@ export class MarketFeed {
     const added=!this.clients.has(ticker);
     if(added)this.clients.set(ticker,new Set());
     this.clients.get(ticker).add(listener);
-    if(this.socket?.readyState===WebSocket.OPEN){if(added)this.subscribe([ticker]);}
-    else await this.connect();
+    try{
+      if(this.socket?.readyState===WebSocket.OPEN){if(added)this.subscribe([ticker]);}
+      else await this.connect();
+    }catch(error){
+      const listeners=this.clients.get(ticker);listeners?.delete(listener);if(!listeners?.size)this.clients.delete(ticker);
+      throw error;
+    }
     return ()=>{
       const listeners=this.clients.get(ticker);listeners?.delete(listener);if(!listeners?.size)this.clients.delete(ticker);
       if(!listeners?.size){clearTimeout(this.reconnect);this.socket?.close();this.replica.reset();this.flush().catch(()=>{});}
@@ -90,7 +95,7 @@ export class MarketFeed {
     try{
       const created=new Date(this.now()).toISOString();
       await store().archive('streams/'+created.slice(0,10)+'/'+randomUUID()+'.json',
-        {created_at:created,source:WS_URL,sampling:'At most one observed full-book snapshot per second and ticker; not a complete tick archive',rows});
+        {created_at:created,source:WS_URL,sampling:'At most one observed snapshot of the top 100 price levels per side, second and ticker; not a complete tick archive',rows});
       this.archiveChunks++;
     }catch(error){this.samples.unshift(...rows);throw error;}
     finally{this.flushing=false;}
