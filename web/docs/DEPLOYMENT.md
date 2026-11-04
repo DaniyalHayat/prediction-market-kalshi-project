@@ -16,6 +16,8 @@ Vercel needs `MARKET_BACKEND_URL`, `MARKET_EDGE_SECRET`, `ASSISTANT_SERVICE_SECR
 
 Railway needs the same two application secrets; backend-only `DATABASE_URL`, `DATABASE_CA_CERT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional Kalshi streaming credentials, Spotify client credentials and X bearer token. Never use a `NEXT_PUBLIC_` prefix for credentials. A Supabase management access token is a setup credential and is not installed in either runtime. `PORT=8780` starts the backend; `MARKET_PIPELINE_ENABLED=1` enables the durable jobs.
 
+Railway's persistent service health check is `/api/health` with a 120-second startup timeout. The checked-in `railway.toml` currently describes the Docker build and restart settings. Railway has announced that legacy TOML/JSON configuration stops working on December 1, 2026. Before that date, use `railway config migrate`, review the generated IaC plan, and apply a migration that preserves the existing service and unmanaged secret variables. Do not recreate the database or backend as part of that migration. [Migration guide](https://docs.railway.com/infrastructure-as-code).
+
 The private evidence bucket is `market-lab-evidence`. No public object policy exists. Archives use immutable content hashes and gzip; cache hits preserve original source retrieval timestamps. The worker uses unique scheduled keys, transactional claims, leases, retries with backoff and idempotent dataset publication. Completion requires ownership of the unexpired claim. Failed jobs remain inspectable.
 
 ## Cost controls
@@ -30,6 +32,6 @@ The active Vercel firewall denies CN, IN, RU, BY, UA, MD, EE, LV, LT, AM, AZ, GE
 
 The API firewall limits 120 requests per minute per IP. The backend also enforces global and visitor limits, caps active streams, bounds payloads and rejects redirected or HTML data responses. Database queries use bound parameters. Source URLs are allowlisted. The MCP service exposes only bounded public-data reads for the selected contract. Neither the assistant nor Analytics receives private journal tokens, chat transcripts as telemetry, bankroll entries or provider credentials.
 
-GA4 stream `G-NJN43KL0FQ` belongs to this website. Enhanced measurement is off. The app loads the tag after consent, excludes advertising signals, strips query strings and fragments, and sends only public market/category interactions. Analytics settings allow revocation. DNT and Global Privacy Control keep collection off.
+GA4 stream `G-NJN43KL0FQ` belongs to the [Predictir property](https://analytics.google.com/analytics/web/#/a292731019p562468214/reports/intelligenthome). Property creation and stream setup are complete; collection remains pending until consenting visitors generate traffic. Enhanced measurement is off. The app loads the tag after consent, excludes advertising signals, strips query strings and fragments, and sends only public market/category interactions. Analytics settings allow revocation. DNT and Global Privacy Control keep collection off.
 
 Old AWS deployment data has not been deleted. Existing forecasts on that deployment remain there; the new Supabase journal begins with its own prospective records. Importing a journal access token does not copy historical AWS records into Supabase. No historical prediction is backfilled or silently scored as prospective.
