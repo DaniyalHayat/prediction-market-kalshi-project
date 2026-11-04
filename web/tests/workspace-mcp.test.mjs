@@ -108,10 +108,23 @@ test('assistant uses real MCP-shaped tools, budgets before generation and closes
     callTool:async input=>{calls.push(input);return {content:[{type:'text',text:JSON.stringify({ticker,opinion:{side:'PASS'}})}]};},close:async()=>{closed=true;}};
   const request=()=>new Request('https://predictir.dev/api/assistant',{method:'POST',headers:{Origin:'https://predictir.dev','Content-Type':'application/json'},body:JSON.stringify({ticker,messages:[{role:'user',content:'Explain the model.'}]})});
   const response=await assistantResponse(request(),{createClient:async()=>client,fetcher:async(url,options)=>{calls.push({reserve:url.pathname,body:JSON.parse(options.body)});return {reserved_usd:.025};},
-    generate:options=>({toTextStreamResponse:()=>new Response(new ReadableStream({async start(controller){const result=await options.tools.get_research.execute({ticker});assert.equal(result.opinion.side,'PASS');controller.enqueue(new TextEncoder().encode('PASS: no supported edge.'));controller.close();await options.onFinish();}}),{headers:{'Content-Type':'text/plain'}})})});
+    generate:options=>({fullStream:(async function*(){const result=await options.tools.get_research.execute({ticker});assert.equal(result.opinion.side,'PASS');assert.equal(options.prepareStep({stepNumber:2,messages:[]}).toolChoice,'none');yield {type:'text-delta',text:'PASS: no supported edge.'};await options.onFinish();})()})});
   assert.match(await response.text(),/PASS/);assert.equal(calls[0].reserve,'/internal/assistant/reserve');assert.match(calls[0].body.fingerprint,/^[a-f0-9]{64}$/);assert.equal(closed,true);
   const blocked=await assistantResponse(request(),{fetcher:async()=>{throw Object.assign(new Error('budget'),{status:429});},generate:()=>{throw new Error('must not generate');}});
   assert.equal(blocked.status,429);
+});
+test('provider errors, interrupted streams and empty answers show usable text without leaking raw errors',async t=>{
+  const previous={backend:process.env.MARKET_BACKEND_URL,secret:process.env.ASSISTANT_SERVICE_SECRET};process.env.MARKET_BACKEND_URL='http://127.0.0.1:9876';process.env.ASSISTANT_SERVICE_SECRET=secret;
+  t.after(()=>{for(const [key,value] of [['MARKET_BACKEND_URL',previous.backend],['ASSISTANT_SERVICE_SECRET',previous.secret]])if(value===undefined)delete process.env[key];else process.env[key]=value;});
+  const marker='private-provider-key-sentinel';
+  const cases=[{parts:[{type:'error',error:new Error(marker)}],message:/temporarily unavailable/},{parts:[],message:/returned no explanation/},{parts:null,message:/connection was interrupted/}];
+  for(const value of cases){
+    let closed=false,reserved=false;
+    const client={listTools:async()=>({tools:[]}),close:async()=>{closed=true;}};
+    const request=new Request('https://predictir.dev/api/assistant',{method:'POST',headers:{Origin:'https://predictir.dev','Content-Type':'application/json'},body:JSON.stringify({ticker,messages:[{role:'user',content:'Explain.'}]})});
+    const response=await assistantResponse(request,{createClient:async()=>client,fetcher:async()=>{reserved=true;return {reserved_usd:.025};},generate:()=>({fullStream:(async function*(){if(value.parts===null)throw new Error(marker);yield*value.parts;})()})});
+    const text=await response.text();assert.match(response.headers.get('content-type'),/text\/plain/);assert.match(text,value.message);assert.ok(!text.includes(marker));assert.equal(closed,true);assert.equal(reserved,true);
+  }
 });
 test('assistant geographic restriction runs before any paid reservation',async t=>{
   const previous=process.env.VERCEL;process.env.VERCEL='1';t.after(()=>{if(previous===undefined)delete process.env.VERCEL;else process.env.VERCEL=previous;});
