@@ -35,23 +35,34 @@ function fitSparse(rows,dimension,{poisson=false,ridge=6}={}) {
   return {beta,predict:row=>{const eta=sparseDot(row,beta),direction=new Float64Array(dimension);row.index.forEach((j,k)=>direction[j]=row.value[k]);
     const variance=Math.max(0,dot(direction,conjugateGradient(precision,direction)));return {eta,se:Math.sqrt(variance)};}};
 }
-function structure(games,soccer=false){
+function structure(games,soccer=false,halfLifeDays=180){
   if(!Array.isArray(games)||!games.length||games.some(g=>!g.home_id||!g.away_id||g.home_id===g.away_id||!Number.isFinite(Date.parse(g.played_at))||
     !Number.isInteger(g.home_score)||g.home_score<0||!Number.isInteger(g.away_score)||g.away_score<0))throw new RangeError('Completed dated games with distinct teams and integer scores are required');
   const teams=[...new Set(games.flatMap(g=>[g.home_id,g.away_id]))].sort(),index=new Map(teams.map((id,i)=>[id,i+2]));
   const latest=Math.max(...games.map(g=>Date.parse(g.played_at)));
-  const weight=g=>Math.exp(-Math.LN2*(latest-Date.parse(g.played_at))/(180*86400000));
+  const weight=g=>Math.exp(-Math.LN2*(latest-Date.parse(g.played_at))/(halfLifeDays*86400000));
   const row=(home,away,atHome=true)=>soccer?{index:[0,1,index.get(home),index.get(away)+teams.length],value:[1,atHome?1:0,1,1]}:
     {index:[0,index.get(home),index.get(away)],value:[1,1,-1]};
   return {teams,index,row,dimension:soccer?2+2*teams.length:2+teams.length,weight};
 }
-export function fitBasketball(games) {
-  const data=games.filter(g=>g.home_score!==g.away_score),s=structure(data);
-  const fit=fitSparse(data.map(g=>({...s.row(g.home_id,g.away_id),weight:s.weight(g),y:g.home_score>g.away_score?1:0})),s.dimension);
-  return {predict(home,away){if(!s.index.has(home)||!s.index.has(away))return null;
-    const {eta,se}=fit.predict(s.row(home,away));return {home:sigmoid(eta),draw:0,away:1-sigmoid(eta),interval:[sigmoid(eta-1.96*se),sigmoid(eta+1.96*se)],
+export function fitTeamWinModel(games, {halfLifeDays = 180, neutralAware = false} = {}) {
+  const data = games.filter(game => game.home_score !== game.away_score);
+  const s = structure(data, false, halfLifeDays);
+  const design = (home, away, neutral) => {
+    const row = s.row(home, away);
+    if (neutralAware && neutral === true) row.value[0] = 0;
+    return row;
+  };
+  const fit = fitSparse(data.map(game => ({
+    ...design(game.home_id, game.away_id, game.neutral),
+    weight: s.weight(game),
+    y: Number(game.home_score > game.away_score)
+  })), s.dimension);
+  return {predict(home,away,neutral=false){if(!s.index.has(home)||!s.index.has(away))return null;
+    const {eta,se}=fit.predict(design(home,away,neutral));return {home:sigmoid(eta),draw:0,away:1-sigmoid(eta),interval:[sigmoid(eta-1.96*se),sigmoid(eta+1.96*se)],
       interval_kind:'95% penalized Laplace parameter interval; excludes roster changes and model misspecification'};},teams:s.teams.length};
 }
+export const fitBasketball = games => fitTeamWinModel(games);
 function poissonVector(lambda){const maximum=Math.ceil(lambda+12*Math.sqrt(lambda)+12),p=[Math.exp(-lambda)];for(let i=1;i<=maximum;i++)p.push(p[i-1]*lambda/i);return p;}
 function goalOutcome(home,away){
   const h=poissonVector(home),a=poissonVector(away);let hw=0,draw=0,aw=0;
