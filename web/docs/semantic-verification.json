@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-11-05T01:53:09.066Z",
+  "classification": "actual_local_inference_and_disposable_database_verification",
+  "production_writes": false,
+  "model": {"id": "Xenova/all-MiniLM-L6-v2", "revision": "751bff37182d3f1213fa05d7196b954e230abad9", "runtime_version": "4.3.2", "dimensions": 384, "dtype": "q8", "device": "cpu", "pooling": "mean", "normalize": true},
+  "local_measurement": {"model_file_cache": "already_present", "initial_load_and_three_texts_ms": 415.9536, "warm_new_query_ms": 4.5704, "total_process_rss_mib": 177.125, "heap_used_mib": 29.0541, "related_cosine": 0.7307945034, "unrelated_cosine": -0.0231701530, "norms": [1.0000002432, 1.0000000061, 0.9999999972], "scope": "Controlled synthetic paraphrase diagnostic; not held-out retrieval, provider latency or trading evaluation"},
+  "postgresql": {"native_vector_test": "passed", "plain_array_fallback_test": "passed", "database_scope": "separate disposable _test databases only", "native_image": "pgvector/pgvector:pg17@sha256:7d0a41464797aeb9862dfdc0bbf1526b82cfd324cdd8036df19e3545f4a9ccb8", "checks": ["actual MiniLM vectors stored", "native cosine plus full-text RRF", "plain stored-array cosine fallback", "exact ticker scoping", "parameterized injection-shaped query", "RLS-denied separately granted reader", "idempotent migration"]},
+  "docker": {"status": "passed", "install": "npm ci --omit=dev --ignore-scripts", "node": "26.12.1-bookworm-slim", "uid": 1000, "root_filesystem": "read-only", "cache_path": "/tmp/market-lab-models", "cache_mode": "0700", "cache_tmpfs_limit_bytes": 134217728, "observed_model_cache_bytes": 23685697, "fresh_model_download_and_two_texts_ms": 3933.5085, "total_process_rss_mib": 228.765625, "dimensions": 384},
+  "deployment": "not_deployed",
+  "limitations": ["Process measurements are host-specific and not incremental model-only memory.", "No source-truth or outcome-probability improvement is established.", "Model-file cache requires writable scratch under a read-only root filesystem."]
+}

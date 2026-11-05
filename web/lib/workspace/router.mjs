@@ -5,11 +5,14 @@ import {executionEstimate} from '../intelligence/math.mjs';
 import {workspaceCatalog,workspaceMarkets,inferCategory,inferResearchFamily} from './catalog.mjs';
 import {retainMarketHistory,warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
 import {sportsResearch} from './sports.mjs';
-import {musicResearch,musicContract,chartPosts} from './music.mjs';
+import {musicResearch} from './music.mjs';
+import {contractEvidence} from './evidence.mjs';
+import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
 import {tradeCandidates,rankCandidates} from './recommendations.mjs';
 const researchCache=new Map(),researchInflight=new Map();
 const scanCache=new Map(),scanInflight=new Map();
+const evidenceCache=new Map(),evidenceInflight=new Map();
 function modelChoice(model='baseline'){
   if(!['baseline','validated','challenger'].includes(model))throw new RangeError('Choose the validated baseline or experimental challenger');
   return model==='validated'?'baseline':model;
@@ -72,23 +75,22 @@ export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeV
       fee_note:feeVerified?'General taker formula with the exchange series multiplier; individual-market exceptions still require inspection.':'Explicit general taker-fee assumption; a market-specific schedule was not verified.'},
     validation_note:'A historical team-strength holdout and parameter range do not establish calibrated contract uncertainty, injury effects, profitable fills or optimal real-world trades. Position size remains conditional on your own budget and assumptions.'};
 }
-export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline'}={},dependencies={}) {
+export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline',evidence=false}={},dependencies={}) {
   validateTicker(ticker);
   model=modelChoice(model);
-  const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full'),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
+  const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full')+'#'+Number(evidence),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&researchInflight.has(key))return researchInflight.get(key);
-  const deps={marketDetails,book,marketBrief,marketFees,sportsResearch,musicResearch,chartPosts,...dependencies};
+  const deps={marketDetails,book,marketBrief,marketFees,sportsResearch,musicResearch,...dependencies};
   const task=(async()=>{
     const detail=await deps.marketDetails(ticker),market=detail.market;
     if(market?.ticker!==ticker)throw new Error('Research identity does not match the selected contract');
     const depthPromise=deps.book(ticker,1).catch(()=>null),feesPromise=deps.marketFees(ticker).catch(()=>null);
     const briefPromise=deps.marketBrief(ticker,{contracts:1},{marketDetails:async()=>detail,book:()=>depthPromise,
-      ...((fast||assistant)?{headlines:async()=>({status:'not_queried',articles:[],reason:'Headline retrieval is omitted from compact research.'})}:{})});
+      ...((fast||assistant||!evidence)?{headlines:async()=>({status:'not_queried',articles:[],reason:'Use Load contract news for explicit evidence retrieval.'})}:{})});
     const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant}).catch(()=>({reason:'Matched sports evidence could not be refreshed. Its source or shared cache is temporarily unavailable.',error:true}));
-    const musicPromise=!fast?deps.musicResearch(market,{includeSpotify:!assistant}).catch(error=>({forecast:{probability:null,reason:error.message},error:true})):null;
-    const postsPromise=!fast&&!assistant&&musicContract(market)?deps.chartPosts().catch(error=>({status:'unavailable',posts:[],reason:error.message})):null;
-    const [brief,depth,fees,sports,music,posts]=await Promise.all([briefPromise,depthPromise,feesPromise,sportsPromise,musicPromise,postsPromise]);
+    const musicPromise=!fast?deps.musicResearch(market,{includeSpotify:!assistant,includeAlternatives:evidence&&!assistant}).catch(error=>({forecast:{probability:null,reason:error.message},error:true})):null;
+    const [brief,depth,fees,sports,music]=await Promise.all([briefPromise,depthPromise,feesPromise,sportsPromise,musicPromise]);
     let forecast=brief.forecast,decision=brief.decision,summary=brief.summary,status=brief.status;
     const errors=[...(brief.errors||[])];
     if(sports?.error){errors.push({source:'Sports evidence',error:sports.reason});forecast={probability:null};decision={...decision,side:'insufficient_edge',reasons:[sports.reason]};summary=sports.reason;status='unavailable';}
@@ -98,19 +100,40 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
       forecast={...selected,evidence:{tier:selected.eligible?2:1,label:alternative&&!selected.eligible?(selected.inplay?'Experimental score-clock model':'Experimental calibrated ensemble'):selected.eligible?'Chronological matchup holdout':selected.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
       decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason});
       if(alternative&&!alternative.eligible)decision.reasons.unshift(alternative.promotion_reason||'The experimental model has not passed its promotion gate.');
-      status='modeled';summary=`The matched-event historical team model estimates ${(forecast.probability*100).toFixed(1)}% YES. Its displayed range is parameter uncertainty or sensitivity, not a calibrated injury-adjusted outcome interval. ${decision.reasons[0]||'The conservative screen clears assumed entry costs; this remains a research hypothesis.'}`;
+      status='modeled';summary=`${forecast.inplay?'The experimental score-clock model':alternative?'The experimental matchup ensemble':'The matched-event historical team model'} estimates ${(forecast.probability*100).toFixed(1)}% YES. Its displayed range is parameter uncertainty or sensitivity, not a calibrated injury-adjusted outcome interval. ${decision.reasons[0]||'The conservative screen clears assumed entry costs; this remains a research hypothesis.'}`;
+    }
+    else if(sports?.league&&!sports.error){
+      const started=sports.event&&Date.parse(sports.event.played_at)<=Date.now(),completed=sports.event?.completed;
+      const reason=sports.reason||(completed?'This matched game is complete. A new pregame trade estimate is not produced.':started?'This matched game has started. The validated pregame model is withheld after tip-off. '+(sports.challenger?.available&&sports.challenger?.inplay?'A separately labeled experimental score-clock view is available, but its recommendation promotion gate has not passed.':'No released live estimate is available for this event.'):'The fixture is matched, but an independent matchup estimate is unavailable. '+(sports.model?.validation?.reason||'Check model and source coverage.'));
+      forecast={probability:null,interval:null,model_name:null,reason,evidence:{tier:0,label:started?'Pregame estimate withheld after start':'Matched sports estimate unavailable'}};
+      decision={...decision,side:'insufficient_edge',reasons:[reason],candidates:[]};summary=reason;status='evidence_only';
     }
     const side=['yes','no'].includes(decision.side)?decision.side.toUpperCase():'PASS';
     const value={...brief,forecast,decision,summary,status,model_selection:{requested:model,applied:alternative?'challenger':'baseline',reason:model==='challenger'&&!alternative?'An audited challenger is unavailable for this exact contract; baseline research is shown.':null},
       opinion:{side,reason:decision.reasons?.[0]||(side==='PASS'?'No supported cost advantage was established.':'The modeled conservative bound clears one-contract entry costs; inspect validation and assumptions.'),
         basis:'Independent-data research screen; conditional paper sizing is available in Paper position.',supported_allocation:side==='PASS'?0:null},
-      extensions:{...(sports?{sports}:{}),...(music?{music}:{}),...(posts?{posts:posts.posts,post_status:posts.status,post_note:posts.note}: {})},
+      extensions:{...(sports?{sports}:{}),...(music?{music}:{}),post_status:'not_queried',post_note:'Public social feeds are loaded only by the selected-contract evidence action.'},
       sources:[...(brief.sources||[]),...(sports?.sources||[]),...(music?.sources||[])],errors};
     if(useCache){if(researchCache.size>=512)researchCache.delete(researchCache.keys().next().value);researchCache.set(key,{until:Date.now()+(forecast?.inplay?5000:30000),value});}
     return value;
   })();
   if(useCache)researchInflight.set(key,task);
   try{return await task;}finally{if(useCache)researchInflight.delete(key);}
+}
+export async function workspaceEvidence(ticker,{reddit=false,includeX=true,model='baseline'}={},dependencies={}){
+  validateTicker(ticker);model=modelChoice(model);
+  if(typeof reddit!=='boolean'||typeof includeX!=='boolean')throw new RangeError('Evidence source toggles must be booleans');
+  const deps={workspaceResearch,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
+  if(useCache&&hit&&hit.until>Date.now())return hit.value;
+  if(useCache&&evidenceInflight.has(key))return evidenceInflight.get(key);
+  const task=(async()=>{
+    const research=await deps.workspaceResearch(ticker,{model,evidence:true}),market=research.market;
+    if(market?.ticker!==ticker)throw new Error('Evidence identity does not match the selected contract');
+    const value=await deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,news:research.news,sports:research.extensions?.sports,music:research.extensions?.music});
+    const retention=await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker}).catch(()=>({status:'unavailable',reason:'Evidence remains readable; retained semantic indexing is temporarily unavailable.'}));
+    const result={...value,retention};if(useCache){if(evidenceCache.size>=100)evidenceCache.delete(evidenceCache.keys().next().value);evidenceCache.set(key,{until:Date.now()+60000,value:result});}return result;
+  })();
+  if(useCache)evidenceInflight.set(key,task);try{return await task;}finally{if(useCache)evidenceInflight.delete(key);}
 }
 export async function workspaceOpinions(raw,{research=workspaceResearch,model='baseline'}={}) {
   if(typeof raw!=='string'||raw.length>1200)throw new RangeError('Supply one to eight exact tickers');
@@ -160,7 +183,8 @@ export async function workspaceRecommendations(category='sports',budget=20,model
       risk_size:{drawdown_floor:.8,drawdown_probability:.1},budget_scope:'Each row is a separate use of this budget; do not add the scenarios as if each had its own extra cash.'}};
 }
 
-export async function workspaceGET(endpoint,params) {
+export async function workspaceGET(endpoint,params,dependencies={}) {
+  const deps={workspaceEvidence,searchRetainedEvidence,...dependencies};
   if(endpoint==='workspace/catalog')return workspaceCatalog();
   if(endpoint==='workspace/markets') {
     const value=await workspaceMarkets(params.get('category')||'sports');
@@ -174,10 +198,15 @@ export async function workspaceGET(endpoint,params) {
   }
   if(endpoint==='workspace/history')return contractHistory(params.get('ticker'),Number(params.get('hours')||24));
   if(endpoint==='workspace/research')return workspaceResearch(validateTicker(params.get('ticker')),{fast:params.get('compact')==='1',model:params.get('model')||'baseline'});
+  if(endpoint==='workspace/evidence'){
+    if(!['0','1'].includes(params.get('reddit')||'0')||!['0','1'].includes(params.get('x')||'1'))throw new RangeError('Use 0 or 1 for evidence source toggles');
+    return deps.workspaceEvidence(validateTicker(params.get('ticker')),{reddit:params.get('reddit')==='1',includeX:params.get('x')!=='0',model:params.get('model')||'baseline'});
+  }
+  if(endpoint==='workspace/evidence/search')return deps.searchRetainedEvidence(validateTicker(params.get('ticker')),params.get('q')||'',{limit:Number(params.get('limit')||6)});
   if(endpoint==='workspace/opinions')return workspaceOpinions(params.get('tickers'),{model:params.get('model')||'baseline'});
   if(endpoint==='workspace/recommendations')return workspaceRecommendations(params.get('category')||'sports',Number(params.get('budget')||20),params.get('model')||'baseline');
   if(endpoint==='workspace/search')return searchPublicMarkets(params.get('q')||'',Number(params.get('limit')||30));
   if(endpoint==='workspace/attribution')return marketAttribution();
-  if(endpoint==='workspace/sources')return {warehouse:await warehouseStatus(),providers:providerStatus(),as_of:new Date().toISOString()};
+  if(endpoint==='workspace/sources')return {warehouse:await warehouseStatus(),providers:providerStatus(),semantic:embeddingStatus(),as_of:new Date().toISOString()};
   throw Object.assign(new Error('Unknown workspace route'),{status:404});
 }
