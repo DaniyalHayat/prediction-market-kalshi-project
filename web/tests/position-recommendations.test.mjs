@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {executionCurve,affordableQuantity,riskConstrainedSize} from '../lib/workspace/execution-curve.mjs';
 import {budgetScenario,tradeCandidates,rankCandidates,eventConflictGraph} from '../lib/workspace/recommendations.mjs';
-import {evaluatePaperPosition} from '../lib/workspace/positions.mjs';
+import {evaluatePaperPosition,evaluatePaperPortfolio} from '../lib/workspace/positions.mjs';
 import {workspaceRecommendations,workspaceResearch} from '../lib/workspace/router.mjs';
 const now=Date.parse('2026-11-04T18:00:00Z'),ticker='TEST-26NOV04-A';
 const book={ticker,as_of:new Date(now).toISOString(),raw:{orderbook_fp:{yes_dollars:[['0.38','20'],['0.37','100']],no_dollars:[['0.60','20.5'],['0.59','100']]}}};
@@ -57,6 +57,17 @@ test('wrong-contract, failed-refresh and expired pregame packets cannot drive an
     const mark=evaluatePaperPosition(position,book,packet,{now,experimental:true});assert.equal(mark.action,'REVIEW');assert.ok(Number.isFinite(mark.marked_value));
     const candidate=tradeCandidates(market,book,packet,{now,experimental:true})[0];assert.equal(candidate.side,'PASS');assert.equal(candidate.probability,null);
   }
+});
+test('multiple paper lots share bid depth and cannot duplicate the best price or total available quantity',()=>{
+  const lots=[{...position,id:'a',remaining_quantity:80},{...position,id:'b',remaining_quantity:80}];
+  const partial=evaluatePaperPortfolio(lots,{[ticker]:book},{[ticker]:research},{now});
+  assert.equal(partial.a.status,'partial');assert.equal(partial.b.status,'partial');assert.equal(partial.a.marked_value,null);assert.equal(partial.b.marked_value,null);
+  const smaller=lots.map(row=>({...row,remaining_quantity:20}));
+  const values=evaluatePaperPortfolio(smaller,{[ticker]:book},{[ticker]:research},{now});
+  const combined=globalThis.KalshiPaper.estimate(book,ticker,'yes','sell',40,{now});
+  assert.ok(values.a.marked_value+values.b.marked_value<=combined.cash+1e-8);
+  assert.ok(values.a.marked_value+values.b.marked_value<2*evaluatePaperPosition(smaller[0],book,research,{now}).marked_value);
+  assert.ok(values.a.shared_lots===2&&values.b.shared_lots===2);
 });
 test('ranking cannot duplicate a shared-event exposure or turn invalid research into a probability',()=>{
   const candidates=tradeCandidates(market,book,research,{now,budget:20});assert.equal(candidates[0].eligible,true);
