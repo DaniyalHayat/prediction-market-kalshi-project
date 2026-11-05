@@ -71,3 +71,8 @@ export async function marketAttribution(){
   const result=await s.db.query('SELECT * FROM market_lab.market_attribution ORDER BY abs(observed_price_change) DESC NULLS LAST,last_observed DESC LIMIT 30');
   return {rows:result.rows,as_of:new Date().toISOString(),scope:'Seven-day observed exchange price changes and spreads. Requires at least two observations for a change. These are not causal explanations, strategy returns or realized P&L.'};
 }
+
+export async function searchPublicMarkets(query,limit=30){
+  const s=active();if(!s?.searchMarkets)return {rows:[],scope:'Retained-history full-text search requires the relational backend.'};
+  return s.searchMarkets(query,{limit});
+}

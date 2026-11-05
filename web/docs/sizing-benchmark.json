@@ -1,0 +1,15 @@
+{
+  "measured_at": "2026-11-05T00:17:07.127Z",
+  "cpu": "Intel(R) Core(TM) Ultra 9 185H",
+  "runtime": "v26.12.1",
+  "queries": 1000,
+  "book_levels": 1000,
+  "construction_median_ms": 0.23730000000000473,
+  "prefix_median_ms": 0.057699999999840657,
+  "reparse_median_ms": 182.99630000000002,
+  "ratio": 3171.5129982756566,
+  "batch_ratio_including_construction": 620.3264406782913,
+  "independent_cashflow_matches": true,
+  "complexity": "O(L log L) parse/sort plus O(L) prefix construction, then O(log L) per fill query; prior repeated parsing/sorting/scanning O(L log L) per query.",
+  "scope": "Local repeated-sizing CPU fixture, seven repetitions after warmup. Reuses one validated fresh book; excludes network, refresh, rendering and initial parse. This is not a whole-site latency claim."
+}
