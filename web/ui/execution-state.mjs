@@ -21,8 +21,8 @@ export function executionControls(value=EXECUTION_DEFAULTS){
   return result;
 }
 export function executionFingerprint(controls){return JSON.stringify(executionControls(controls));}
-export async function requestExecution(ticker,controls,{signal,transport=api}={}){
-  const value=await transport('/api/workspace/execution-research',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({ticker,controls:executionControls(controls)})});
+export async function requestExecution(ticker,controls,{signal,transport=api,model='validated'}={}){
+  const value=await transport('/api/workspace/execution-research',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({ticker,controls:executionControls(controls),model})});
   if(value?.ticker!==ticker)throw new Error('The execution result belongs to a different contract. Run this contract again.');
   return value;
 }
