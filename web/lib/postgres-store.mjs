@@ -15,6 +15,7 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   const db = pool || new pg.Pool({connectionString,max:4,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir',
     ...(remote ? {ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}} : {})});
   const storage = storageURL && storageKey ? createClient(storageURL,storageKey,{auth:{persistSession:false,autoRefreshToken:false}}).storage.from(bucket) : null;
+  const listeners=new Set();let closePromise;
   db.on?.('error',()=>structuredLog('database.pool_error',{error_code:'IDLE_CONNECTION_ERROR'}));
   async function transaction(fn) {
     const client=await db.connect();
@@ -194,16 +195,21 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
     return {rows:result.rows,as_of:new Date().toISOString(),scope:'English full-text search across the last seven days of retained public market observations; nested source provenance is joined in one parameterized query. Not a complete exchange search.'};
   }
   async function listenJobs(onWake,onDisconnect=()=>{}){
+    if(closePromise)throw new Error('The database store is closing');
     const listener=new pg.Client({connectionString,application_name:'market-lab-job-listener',connectionTimeoutMillis:10000,
       ...(remote?{ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}}:{})});
-    let closing=false,reported=false;
-    const disconnected=()=>{if(!closing&&!reported){reported=true;onDisconnect();}};
+    let closing=false,reported=false,ended;
+    const close=()=>{if(!ended){closing=true;listeners.delete(close);ended=listener.end().catch(()=>{});}return ended;};
+    listeners.add(close);
+    const disconnected=()=>{if(!closing&&!reported){reported=true;void close();onDisconnect();}};
     listener.on('error',disconnected);listener.on('end',disconnected);
     listener.on('notification',message=>{if(message.channel==='market_lab_jobs')onWake();});
     try{await listener.connect();await listener.query('LISTEN market_lab_jobs');}
-    catch(error){closing=true;await listener.end().catch(()=>{});throw error;}
-    return async()=>{closing=true;await listener.end().catch(()=>{});};
+    catch(error){await close();throw error;}
+    if(closePromise){await close();throw new Error('The database store is closing');}
+    return close;
   }
+  function close(){if(!closePromise)closePromise=(async()=>{await Promise.all([...listeners].map(end=>end()));await db.end();})();return closePromise;}
   async function readOwnerPortfolio(owner){
     if(typeof owner!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(owner))throw new RangeError('Invalid portfolio owner');
     const row=(await db.query('SELECT ledger,watchlist,revision FROM market_lab.owner_portfolios WHERE owner_id=$1',[owner])).rows[0];
@@ -218,5 +224,5 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
     return {conflict:true,value:await readOwnerPortfolio(owner)};
   }
   return {kind:'postgres',db,get,put:item=>save(item),save,consume,lease,archive,readArchive,cached,appendAudit,readAudit,auditIds,readOwnerPortfolio,saveOwnerPortfolio,
-    journalRows,pendingRows,reschedule,settle,searchMarkets,listenJobs,reserveAssistantBudget,settleAssistantBudget,transaction,close:()=>db.end()};
+    journalRows,pendingRows,reschedule,settle,searchMarkets,listenJobs,reserveAssistantBudget,settleAssistantBudget,transaction,close};
 }

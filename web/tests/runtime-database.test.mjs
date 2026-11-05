@@ -4,6 +4,18 @@ import {randomUUID} from 'node:crypto';
 import {makePostgresStore} from '../lib/postgres-store.mjs';
 import {applyTestSchema} from './database-fixture.mjs';
 const url=process.env.MARKET_TEST_DATABASE_URL;
+test('closing the database store releases its actual LISTEN session without a reconnect callback',{skip:!url,timeout:15000},async()=>{
+  if(!new URL(url).pathname.endsWith('_test')||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))throw new Error('Use a loopback disposable _test database');
+  const storage=makePostgresStore({connectionString:url}),observer=makePostgresStore({connectionString:url});let closeListener,disconnections=0;
+  const listeners=async()=>(await observer.db.query("SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND application_name='market-lab-job-listener'")).rows.map(row=>row.pid);
+  try{
+    const before=await listeners();closeListener=await storage.listenJobs(()=>{},()=>{disconnections++;});
+    const own=(await listeners()).filter(pid=>!before.includes(pid));assert.equal(own.length,1);
+    await Promise.all([storage.close(),storage.close()]);
+    assert.ok((await listeners()).every(pid=>!own.includes(pid)));assert.equal(disconnections,0);
+    await closeListener();
+  }finally{await closeListener?.();await storage.close();await observer.close();}
+});
 test('database safety, nested full-text search and commit-time wakeups use actual PostgreSQL',{skip:!url,timeout:30000},async()=>{
   if(!new URL(url).pathname.endsWith('_test'))throw new Error('Use a dedicated _test database');
   const storage=makePostgresStore({connectionString:url}),tag=randomUUID(),client=await storage.db.connect();let closeListener;

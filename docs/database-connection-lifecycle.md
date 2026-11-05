@@ -1,0 +1,9 @@
+# Runtime database connection lifecycle
+
+The hosted backend creates one shared PostgreSQL store per process. Its query pool is capped at four connections; the pipeline uses one separate session for `LISTEN`. Query transactions return checked-out clients in `finally` blocks, and cache producers do not hold a database checkout across upstream network requests. There is no per-request pool creation in the inspected runtime paths.
+
+One steady replica therefore uses at most five application connections; two overlapping replicas during a replacement can use ten. The currently inspected application-role limit is twelve. Additional replicas, separately configured pooler modes and development or diagnostic clients using that same role must be included in the budget. Connection-limit errors observed in earlier logs do not establish the historical limit or prove a present leak.
+
+On SIGTERM/SIGINT, the backend stops admitting HTTP connections, stops new pipeline claims, closes its notification listener and waits for current HTTP/pipeline work. It then closes the shared store. The store tracks notification sessions and closes them with its query pool exactly once. Idle HTTP keep-alive connections are reaped while draining; the existing eight-second maximum still bounds shutdown, including long-lived streams or stalled upstream work. Forced shutdown relies on connection teardown and the existing job lease/retry semantics.
+
+This change preserves the four-connection pool, role privileges and connection limit. It adds no connection retry loop or paid resource. Tests exercise actual HTTP request drainage and a real local PostgreSQL notification connection: closing the store removes its LISTEN backend without firing a reconnection callback. Separate tests preserve bounded exit, cleanup after pipeline failure and idempotent closure.
