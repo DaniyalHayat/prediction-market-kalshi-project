@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {loadAccountSession,accountSnapshot,resolveAccountConflict} from '../ui/useAccount.jsx';
+import {loadAccountSession,accountSnapshot,resolveAccountConflict,assertPaperSession} from '../ui/useAccount.jsx';
 import {PAPER_STORAGE,initializePaperAccount} from '../ui/paper-state.mjs';
 import {ACTIVE_ACCOUNT,accountCacheKey} from '../ui/guest-session.mjs';
 const memory=new Map<string,string>();
@@ -10,6 +10,7 @@ const guest={kind:'guest',guest:{id:'guest-test',created_at:new Date().toISOStri
 const owner={kind:'owner',owner:{email:'owner@example.test'},guest:guest.guest};
 const ledger=(amount=0)=>({...initializePaperAccount({version:1,positions:[],trades:[]}),cash_movements:amount?[{id:'cash-'+amount,action:'add',amount,occurred_at:new Date().toISOString()}]:[]});
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
+const sessionKind=()=>((accountSnapshot().session as unknown as {kind:string}|null)?.kind);
 test('session request failure retains the local paper ledger and blocks writes pending recovery',async()=>{
   memory.clear();const retained=JSON.stringify(ledger(25));memory.set(PAPER_STORAGE,retained);
   globalThis.fetch=async()=>{throw new Error('Offline');};
@@ -31,4 +32,18 @@ test('divergent owner records preserve both versions, stop automatic saves and r
   let writes=0;globalThis.fetch=async(input,options)=>{if(String(input).endsWith('/api/session'))return json(owner);if(options?.method==='PUT')writes++;return json({ledger:remote,watchlist:['KXTEST-YES'],revision:2});};
   await loadAccountSession(true);assert.deepEqual(JSON.parse(memory.get(PAPER_STORAGE)!),local);const conflict=accountSnapshot().conflict as unknown as {local:unknown,remote:{ledger:unknown}};assert.deepEqual(conflict.local,local);assert.deepEqual(conflict.remote.ledger,remote);
   await new Promise(resolve=>setTimeout(resolve,850));assert.equal(writes,0);resolveAccountConflict('account');assert.deepEqual(JSON.parse(memory.get(PAPER_STORAGE)!),remote);assert.equal(accountSnapshot().conflict,null);assert.deepEqual(accountSnapshot().watchlist,['KXTEST-YES']);
+});
+test('an account change in another tab blocks writes before accepting that tab’s retained ledger',async()=>{
+  assert.equal(sessionKind(),'owner');
+  const changed=JSON.stringify(ledger(75));memory.set(ACTIVE_ACCOUNT,'guest:other-tab');memory.set(PAPER_STORAGE,changed);
+  globalThis.fetch=async()=>json(guest);
+  assert.throws(()=>assertPaperSession(),/changed in another tab/);assert.equal(memory.get(PAPER_STORAGE),changed);assert.equal(accountSnapshot().status,'loading');
+  await loadAccountSession();assert.equal(sessionKind(),'guest');assert.equal(memory.get(ACTIVE_ACCOUNT),'guest:'+guest.guest.id);
+});
+test('a late session response cannot replace a newer verified account identity',async()=>{
+  let release:(response:Response)=>void=()=>{};const delayed=new Promise<Response>(resolve=>{release=resolve;});let calls=0;
+  globalThis.fetch=async()=>++calls===1?delayed:json(guest);
+  const old=loadAccountSession(true),current=loadAccountSession(true);await current;assert.equal(sessionKind(),'guest');
+  const retained=memory.get(PAPER_STORAGE);release(json(owner));await old;
+  assert.equal(sessionKind(),'guest');assert.equal(memory.get(ACTIVE_ACCOUNT),'guest:'+guest.guest.id);assert.equal(memory.get(PAPER_STORAGE),retained);assert.equal(calls,2);
 });
