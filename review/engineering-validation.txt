@@ -1,0 +1,29 @@
+Verified 2026-11-05 01:59:25 UTC on feature/black-evidence-lab-v3.
+Source revision: aadf8948897305c503965ef3bf7552041be32eeb, plus pending root analytics changes present during the checks.
+
+RESULT: PASS. No production deployment, cloud resource change or real account creation.
+
+npm test: 272 passed, 0 failed, 2 intentional default skips.
+  Node: 266 total; 264 passed, 0 failed, 2 skipped.
+  TypeScript: 8 total; 8 passed, 0 failed, 0 skipped.
+  PostgreSQL integration used a disposable local PG17 *_test database.
+  Cloud/account/provider credentials were removed from the test-process environment.
+  Opt-in actual MiniLM and separate semantic database checks were independently passed by the evidence agent, including native vector and plain-array fallback. See web/docs/semantic-verification.json.
+
+npm run typecheck: PASS (exit 0).
+npm run build: PASS (exit 0), Next.js 16.4.3.
+  Local Next development was stopped before the production build.
+  Static routes: / and /_not-found.
+  Dynamic routes: /api/[...path], /api/assistant and /api/paper/size.
+  Next telemetry, semantic inference and the background market pipeline were disabled for the build.
+  Nonblocking warning: an unrelated parent-directory package lock was ignored.
+
+Terraform 1.17.1 / AWS provider 6.72.0: fmt PASS, validate PASS, 5 mocked safety plans PASS. No AWS API calls or apply.
+
+Account migration 004 applied only to disposable local PG17 and mirrored identically into supabase/migrations. Tests cover initial/update CAS races, stale writes, owner isolation, encrypted cookie tampering/purpose separation, expiry, refresh, revocation, CSRF and private proxy cookie forwarding.
+
+Runtime checks cover service-only request/provider p95/p99 and Prometheus diagnostics, public denial of internal paths, bounded diagnostic logging, signed drain filtering, separate local operator inspection, worker-thread SPSC transfer and actual unary protobuf/gRPC over loopback HTTP/2.
+
+Measurement limits: HTTP provider attempt timings end at response headers; request timings include body parsing and handler work. Database timings currently cover explicit diagnostic probes. Percentiles are bounded local process samples, not fleet percentiles. Synthetic structures and model tests do not establish production latency, forecast accuracy, source truth or profitability.
+
+Activation gates remain: real owner creation, hosted Auth signup configuration, external telemetry/drain registration, cloud migration and every production deployment require their separate review.
