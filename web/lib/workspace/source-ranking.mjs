@@ -33,7 +33,8 @@ function interpretation(text,topic){
   return {claim_type:'context',impact:'Context only; no direct settlement measurement identified. Review the dated source and whether the claim applies to the selected event.'};
 }
 export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={}){
-  const entities=evidenceEntities(market,{sports}),topic=evidenceTopic(market),seen=new Set(),ranked=[];
+  const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
+  const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),seen=new Set(),ranked=[];
   for(const item of (items||[]).slice(0,200)){
     const title=String(item.title||item.excerpt||'').slice(0,500),excerpt=String(item.excerpt||item.description||'').slice(0,900),text=normalize(title+' '+excerpt),url=safePublicURL(item.url),asof=item.as_of||item.published_at||item.created_at,date=Date.parse(asof);
     if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway)\b/.test(text))continue;
@@ -43,7 +44,7 @@ export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={})
     const tier=item.platform==='reddit'?'community_context':source?.tier||'unverified_context';
     const specificity=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart)\b/.test(text);
     const reputation={primary:1,reported:.8,specialist_context:.55,community_context:.2,unverified_context:.35}[tier]??.35;
-    const relevance=Math.min(1,matched.length/entities.length),freshness=Math.exp(-(now-date)/(36*3600000)),score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity)));
+    const relevance=Math.min(1,matched.length/Math.min(2,entities.length)),freshness=Math.exp(-(now-date)/(36*3600000)),score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity)));
     const key=normalize(title).replace(/\b(espn|reuters|associated press|variety|the hollywood reporter)\b/g,'').trim();if(seen.has(key))continue;seen.add(key);
     ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,...interpretation(text,topic),
       confidence:tier==='primary'?'primary_source':tier==='reported'?'attributed_report':'unverified_context',metrics:item.metrics||{},
