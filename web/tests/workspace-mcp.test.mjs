@@ -24,6 +24,12 @@ async function listen(t,options={}){
   return 'http://127.0.0.1:'+server.address().port;
 }
 const packet=value=>JSON.parse(value.content.find(row=>row.type==='text').text);
+test('MCP execution quantities and dollar costs use distinct explicit units',()=>{
+  const value=publicResearch({ticker,decision:{candidates:[{side:'yes',execution:{side:'yes',requested:1,filled:1,unfilled:0,available:1234.5,cost:.42,fee:.01,all_in:.43,vwap:.42,breakeven:.43,slippage_cents:0}}]}});
+  const e=value.decision.candidates[0].execution;
+  assert.equal(e.available_contracts_within_slippage,1234.5);assert.equal(e.entry_notional_usd,.42);assert.equal(e.estimated_entry_fee_usd,.01);assert.equal(e.all_in_entry_usd,.43);
+  assert.equal(e.available,undefined);assert.equal(e.cost,undefined);assert.match(e.units_note,/not dollars/);assert.match(value.units.quantity,/never an account balance/);
+});
 const edgeHeaders={'x-market-edge-secret':edgeSecret,'x-market-country':'US','x-market-client-ip':'198.51.100.7'};
 function memoryQuota(){const used=new Map();return {used,consume:async(key,limit,amount=1)=>{const before=used.get(key)||0;if(before+amount>limit)return false;used.set(key,before+amount);return true;}};}
 

@@ -8,15 +8,23 @@ import {warehouseStatus} from './warehouse.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
+  const decision=value.decision?{...value.decision,candidates:value.decision.candidates?.map(candidate=>{
+    const e=candidate.execution;if(!e)return candidate;
+    return {...candidate,execution:{side:e.side,requested_contracts:e.requested,filled_contracts:e.filled,unfilled_contracts:e.unfilled,
+      available_contracts_within_slippage:e.available,entry_notional_usd:e.cost,estimated_entry_fee_usd:e.fee,all_in_entry_usd:e.all_in,
+      vwap_usd_per_contract:e.vwap,breakeven_probability:e.breakeven,slippage_cents_per_contract:e.slippage_cents,
+      units_note:'Contract quantities are not dollars, cash available or account balances. This tool has no account access.'}};
+  })}:undefined;
   return {ticker:value.ticker,title:value.title,as_of:value.as_of,status:value.status,summary:value.summary,opinion:value.opinion,
-    forecast:value.forecast,decision:value.decision,drivers:value.drivers,rules:value.rules,sources:(value.sources||[]).filter(s=>!s.url?.includes('api.spotify.com')),
+    units:{probability:'0 to 1; multiply by 100 for percent',price:'USD per $1 binary payout contract',quantity:'Number of contracts, never an account balance'},
+    forecast:value.forecast,decision,drivers:value.drivers,rules:value.rules,sources:(value.sources||[]).filter(s=>!s.url?.includes('api.spotify.com')),
     errors:value.errors,extensions:{sports:value.extensions?.sports,music:music?{scope:music.scope,comparability:music.comparability,
       forecast:music.forecast,persistence:music.persistence,source_updated:music.apple?.source_updated,scope_note:music.apple?.note}:undefined}};
 }
 export function boundPacket(value,maximum=14000){
   if(Buffer.byteLength(JSON.stringify(value))<=maximum)return value;
   const lean={ticker:value.ticker,title:value.title,as_of:value.as_of,summary:value.summary,opinion:value.opinion,
-    forecast:value.forecast,decision:value.decision,sources:value.sources,scope:'Additional details omitted to keep the research packet bounded.'};
+    units:value.units,forecast:value.forecast,decision:value.decision,sources:value.sources,scope:'Additional details omitted to keep the research packet bounded.'};
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
