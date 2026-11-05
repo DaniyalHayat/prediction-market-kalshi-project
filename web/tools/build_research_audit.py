@@ -88,7 +88,7 @@ def append_markdown(story, path):
                 index += 1
             columns = len(rows[0])
             widths = [135, 238, 155] if columns == 3 else [528 / columns] * columns
-            story += [Spacer(1,5), table(rows, widths), Spacer(1,10)]
+            story += [table(rows, widths), Spacer(1,10)]
             continue
         if line.startswith("## "):
             story.append(P(line[3:], "H1Audit"))
