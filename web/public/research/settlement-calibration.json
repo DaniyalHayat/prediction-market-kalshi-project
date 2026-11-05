@@ -1,0 +1,329 @@
+{
+  "version": "settlement-calibration-v1",
+  "protocol": {
+    "window_start": "2026-08-13T00:00:00.000Z",
+    "holdout_start": "2026-10-01T00:00:00.000Z",
+    "window_end": "2026-11-05T00:00:00.000Z",
+    "candle_period_minutes": 60,
+    "maximum_hours_after_open": 48,
+    "minimum_lead_hours": 6,
+    "per_category_per_week": 4,
+    "calibration_penalty": 10,
+    "series": {
+      "sports": [
+        "KXNFLGAME",
+        "KXNBAGAME"
+      ],
+      "macro": [
+        "KXCPI",
+        "KXFEDDECISION"
+      ],
+      "crypto": [
+        "KXBTC",
+        "KXETH"
+      ],
+      "travel": [
+        "KXTSAD",
+        "KXTSA"
+      ],
+      "weather": [
+        "KXHIGHNY",
+        "KXHIGHCHI"
+      ],
+      "science": [
+        "KXTOPMODEL",
+        "KXSPACEXCOUNT"
+      ],
+      "climate": [
+        "KXHURRICANE",
+        "KXRAINNYC"
+      ],
+      "culture": [
+        "KXRANKLIST1SONG",
+        "KXRT"
+      ]
+    }
+  },
+  "archive_sha256": "b19f1d51d92323eed9b742eed2fe950894b53b5c3a3f8ae63194a9cc1727d578",
+  "scored_rows_sha256": "fb2da7291d34de9bc89a8e85fad005bc2522eb20f35d18ace6209a6b3fb351ad",
+  "network_requests": 28,
+  "sample_coverage": {
+    "sports": {
+      "series": {
+        "KXNFLGAME": {
+          "returned": 266,
+          "eligible": 230,
+          "truncated": false,
+          "available": true
+        },
+        "KXNBAGAME": {
+          "returned": 348,
+          "eligible": 348,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 614,
+      "candidate_markets": 578,
+      "unique_candidate_events": 289,
+      "sampled_events": 40,
+      "observed_events": 34
+    },
+    "macro": {
+      "series": {
+        "KXCPI": {
+          "returned": 29,
+          "eligible": 3,
+          "truncated": false,
+          "available": true
+        },
+        "KXFEDDECISION": {
+          "returned": 10,
+          "eligible": 0,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 39,
+      "candidate_markets": 3,
+      "unique_candidate_events": 1,
+      "sampled_events": 1,
+      "observed_events": 1
+    },
+    "crypto": {
+      "series": {
+        "KXBTC": {
+          "returned": 1000,
+          "eligible": 80,
+          "truncated": true,
+          "available": true
+        },
+        "KXETH": {
+          "returned": 1000,
+          "eligible": 40,
+          "truncated": true,
+          "available": true
+        }
+      },
+      "listed_markets": 2000,
+      "candidate_markets": 120,
+      "unique_candidate_events": 2,
+      "sampled_events": 2,
+      "observed_events": 0
+    },
+    "travel": {
+      "series": {
+        "KXTSAD": {
+          "returned": 390,
+          "eligible": 390,
+          "truncated": false,
+          "available": true
+        },
+        "KXTSA": {
+          "returned": 0,
+          "eligible": 0,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 390,
+      "candidate_markets": 390,
+      "unique_candidate_events": 26,
+      "sampled_events": 16,
+      "observed_events": 2
+    },
+    "weather": {
+      "series": {
+        "KXHIGHNY": {
+          "returned": 408,
+          "eligible": 408,
+          "truncated": false,
+          "available": true
+        },
+        "KXHIGHCHI": {
+          "returned": 408,
+          "eligible": 408,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 816,
+      "candidate_markets": 816,
+      "unique_candidate_events": 136,
+      "sampled_events": 40,
+      "observed_events": 37
+    },
+    "science": {
+      "series": {
+        "KXTOPMODEL": {
+          "returned": 37,
+          "eligible": 32,
+          "truncated": false,
+          "available": true
+        },
+        "KXSPACEXCOUNT": {
+          "returned": 32,
+          "eligible": 23,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 69,
+      "candidate_markets": 55,
+      "unique_candidate_events": 8,
+      "sampled_events": 8,
+      "observed_events": 7
+    },
+    "climate": {
+      "series": {
+        "KXHURRICANE": {
+          "returned": 17,
+          "eligible": 0,
+          "truncated": false,
+          "available": true
+        },
+        "KXRAINNYC": {
+          "returned": 0,
+          "eligible": 0,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 17,
+      "candidate_markets": 0,
+      "unique_candidate_events": 0,
+      "sampled_events": 0,
+      "observed_events": 0
+    },
+    "culture": {
+      "series": {
+        "KXRANKLIST1SONG": {
+          "returned": 7,
+          "eligible": 7,
+          "truncated": false,
+          "available": true
+        },
+        "KXRT": {
+          "returned": 447,
+          "eligible": 294,
+          "truncated": false,
+          "available": true
+        }
+      },
+      "listed_markets": 454,
+      "candidate_markets": 301,
+      "unique_candidate_events": 30,
+      "sampled_events": 28,
+      "observed_events": 24
+    }
+  },
+  "classification": "exchange_derived_settlement_calibration_research",
+  "eligible": false,
+  "independent_forecast": false,
+  "coefficients": {
+    "intercept": 0.04385248090141376,
+    "slope": 0.8310755604607678,
+    "penalty": 10
+  },
+  "split": {
+    "cutoff": "2026-10-01T00:00:00.000Z",
+    "training_n": 40,
+    "holdout_n": 48,
+    "embargo_n": 17
+  },
+  "available": true,
+  "overall": {
+    "n": 48,
+    "midpoint_brier": 0.1468421875,
+    "challenger_brier": 0.14970907204889364,
+    "midpoint_log_loss": 0.43373534903465044,
+    "challenger_log_loss": 0.4486248015176532
+  },
+  "weekly_blocks": 5,
+  "brier_gain": -0.002866884548893639,
+  "brier_gain_interval_95": [
+    -0.006775897680076162,
+    0.0008825770259140201
+  ],
+  "by_category": {
+    "sports": {
+      "training_n": 7,
+      "holdout_n": 18,
+      "metrics": {
+        "n": 18,
+        "midpoint_brier": 0.2393986111111111,
+        "challenger_brier": 0.2390619311968288,
+        "midpoint_log_loss": 0.6705082742004365,
+        "challenger_log_loss": 0.6700888237756609
+      }
+    },
+    "macro": {
+      "training_n": 0,
+      "holdout_n": 0,
+      "metrics": null
+    },
+    "crypto": {
+      "training_n": 0,
+      "holdout_n": 0,
+      "metrics": null
+    },
+    "travel": {
+      "training_n": 0,
+      "holdout_n": 2,
+      "metrics": {
+        "n": 2,
+        "midpoint_brier": 0.21445000000000003,
+        "challenger_brier": 0.20957156595358678,
+        "midpoint_log_loss": 0.5666018667188645,
+        "challenger_log_loss": 0.5696967918369135
+      }
+    },
+    "weather": {
+      "training_n": 19,
+      "holdout_n": 17,
+      "metrics": {
+        "n": 17,
+        "midpoint_brier": 0.05999117647058824,
+        "challenger_brier": 0.06534849702258638,
+        "midpoint_log_loss": 0.21236260538034185,
+        "challenger_log_loss": 0.2402463029573412
+      }
+    },
+    "science": {
+      "training_n": 1,
+      "holdout_n": 4,
+      "metrics": {
+        "n": 4,
+        "midpoint_brier": 0.027125000000000007,
+        "challenger_brier": 0.033769075411800936,
+        "midpoint_log_loss": 0.13679216092575186,
+        "challenger_log_loss": 0.16665773135020695
+      }
+    },
+    "climate": {
+      "training_n": 0,
+      "holdout_n": 0,
+      "metrics": null
+    },
+    "culture": {
+      "training_n": 13,
+      "holdout_n": 7,
+      "metrics": {
+        "n": 7,
+        "midpoint_brier": 0.1688571428571429,
+        "challenger_brier": 0.1739681162665188,
+        "midpoint_log_loss": 0.4942301642069729,
+        "challenger_log_loss": 0.5117399979337153
+      }
+    }
+  },
+  "limitations": [
+    "The selected series and capped pages define this sample. Categories and contract families outside those pages lack coverage.",
+    "Each event contributes at most one ticker, selected by a fixed hash before reading its candle.",
+    "Hourly bid and ask closes with observed volume are price observations. Market availability, fill probability and execution costs are separate questions.",
+    "The six-hour buffer precedes recorded close, expiry and settlement. The archive lacks authoritative point-in-time publication times for the underlying outcomes.",
+    "Training labels settle before the holdout cutoff. Observations from overlapping events are withheld from both partitions.",
+    "The diagnostic calibrates the exchange midpoint. Its estimates rely on the same market price as the baseline.",
+    "Small weekly samples, unequal category coverage and shared underlying events limit generalization."
+  ]
+}

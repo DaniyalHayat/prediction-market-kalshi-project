@@ -5,6 +5,7 @@ import {eventDate} from '../intelligence/math.mjs';
 import {fitNBAChallenger} from './nba-challenger.mjs';
 import inplayParameters from './models/nba-inplay.json' with {type:'json'};
 import {parseNBALiveScore,estimateNBAInPlay} from './nba-inplay-math.mjs';
+import {nflResearch} from './nfl.mjs';
 const leagues={nba:{path:'basketball/nba',name:'NBA'},epl:{path:'soccer/eng.1',name:'Premier League'}};
 const cache=new Map(),jobs=new Map();
 const inplayPriors=new Map();
@@ -159,7 +160,8 @@ async function nbaInPlay(game,data,side){
     comparison:{baseline_probability:null,pregame_prior_probability:side==='home'?prior.probability:1-prior.probability}}:
     {...estimate,inplay:true,source_as_of:response.as_of,source_url:response.source_url,score:observed}};
 }
-export async function sportsResearch(market,{includeAvailability=true}={}) {
+export async function sportsResearch(market,{includeAvailability=true,...options}={}) {
+  if (market.ticker.startsWith('KXNFLGAME-')) return nflResearch(market, options);
   const league=market.ticker.startsWith('KXNBAGAME-')?'nba':market.ticker.startsWith('KXEPLGAME-')?'epl':null;
   if(!league)return null;
   let data=await leagueData(league),match=matchGame(market,data);

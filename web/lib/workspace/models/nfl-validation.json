@@ -1,0 +1,50 @@
+{
+  "n": 272,
+  "coverage": 1,
+  "tested_games": 272,
+  "weekly_blocks": 18,
+  "holdout_season": 2025,
+  "passed": true,
+  "brier": 0.15463580310919262,
+  "baseline_brier": 0.16728763231934257,
+  "brier_skill": 0.07562919646084976,
+  "mean_loss_improvement": 0.012651829210149956,
+  "improvement_95_lower": 0.006464806505645176,
+  "improvement_95_upper": 0.018445926716359144,
+  "log_loss": 0.6775607843368511,
+  "baseline_log_loss": 0.7174813437953725,
+  "payout_mse": 0.2291982171758094,
+  "baseline_payout_mse": 0.2481517019666933,
+  "ties_observed": 1,
+  "train_end": "2025-01-06T01:20:00.000Z",
+  "test_start": "2025-09-05T00:20:00.000Z",
+  "test_end": "2026-01-05T01:20:00.000Z",
+  "calibration": [
+    {
+      "n": 31,
+      "predicted": 0.3706353693012818,
+      "actual": 0.3870967741935484
+    },
+    {
+      "n": 163,
+      "predicted": 0.513653806231369,
+      "actual": 0.48466257668711654
+    },
+    {
+      "n": 78,
+      "predicted": 0.6559944082399534,
+      "actual": 0.7051282051282052
+    }
+  ],
+  "brier_definition": "Mean squared error across the home-win, away-win and tie outcomes.",
+  "protocol": "Fixed model and league-outcome baseline replay every regular-season game in the held-out year. Each fit uses games scheduled at least 36 hours earlier. Paired uncertainty resamples 18 whole NFL weeks. The result archive does not contain historical final-publication timestamps.",
+  "archive_sha256": "406eedce98970633fa1c44b4f91bee6352cba456d00e43c952d05e28f9b217dd",
+  "prediction_rows_sha256": "8e7790374d48c637d1f80781b24e7fbae321998c16b06867128f53651f270f78",
+  "source_as_of": "2026-11-05T10:54:20.739Z",
+  "completed_game_counts": {
+    "2023": 272,
+    "2024": 272,
+    "2025": 272,
+    "2026": 121
+  }
+}
