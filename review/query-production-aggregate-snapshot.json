@@ -1,0 +1,167 @@
+{
+  "scope": "Sanitized read-only production catalog and cumulative aggregate statistics; no application rows, payloads, SQL text, connection addresses or credentials.",
+  "source_snapshot": "query-live-catalog-before-admin.json",
+  "observed_at": "2026-11-05T02:37:22.895Z",
+  "server": {
+    "version": "17.11",
+    "started_at": "2026-11-04T22:58:48.156Z"
+  },
+  "statistics_window": {
+    "stats_reset": null,
+    "note": "The original snapshot did not read stats_reset. Statement aggregates are cumulative since the collector reset; server startup is a separate timestamp and does not establish their measurement window.",
+    "percentiles_available": false
+  },
+  "indexes": [
+    {
+      "tablename": "leases",
+      "indexname": "leases_pkey",
+      "indexdef": "CREATE UNIQUE INDEX leases_pkey ON market_lab.leases USING btree (key)"
+    },
+    {
+      "tablename": "quotas",
+      "indexname": "quotas_pkey",
+      "indexdef": "CREATE UNIQUE INDEX quotas_pkey ON market_lab.quotas USING btree (key)"
+    },
+    {
+      "tablename": "records",
+      "indexname": "pending_forecasts",
+      "indexdef": "CREATE INDEX pending_forecasts ON market_lab.records USING btree (((payload ->> 'pending_sk'::text))) WHERE ((payload ->> 'status'::text) = 'pending'::text)"
+    },
+    {
+      "tablename": "records",
+      "indexname": "records_expiry",
+      "indexdef": "CREATE INDEX records_expiry ON market_lab.records USING btree (expires_at) WHERE (expires_at IS NOT NULL)"
+    },
+    {
+      "tablename": "records",
+      "indexname": "records_pkey",
+      "indexdef": "CREATE UNIQUE INDEX records_pkey ON market_lab.records USING btree (pk, sk)"
+    }
+  ],
+  "estimated_table_statistics": [
+    {
+      "relname": "leases",
+      "n_live_tup": "1",
+      "n_dead_tup": "43",
+      "n_tup_ins": "2738",
+      "n_tup_upd": "0",
+      "n_tup_hot_upd": "0",
+      "n_mod_since_analyze": "32",
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-05T02:17:31.391Z",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-05T02:21:28.953Z",
+      "total_bytes": "98304"
+    },
+    {
+      "relname": "quotas",
+      "n_live_tup": "56",
+      "n_dead_tup": "43",
+      "n_tup_ins": "56",
+      "n_tup_upd": "5270",
+      "n_tup_hot_upd": "5270",
+      "n_mod_since_analyze": "26",
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-05T01:09:27.215Z",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-05T02:30:29.048Z",
+      "total_bytes": "65536"
+    },
+    {
+      "relname": "records",
+      "n_live_tup": "478",
+      "n_dead_tup": "16",
+      "n_tup_ins": "478",
+      "n_tup_upd": "2269",
+      "n_tup_hot_upd": "0",
+      "n_mod_since_analyze": "43",
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-05T02:21:28.941Z",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-05T02:17:31.382Z",
+      "total_bytes": "58720256"
+    }
+  ],
+  "records_storage": [
+    {
+      "heap_bytes": "294912",
+      "index_bytes": "131072",
+      "toast_total_bytes": "58261504"
+    }
+  ],
+  "active_waits": [],
+  "statement_statistics": [
+    {
+      "table_family": "records",
+      "queryid": "7671559271883529654",
+      "calls": "2735",
+      "rows": "2735",
+      "total_exec_time": 13949.333283,
+      "mean_exec_time": 5.1003046738574,
+      "stddev_exec_time": 13.8458674672221,
+      "min_exec_time": 0.059873,
+      "max_exec_time": 394.403542,
+      "shared_blks_hit": "195152",
+      "shared_blks_read": "1",
+      "shared_blks_dirtied": "10907",
+      "shared_blks_written": "7159",
+      "wal_records": "107481",
+      "wal_fpi": "2302",
+      "wal_bytes": "97193608"
+    },
+    {
+      "table_family": "quotas",
+      "queryid": "-845651269940424935",
+      "calls": "5378",
+      "rows": "5320",
+      "total_exec_time": 1202.02611,
+      "mean_exec_time": 0.223508015991075,
+      "stddev_exec_time": 1.4290919367702,
+      "min_exec_time": 0.041435,
+      "max_exec_time": 65.925145,
+      "shared_blks_hit": "22225",
+      "shared_blks_read": "1",
+      "shared_blks_dirtied": "55",
+      "shared_blks_written": "2",
+      "wal_records": "10837",
+      "wal_fpi": "53",
+      "wal_bytes": "949765"
+    },
+    {
+      "table_family": "leases",
+      "queryid": "3899183415557031032",
+      "calls": "3361",
+      "rows": "2737",
+      "total_exec_time": 568.806819000001,
+      "mean_exec_time": 0.169237375483488,
+      "stddev_exec_time": 1.96825122208691,
+      "min_exec_time": 0.027405,
+      "max_exec_time": 104.982624,
+      "shared_blks_hit": "14820",
+      "shared_blks_read": "1",
+      "shared_blks_dirtied": "82",
+      "shared_blks_written": "36",
+      "wal_records": "8868",
+      "wal_fpi": "53",
+      "wal_bytes": "1010754"
+    },
+    {
+      "table_family": "records",
+      "queryid": "6873631334363502946",
+      "calls": "6",
+      "rows": "6",
+      "total_exec_time": 13.396692,
+      "mean_exec_time": 2.232782,
+      "stddev_exec_time": 2.07150100397111,
+      "min_exec_time": 0.115029,
+      "max_exec_time": 6.11265,
+      "shared_blks_hit": "45",
+      "shared_blks_read": "0",
+      "shared_blks_dirtied": "4",
+      "shared_blks_written": "0",
+      "wal_records": "18",
+      "wal_fpi": "6",
+      "wal_bytes": "15523"
+    }
+  ]
+}
