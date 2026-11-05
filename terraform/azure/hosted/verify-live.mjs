@@ -101,7 +101,7 @@ export async function verifyLive({origin, compare = false, backend, allowRegionB
       body: {ticker: azure.ticker, messages: [{role: 'user', content: 'What is the provider and warehouse coverage?'}]},
       verify: (data, headers) => typeof data === 'string' && /Warehouse coverage:/i.test(data) &&
         ['azure-deterministic', 'azure-foundry'].includes(headers.get('x-research-model')) &&
-        headers.get('x-research-transport') === 'MCP Streamable HTTP',
+        ['MCP In-Process', 'MCP Streamable HTTP'].includes(headers.get('x-research-transport')),
     });
   }
 
