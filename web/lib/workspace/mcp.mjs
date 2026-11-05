@@ -20,10 +20,11 @@ export function boundPacket(value,maximum=14000){
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
-export function createResearchServer({tickerScope,dependencies={}}={}) {
+export function createResearchServer({tickerScope,modelScope='baseline',dependencies={}}={}) {
   const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,...dependencies};
   const server=new McpServer({name:'predictir',version:'4.0.0'});
   if(tickerScope)validateTicker(tickerScope);
+  if(!['baseline','validated','challenger'].includes(modelScope))throw new RangeError('Unknown research model');
   const ticker=z.string().min(1).max(140).regex(/^[A-Za-z0-9_.-]+$/);
   const check=value=>{validateTicker(value);if(tickerScope&&tickerScope!==value)throw new RangeError('This chat is scoped to the selected contract');};
   const output=value=>({content:[{type:'text',text:JSON.stringify(boundPacket(value))}]});
@@ -41,7 +42,7 @@ export function createResearchServer({tickerScope,dependencies={}}={}) {
       raw:{orderbook_fp:Object.fromEntries(Object.entries(depth.raw.orderbook_fp).filter(([side,rows])=>['yes_dollars','no_dollars'].includes(side)&&Array.isArray(rows)).map(([side,rows])=>[side,rows.slice(0,12)]))}},
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]};
   });
-  register('get_research','Read deterministic public research, uncertainty, validation, cost screen and evidence gaps for the selected contract. Does not contain Spotify catalog content or private journals.',{ticker},async({ticker})=>publicResearch(await deps.workspaceResearch(ticker,{assistant:true})));
+  register('get_research','Read deterministic public research, uncertainty, validation, cost screen and evidence gaps for the selected contract. Does not contain Spotify catalog content or private journals.',{ticker},async({ticker})=>publicResearch(await deps.workspaceResearch(ticker,{assistant:true,model:modelScope})));
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{
     const value=await deps.contractHistory(ticker,Number(hours));return {...value,rows:value.rows.slice(-120)};
   });

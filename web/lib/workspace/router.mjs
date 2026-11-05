@@ -2,12 +2,18 @@ import {request,marketDetails,book,validateTicker,number,validQuote} from '../li
 import {marketFees} from '../cloud/resolve.mjs';
 import {marketBrief} from '../intelligence/brief.mjs';
 import {executionEstimate} from '../intelligence/math.mjs';
-import {workspaceCatalog,workspaceMarkets,inferCategory} from './catalog.mjs';
-import {retainMarketHistory,warehouseStatus,marketAttribution} from './warehouse.mjs';
+import {workspaceCatalog,workspaceMarkets,inferCategory,inferResearchFamily} from './catalog.mjs';
+import {retainMarketHistory,warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
 import {sportsResearch} from './sports.mjs';
 import {musicResearch,musicContract,chartPosts} from './music.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
+import {tradeCandidates,rankCandidates} from './recommendations.mjs';
 const researchCache=new Map(),researchInflight=new Map();
+const scanCache=new Map(),scanInflight=new Map();
+function modelChoice(model='baseline'){
+  if(!['baseline','validated','challenger'].includes(model))throw new RangeError('Choose the validated baseline or experimental challenger');
+  return model==='validated'?'baseline':model;
+}
 
 export function candleRows(payload,end=Math.floor(Date.now()/1000)) {
   return (payload.candlesticks||[]).flatMap(row=>{
@@ -66,9 +72,10 @@ export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeV
       fee_note:feeVerified?'General taker formula with the exchange series multiplier; individual-market exceptions still require inspection.':'Explicit general taker-fee assumption; a market-specific schedule was not verified.'},
     validation_note:'A historical team-strength holdout and parameter range do not establish calibrated contract uncertainty, injury effects, profitable fills or optimal real-world trades. Position size remains conditional on your own budget and assumptions.'};
 }
-export async function workspaceResearch(ticker,{fast=false,assistant=false}={},dependencies={}) {
+export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline'}={},dependencies={}) {
   validateTicker(ticker);
-  const key=ticker+'#'+(fast?'fast':assistant?'assistant':'full'),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
+  model=modelChoice(model);
+  const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full'),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&researchInflight.has(key))return researchInflight.get(key);
   const deps={marketDetails,book,marketBrief,marketFees,sportsResearch,musicResearch,chartPosts,...dependencies};
@@ -85,34 +92,71 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false}={},d
     let forecast=brief.forecast,decision=brief.decision,summary=brief.summary,status=brief.status;
     const errors=[...(brief.errors||[])];
     if(sports?.error)errors.push({source:'Sports evidence',error:sports.reason});
-    if(sports?.forecast){
-      forecast={...sports.forecast,evidence:{tier:sports.forecast.eligible?2:1,label:sports.forecast.eligible?'Chronological matchup holdout':sports.forecast.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
+    const alternative=model==='challenger'&&sports?.challenger?.available?sports.challenger:null;
+    if(sports?.forecast||alternative){
+      const selected=alternative?{...(sports.forecast||{}),...alternative}:sports.forecast;
+      forecast={...selected,evidence:{tier:selected.eligible?2:1,label:alternative&&!selected.eligible?'Experimental calibrated ensemble':selected.eligible?'Chronological matchup holdout':selected.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
       decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason});
+      if(alternative&&!alternative.eligible)decision.reasons.unshift(alternative.promotion_reason||'The experimental model has not passed its promotion gate.');
       status='modeled';summary=`The matched-event historical team model estimates ${(forecast.probability*100).toFixed(1)}% YES. Its displayed range is parameter uncertainty or sensitivity, not a calibrated injury-adjusted outcome interval. ${decision.reasons[0]||'The conservative screen clears assumed entry costs; this remains a research hypothesis.'}`;
     }
     const side=['yes','no'].includes(decision.side)?decision.side.toUpperCase():'PASS';
-    const value={...brief,forecast,decision,summary,status,
+    const value={...brief,forecast,decision,summary,status,model_selection:{requested:model,applied:alternative?'challenger':'baseline',reason:model==='challenger'&&!alternative?'An audited challenger is unavailable for this exact contract; baseline research is shown.':null},
       opinion:{side,reason:decision.reasons?.[0]||(side==='PASS'?'No supported cost advantage was established.':'The modeled conservative bound clears one-contract entry costs; inspect validation and assumptions.'),
         basis:'Independent-data research screen; conditional paper sizing is available in Paper position.',supported_allocation:side==='PASS'?0:null},
       extensions:{...(sports?{sports}:{}),...(music?{music}:{}),...(posts?{posts:posts.posts,post_status:posts.status,post_note:posts.note}: {})},
       sources:[...(brief.sources||[]),...(sports?.sources||[]),...(music?.sources||[])],errors};
-    if(useCache){if(researchCache.size>=512)researchCache.delete(researchCache.keys().next().value);researchCache.set(key,{until:Date.now()+30000,value});}
+    if(useCache){if(researchCache.size>=512)researchCache.delete(researchCache.keys().next().value);researchCache.set(key,{until:Date.now()+(forecast?.inplay?5000:30000),value});}
     return value;
   })();
   if(useCache)researchInflight.set(key,task);
   try{return await task;}finally{if(useCache)researchInflight.delete(key);}
 }
-export async function workspaceOpinions(raw,{research=workspaceResearch}={}) {
+export async function workspaceOpinions(raw,{research=workspaceResearch,model='baseline'}={}) {
   if(typeof raw!=='string'||raw.length>1200)throw new RangeError('Supply one to eight exact tickers');
   const tickers=[...new Set(raw.split(',').filter(Boolean))];
   if(!tickers.length||tickers.length>8)throw new RangeError('Supply one to eight exact tickers');
   tickers.forEach(validateTicker);
   const opinions=await boundedMap(tickers,2,async ticker=>{
-    try {const value=await research(ticker,{fast:true});return {ticker,...value.opinion,probability:value.forecast?.probability??null,
+    try {const value=await research(ticker,{fast:true,model:modelChoice(model)});return {ticker,...value.opinion,probability:value.forecast?.probability??null,
       interval:value.forecast?.interval??null,as_of:value.as_of,model:value.forecast?.model_name||null};}
     catch{return {ticker,side:'PASS',reason:'Current research could not be verified. Open the contract to retry.',supported_allocation:0};}
   });
   return {opinions,as_of:new Date().toISOString(),scope:'Compact deterministic screens. Headlines, paid X reads, Spotify references and availability retrieval are omitted.'};
+}
+
+export async function workspaceRecommendations(category='sports',budget=20,model='baseline',dependencies={}) {
+  model=modelChoice(model);
+  if(!Number.isFinite(budget)||budget<1||budget>10000)throw new RangeError('Choose a paper budget from $1 to $10,000');
+  const deps={markets:workspaceMarkets,research:workspaceResearch,book,fees:marketFees,...dependencies};
+  const useCache=!Object.keys(dependencies).length,key=category+'#'+model;
+  const scan=async()=>{
+    const list=await deps.markets(category),seen=new Set(),ordered=[...list.markets].sort((a,b)=>{
+      const priority=m=>/^KX(?:NBA|EPL)GAME-/.test(m.ticker)||inferResearchFamily(m.ticker)?0:1;
+      return priority(a)-priority(b)||(b.volume_24h||0)-(a.volume_24h||0);
+    });
+    const selected=[];for(const row of ordered){const event=row.event_ticker||row.ticker;if(!seen.has(event)){seen.add(event);selected.push(row);}if(selected.length>=12)break;}
+    const rows=await boundedMap(selected,3,async market=>{
+      try{const [research,depth,fees]=await Promise.all([deps.research(market.ticker,{fast:true,model}),deps.book(market.ticker,10000),deps.fees(market.ticker).catch(()=>null)]);
+        return {market:{...market,...research.market},research,depth,fees};}
+      catch(error){return {market,error:String(error.message).slice(0,180)};}
+    });
+    return {rows,as_of:new Date().toISOString(),coverage:{catalog_contracts:list.markets.length,scanned_events:selected.length,maximum_events:12,catalog_partial:Boolean(list.partial),source_errors:list.errors||[],scope:'A bounded liquid-event scan. It is not an exchange-wide best-trade claim.'}};
+  };
+  let data=useCache?scanCache.get(key):null;
+  const lifetime=data?.rows.some(row=>row.research?.forecast?.inplay)?5000:30000;
+  if(!data||Date.now()-Date.parse(data.as_of)>lifetime){
+    let task=useCache?scanInflight.get(key):null;
+    if(!task){task=scan();if(useCache)scanInflight.set(key,task);}
+    try{data=await task;if(useCache){if(scanCache.size>=16)scanCache.delete(scanCache.keys().next().value);scanCache.set(key,data);}}
+    finally{if(useCache)scanInflight.delete(key);}
+  }
+  const candidates=data.rows.flatMap(row=>row.error?[{ticker:row.market.ticker,title:row.market.title,event_ticker:row.market.event_ticker,side:'PASS',eligible:false,reasons:[row.error]}]:
+    tradeCandidates(row.market,row.depth,row.research,{budget,coefficient:Number.isFinite(row.fees?.coefficient)?row.fees.coefficient:.07,experimental:model==='challenger'})
+      .map(value=>({...value,fee_source:Number.isFinite(row.fees?.coefficient)?'series_metadata':'general_assumption'})));
+  return {...rankCandidates(candidates,{experimental:model==='challenger'}),as_of:data.as_of,budget,model,coverage:data.coverage,
+    assumptions:{paper_only:true,independent_probability:true,entry_buffer_cents:2,slippage_cents:2,settlement_payout_per_contract:1,settlement_fee:0,quantity_step:1,fee_policy:'Series coefficient when supplied; otherwise the explicit general 0.07 assumption. Rounded per price level. Exchange billing can differ.',
+      risk_size:{drawdown_floor:.8,drawdown_probability:.1},budget_scope:'Each row is a separate use of this budget; do not add the scenarios as if each had its own extra cash.'}};
 }
 
 export async function workspaceGET(endpoint,params) {
@@ -128,8 +172,10 @@ export async function workspaceGET(endpoint,params) {
     return {ticker,market:{...detail.market,category:inferCategory(detail.market,profile?[profile.data.series]:[])},fees,as_of:detail.as_of,source_url:detail.source_url};
   }
   if(endpoint==='workspace/history')return contractHistory(params.get('ticker'),Number(params.get('hours')||24));
-  if(endpoint==='workspace/research')return workspaceResearch(validateTicker(params.get('ticker')));
-  if(endpoint==='workspace/opinions')return workspaceOpinions(params.get('tickers'));
+  if(endpoint==='workspace/research')return workspaceResearch(validateTicker(params.get('ticker')),{fast:params.get('compact')==='1',model:params.get('model')||'baseline'});
+  if(endpoint==='workspace/opinions')return workspaceOpinions(params.get('tickers'),{model:params.get('model')||'baseline'});
+  if(endpoint==='workspace/recommendations')return workspaceRecommendations(params.get('category')||'sports',Number(params.get('budget')||20),params.get('model')||'baseline');
+  if(endpoint==='workspace/search')return searchPublicMarkets(params.get('q')||'',Number(params.get('limit')||30));
   if(endpoint==='workspace/attribution')return marketAttribution();
   if(endpoint==='workspace/sources')return {warehouse:await warehouseStatus(),providers:providerStatus(),as_of:new Date().toISOString()};
   throw Object.assign(new Error('Unknown workspace route'),{status:404});
