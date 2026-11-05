@@ -15,6 +15,7 @@ export function store() {
     {table:process.env.MARKET_TABLE,bucket:process.env.MARKET_BUCKET,s3:new S3Client(config)});
   return active;
 }
+export async function closeStore(){await active?.close?.();}
 export async function streamCredentials() {
   if(process.env.KALSHI_API_KEY_ID && process.env.KALSHI_PRIVATE_KEY)return {id:process.env.KALSHI_API_KEY_ID,pem:process.env.KALSHI_PRIVATE_KEY};
   if(!process.env.KALSHI_SECRET_PARAMETER)return null;

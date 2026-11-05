@@ -31,14 +31,14 @@ export async function runPipelineJob(s=store(),handlers={}){
 }
 export function startPipeline(){
   if(!process.env.DATABASE_URL||process.env.MARKET_PIPELINE_ENABLED!=='1')return ()=>{};
-  let running=false,stopped=false,processed=0,closeListener,reconnect;
+  let running=false,stopped=false,processed=0,closeListener,reconnect;const drainWaiters=[];
   const tick=async()=>{
     if(running||stopped)return;running=true;processed=0;
     try{
       const s=store();await enqueuePipeline(s);
-      for(;processed<4;processed++){const result=await runPipelineJob(s);if(!result)break;structuredLog('pipeline.job',{kind:result.kind,result:result.status});}
+      for(;processed<4&&!stopped;processed++){const result=await runPipelineJob(s);if(!result)break;structuredLog('pipeline.job',{kind:result.kind,result:result.status});}
     }catch{structuredLog('pipeline.error',{error_code:'STORAGE_UNAVAILABLE'});}
-    finally{running=false;if(processed===4&&!stopped)setImmediate(tick);}
+    finally{running=false;for(const resolve of drainWaiters.splice(0))resolve();if(processed===4&&!stopped)setImmediate(tick);}
   };
   const attach=async()=>{
     if(stopped)return;
@@ -48,5 +48,5 @@ export function startPipeline(){
     }catch{if(!stopped){reconnect=setTimeout(attach,5000);reconnect.unref();}}
   };
   const timer=setInterval(tick,60000);timer.unref();tick();attach();
-  return ()=>{stopped=true;clearInterval(timer);clearTimeout(reconnect);closeListener?.();};
+  return async()=>{stopped=true;clearInterval(timer);clearTimeout(reconnect);await closeListener?.();if(running)await new Promise(resolve=>drainWaiters.push(resolve));};
 }
