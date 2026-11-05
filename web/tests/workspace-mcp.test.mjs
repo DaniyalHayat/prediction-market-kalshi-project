@@ -36,16 +36,19 @@ const edgeHeaders={'x-market-edge-secret':edgeSecret,'x-market-country':'US','x-
 function memoryQuota(){const used=new Map();return {used,consume:async(key,limit,amount=1)=>{const before=used.get(key)||0;if(before+amount>limit)return false;used.set(key,before+amount);return true;}};}
 
 test('exhausted research-work budget leaves paper reads and scoped research available',async t=>{
-  const keys=[];
-  const storage={consume:async key=>{keys.push(key);return !key.startsWith('work#');}};
+  const charges=[];
+  const storage={consume:async (key,limit,weight)=>{charges.push([key,weight]);return !key.startsWith('work#');}};
   const url=await listen(t,{now:()=>Date.parse('2026-11-05T23:50:00Z'),storageEnabled:()=>true,storage:()=>storage,
     getRoute:async()=>Response.json({ok:true})});
   assert.equal((await fetch(url+'/api/workspace/portfolio-books',{headers:edgeHeaders})).status,200);
   assert.equal((await fetch(url+'/api/workspace/research',{headers:edgeHeaders})).status,200);
-  const denied=await fetch(url+'/api/workspace/opinions',{headers:edgeHeaders});
+  assert.equal((await fetch(url+'/api/workspace/opinions?tickers=A,B,C,D,E,F',{headers:edgeHeaders})).status,200);
+  assert.equal((await fetch(url+'/api/workspace/recommendations',{headers:edgeHeaders})).status,200);
+  const denied=await fetch(url+'/api/workspace/search',{headers:edgeHeaders});
   assert.equal(denied.status,429);
   assert.equal(denied.headers.get('retry-after'),'600');
-  assert.deepEqual(keys,['paper-reads#2026-11-05','research-reads#2026-11-05','work#2026-11-05']);
+  assert.deepEqual(charges,[['paper-reads#2026-11-05',1],['research-reads#2026-11-05',5],
+    ['market-screens#2026-11-05',6],['market-screens#2026-11-05',12],['work#2026-11-05',2]]);
 });
 
 test('actual MCP handshake lists only read-only tools and scopes all market reads',async t=>{
