@@ -13,7 +13,7 @@ export function usableForecast(research,now=Date.now(),expectedTicker) {
   return {valid,eligible,fresh,experimental:Boolean(f?.experimental),probability:valid?p:null,interval:valid?range:null,model:f?.model_name||null,reason:!identity?'The research packet does not match this exact contract.':!valid?'No matched independent probability is available.':research?.error?'The research refresh failed. Cached estimates cannot drive a current position action.':expiredDomain?'This pregame estimate expired when the event started. Fresh in-play research is required.':!eligible?'The latest model has not met its release, coverage or freshness requirements.':null};
 }
 
-function nflPositionPayout(research,market,side,now,forecast){
+export function nflPositionPayout(research,market,side,now,forecast){
   const estimate=research.forecast,sport=research.extensions?.sports,identity=nflContractIdentity(market);
   if(estimate.settlement_kind!=='win_loss_half_on_tie'||!identity.available||!identity.tie_payout_verified)
     return {reason:'The current contract rules did not verify the modeled $0.50 tie payout.'};

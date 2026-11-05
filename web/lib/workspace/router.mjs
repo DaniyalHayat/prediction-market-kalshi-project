@@ -11,7 +11,7 @@ import {contractEvidence} from './evidence.mjs';
 import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
 import {tradeCandidates,rankCandidates} from './recommendations.mjs';
-import {usableForecast} from './positions.mjs';
+import {nflPositionPayout,usableForecast} from './positions.mjs';
 import {paperScenarios,rankPaperScenarios} from './paper-scenario.mjs';
 import {marketSignal} from './market-signal.mjs';
 import {settlementCalibrationDiagnostic} from './settlement-calibration.mjs';
@@ -240,10 +240,28 @@ function warmPositionIdeaPool(){
     for(const {id} of WORKSPACE_CATEGORIES){
       const sample=await categorySnapshot(id).catch(()=>null);
       const row=sample?.markets.find(market=>Date.parse(market.close_time)>Date.now()+120000&&
-        (inferResearchFamily(market.ticker)||/^KX(?:NBA|EPL)GAME-/.test(market.ticker)));
+        (inferResearchFamily(market.ticker)||/^KX(?:NBA|NFL|EPL)GAME-/.test(market.ticker)));
       if(row)await workspaceResearch(row.ticker,{fast:true}).catch(()=>{});
     }
   })();
+}
+
+function releasedPositionIdea(market,research,now){
+  if(!market?.ticker)return false;
+  const forecast=usableForecast(research,now,market.ticker);
+  if(!forecast.valid||forecast.experimental)return false;
+  return research.forecast.outcomes?nflPositionPayout(research,market,'yes',now,forecast).eligible===true:forecast.eligible;
+}
+
+export function positionIdeaCandidates(market,depth,research,{now=Date.now(),budget=20,coefficient=.07}={}){
+  if(!releasedPositionIdea(market,research,now))return [];
+  const assumptions={now,budget,coefficient};
+  if(!research.forecast.outcomes)return tradeCandidates(market,depth,research,assumptions);
+  const {win,loss,tie}=research.forecast.outcomes;
+  return paperScenarios(market,depth,research,assumptions).filter(row=>row.conservative_edge>0).map(row=>({
+    ...row,eligible:true,point_edge:row.conservative_edge+(row.settlement_value-row.settlement_value_range[0]),
+    win_probability:row.side==='YES'?win:loss,tie_probability:tie,tie_payout:.5
+  }));
 }
 
 export async function recentPositionIdeas() {
@@ -254,7 +272,7 @@ export async function recentPositionIdeas() {
       if(now-Date.parse(as_of)>30000)continue;
       for(const {market,research,depth} of rows){
         if(market?.category)categories.add(market.category);
-        if(usableForecast(research,now,market?.ticker).eligible&&!research.forecast.experimental){
+        if(releasedPositionIdea(market,research,now)){
           recent.set(market.ticker,{market,research});
           if(depth&&now-Date.parse(depth.as_of)<=30000)books.set(market.ticker,depth);
         }
@@ -265,7 +283,7 @@ export async function recentPositionIdeas() {
       if(!market?.ticker||until<now)continue;
       const category=inferCategory(market);
       if(category!=='other')categories.add(category);
-      if(!recent.has(market.ticker)&&usableForecast(research,now,market.ticker).eligible&&!research.forecast.experimental)
+      if(!recent.has(market.ticker)&&releasedPositionIdea(market,research,now))
         recent.set(market.ticker,{market:{...market,category},research});
     }
     const perCategory=new Map();
@@ -282,11 +300,13 @@ export async function recentPositionIdeas() {
     if(needDepth.length)for(const [ticker,depth] of await batchBooks(needDepth).catch(()=>new Map()))books.set(ticker,depth);
     const as_of=new Date().toISOString();
     const ranked=rankCandidates(candidates.flatMap(({market,research})=>books.has(market.ticker)?
-      tradeCandidates(market,books.get(market.ticker),research,{now:Date.parse(as_of),budget:20,coefficient:research.fee_coefficient??.07}):[]));
+      positionIdeaCandidates(market,books.get(market.ticker),research,{now:Date.parse(as_of),budget:20,coefficient:research.fee_coefficient??.07}):[]));
     return {rows:ranked.candidates.map(row=>({ticker:row.ticker,event_ticker:row.event_ticker,title:row.title,
       side:row.side,category:row.category,as_of:row.quote_as_of,conservative_edge:row.conservative_edge,
       expected_edge:row.point_edge,expected_profit:row.expected_profit,budget:20,contracts:row.contracts,
-      cost:row.cost,probability_yes:row.probability_yes,interval_yes:row.interval_yes,model:row.model,source_as_of:row.source_as_of})),
+      cost:row.cost,probability_yes:row.probability_yes,interval_yes:row.interval_yes,model:row.model,source_as_of:row.source_as_of,
+      ...(row.partial_payout?{settlement_value:row.settlement_value,settlement_value_range:row.settlement_value_range,
+        win_probability:row.win_probability,tie_probability:row.tie_probability,tie_payout:row.tie_payout}:{})})),
       checked_categories:[...new Set(candidates.filter(({market})=>books.has(market.ticker)).map(({market})=>market.category))]
         .filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
       cached_categories:[...categories].filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
