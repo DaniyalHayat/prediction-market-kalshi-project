@@ -37,6 +37,28 @@ test('in-play research requires fresh regulation score/clock and never claims re
     {clock_seconds:null},{clock_seconds:721},{state:'pre'},{state:'post',completed:true}])assert.equal(estimateNBAInPlay({...score,...changed},prior,parameters,now).available,false,JSON.stringify(changed));
   assert.equal(estimateNBAInPlay(score,{probability:0,interval:[0,.5]},parameters,now).available,false);
 });
+test('provider sub-minute decimal clocks preserve elapsed time and regulation safeguards',()=>{
+  const payload={header:{league:{slug:'nba'},competitions:[{id:game.id,status:{period:1,displayClock:'6.9',type:{state:'in',completed:false}},
+    competitors:[{id:'8',homeAway:'home',score:'26'},{id:'20',homeAway:'away',score:'20'}]}]}};
+  const status=payload.header.competitions[0].status;
+  for(const [display,seconds] of [['6.9',6.9],['0:06.9',6.9],['59.99',59.99],['0',0],['12:00',720],['1:02.125',62.125]]){
+    status.displayClock=display;
+    const parsed=parseNBALiveScore(payload,game,new Date(now).toISOString());
+    assert.equal(parsed.clock_seconds,seconds);
+    assert.equal(estimateNBAInPlay(parsed,prior,parameters,now).remaining_regulation_seconds,2160+seconds);
+  }
+  for(const display of ['60.0','6.9 seconds','0:60.0','-1','', 'Halftime']){
+    status.displayClock=display;
+    assert.equal(parseNBALiveScore(payload,game,new Date(now).toISOString()).clock_seconds,null);
+  }
+  status.displayClock='6.9';status.period=4;
+  const parsed=parseNBALiveScore(payload,game,new Date(now-8000).toISOString());
+  assert.equal(estimateNBAInPlay(parsed,prior,parameters,now).available,false);
+  status.displayClock='0.0';
+  assert.equal(estimateNBAInPlay(parseNBALiveScore(payload,game,new Date(now).toISOString()),prior,parameters,now).available,false);
+  status.period=5;status.displayClock='4:59';
+  assert.equal(estimateNBAInPlay(parseNBALiveScore(payload,game,new Date(now).toISOString()),prior,parameters,now).available,false);
+});
 test('real replay archives keep calibration/test games disjoint and reconcile period totals',async()=>{
   const replay=JSON.parse(gunzipSync(await readFile(new URL('../research-data/nba-quarter-replay-2026-11-04.json.gz',import.meta.url))).toString('utf8'));
   const calibration=replay.games.filter(g=>g.split==='calibration'),testGames=replay.games.filter(g=>g.split==='test');

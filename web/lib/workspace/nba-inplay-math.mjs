@@ -14,7 +14,8 @@ export function parseNBALiveScore(payload,game,asOf){
   const home=competition.competitors?.find(c=>c.homeAway==='home'),away=competition.competitors?.find(c=>c.homeAway==='away');
   if(String(home?.team?.id||home?.id)!==game.home_id||String(away?.team?.id||away?.id)!==game.away_id)return {available:false,reason:'Live score teams do not match the selected event.'};
   const status=competition.status||{},period=Number(status.period),clock=typeof status.displayClock==='string'?status.displayClock:null;
-  const matched=clock?.match(/^(\d{1,2}):([0-5]\d)(?:\.(\d))?$/),clockSeconds=typeof status.clock==='number'&&Number.isFinite(status.clock)?status.clock:matched?Number(matched[1])*60+Number(matched[2])+Number(matched[3]||0)/10:null;
+  const matched=clock?.match(/^(\d{1,2}):([0-5]\d(?:\.\d{1,3})?)$/),secondsOnly=clock?.match(/^([0-5]?\d(?:\.\d{1,3})?)$/);
+  const clockSeconds=typeof status.clock==='number'&&Number.isFinite(status.clock)?status.clock:matched?Number(matched[1])*60+Number(matched[2]):secondsOnly?Number(secondsOnly[1]):null;
   return {available:true,event_id:String(game.id),home_id:game.home_id,away_id:game.away_id,home_score:integer(home.score),away_score:integer(away.score),
     state:status.type?.state||null,completed:status.type?.completed===true,period:Number.isInteger(period)?period:null,clock_seconds:clockSeconds,
     display_clock:clock,observed_at:asOf,provider_updated_at:competition.lastUpdated||null,
