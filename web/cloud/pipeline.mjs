@@ -1,7 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import {store} from '../lib/cloud/store.mjs';
 import {settleDue} from '../lib/cloud/journal.mjs';
-import {workspaceGET} from '../lib/workspace/router.mjs';
+import {workspaceMarkets} from '../lib/workspace/catalog.mjs';
+import {retainMarketHistory} from '../lib/workspace/warehouse.mjs';
 import {appleChart} from '../lib/workspace/music.mjs';
 import {structuredLog} from '../lib/runtime-observability.mjs';
 import {sourceFailureDetails} from '../lib/workspace/providers.mjs';
@@ -18,7 +19,7 @@ export async function runPipelineJob(s=store(),handlers={}){
     UPDATE market_lab.jobs j SET state='running',owner=$1,locked_until=now()+interval '5 minutes',attempts=attempts+1
     FROM candidate c WHERE j.key=c.key RETURNING j.*`,[owner]);
   const job=claimed.rows[0];if(!job)return null;
-  const dispatch={catalog:input=>workspaceGET('workspace/markets',new URLSearchParams(input)),apple:()=>appleChart(),settlement:()=>settleDue(12),...handlers};
+  const dispatch={catalog:async input=>retainMarketHistory(await workspaceMarkets(input.category)),apple:()=>appleChart(),settlement:()=>settleDue(12),...handlers};
   try{
     if(!dispatch[job.kind])throw new Error('Unknown job kind');await dispatch[job.kind](job.input);
     const completed=await s.db.query("UPDATE market_lab.jobs SET state='complete',finished_at=now(),locked_until=NULL WHERE key=$1 AND owner=$2 AND state='running' AND locked_until>now() RETURNING key",[job.key,owner]);

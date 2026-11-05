@@ -8,6 +8,7 @@ export const EMBEDDING_MODEL=Object.freeze({id:'Xenova/all-MiniLM-L6-v2',revisio
 const hash=text=>createHash('sha256').update(text).digest('hex');
 const clean=(value,maximum)=>String(value||'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,' ').trim().slice(0,maximum);
 const memory=new Map(),vectorCache=new Map(),capabilities=new WeakMap(),dailyUsage=new Map();
+const embeddingBackfills=new Set();
 let modelPromise,modelLoadedAt=null,modelFailureUntil=0,queue=Promise.resolve(),queued=0;
 export function embeddingStatus(){return {...EMBEDDING_MODEL,status:process.env.SEMANTIC_MODEL_ENABLED==='0'?'disabled':modelLoadedAt?'loaded':modelFailureUntil>Date.now()?'cooldown':'not_loaded',loaded_at:modelLoadedAt,max_parallel_inferences:1,max_queued_requests:4};}
 const validVector=value=>Array.isArray(value)&&value.length===384&&value.every(Number.isFinite)&&Math.abs(value.reduce((s,v)=>s+v*v,0)-1)<.01;
@@ -23,12 +24,14 @@ async function extractor(){
 }
 export async function embedPublicTexts(texts){
   if(!Array.isArray(texts)||!texts.length||texts.length>32||texts.some(t=>typeof t!=='string'||!t.trim()||t.length>1200))throw new RangeError('One to 32 public text chunks of at most 1,200 characters are required');
+  const keys=texts.map(hash),cached=keys.map(key=>vectorCache.get(key));
+  if(cached.every(Boolean))return cached;
   if(queued>=4)throw new Error('The local embedding queue is full');
   const previous=queue;let release;queue=new Promise(resolve=>{release=resolve;});queued++;
   await previous;
   try{
     const output=new Array(texts.length),missing=[];
-    texts.forEach((text,i)=>{const key=hash(text),hit=vectorCache.get(key);if(hit)output[i]=hit;else missing.push({text,i,key});});
+    texts.forEach((text,i)=>{const key=keys[i],hit=vectorCache.get(key);if(hit)output[i]=hit;else missing.push({text,i,key});});
     if(missing.length){const model=await extractor();for(let i=0;i<missing.length;i+=4){const batch=missing.slice(i,i+4),tensor=await model(batch.map(row=>row.text),{pooling:'mean',normalize:true,truncation:true,max_length:256}),vectors=tensor.tolist();
       if(vectors.length!==batch.length||vectors.some(v=>!validVector(v)))throw new Error('The model returned an invalid embedding shape or norm');
       batch.forEach((row,j)=>{output[row.i]=vectors[j];if(vectorCache.size>=1024)vectorCache.delete(vectorCache.keys().next().value);vectorCache.set(row.key,vectors[j]);});tensor.dispose?.();}}
@@ -45,7 +48,12 @@ export function publicEvidenceChunks(market,evidence,{now=Date.now()}={}){
     for(const content of chunks(text)){rows.push({ticker,id:hash(ticker+'\n'+url+'\n'+content),source_url:url,title:clean(title,400),content,publisher:clean(publisher||'Public source',160),source_kind:kind,published_at:Number.isFinite(publication)?new Date(publication).toISOString():null,retrieved_at:new Date(date).toISOString(),expires_at:new Date(expiry).toISOString()});if(rows.length>=32)break;}
   };
   add(market.title,[market.title,market.yes_sub_title,'Primary settlement rules: '+(market.rules_primary||''),'Secondary settlement rules: '+(market.rules_secondary||'')].join('\n'),'https://external-api.kalshi.com/trade-api/v2/markets/'+encodeURIComponent(ticker),'Kalshi','public_contract_rules',null,evidence.as_of);
-  for(const item of evidence.items||[]){if(rows.length>=32)break;add(item.title,[item.title,item.excerpt].filter(Boolean).join('\n'),item.url,item.publisher,item.platform==='reddit'?'community_context':item.source_tier||'public_metadata',item.time_basis==='provider_first_seen'?null:item.published_at||item.as_of,item.retrieved_at||evidence.as_of,item.platform==='reddit'?900000:7*86400000);}
+  for(const item of [...(evidence.items||[]),...(evidence.related_items||[])]){
+    if(rows.length>=32)break;
+    if(item.platform==='reddit')continue;
+    const scope=item.match_scope==='related'?'related_'+(item.source_tier||'public_metadata'):item.source_tier||'public_metadata';
+    add(item.title,[item.title,item.excerpt].filter(Boolean).join('\n'),item.url,item.publisher,scope,item.time_basis==='provider_first_seen'?null:item.published_at||item.as_of,item.retrieved_at||evidence.as_of);
+  }
   const music=evidence.music_alternatives;if(rows.length<32&&music?.status==='available')for(const row of (music.matched_tracks||[]).slice(0,3))add('Secondary music chart context',`${row.artist}: ${row.name}. US daily song rank ${row.rank}; reported daily song streams ${row.streams}; measurement date ${row.measurement_date}. ${music.settlement_note}`,music.source_url,'Kworb','secondary_measurement',row.measurement_date,music.as_of);
   return [...new Map(rows.slice(0,32).map(row=>[row.id,row])).values()];
 }
@@ -68,10 +76,43 @@ export function reciprocalRankFusion(lexical,semantic,{limit=6,constant=60}={}){
   return [...fused.values()].sort((a,b)=>b.rrf_score-a.rrf_score||a.id.localeCompare(b.id)).slice(0,limit);
 }
 const terms=text=>String(text).toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[];
-function localLexical(rows,query){const words=[...new Set(terms(query))];return rows.map(row=>({...row,lexical_score:words.reduce((sum,word)=>sum+Number(terms(row.title+' '+row.content).includes(word)),0)})).filter(row=>row.lexical_score>0).sort((a,b)=>b.lexical_score-a.lexical_score).slice(0,30);}
+const questionWords=new Set(['can','could','does','explain','give','help','how','just','please','tell','the','this','what','when','where','which','why','would','you','your']);
+const queryTerms=value=>[...new Set(terms(value))].filter(word=>!questionWords.has(word)).slice(0,16);
+function localLexical(rows,query){
+  const words=queryTerms(query);
+  return rows.map(row=>{
+    const title=new Set(terms(row.title)),content=new Set(terms(row.content));
+    return {...row,lexical_score:words.reduce((sum,word)=>sum+(title.has(word)?2:Number(content.has(word))),0)};
+  }).filter(row=>row.lexical_score>0).sort((a,b)=>b.lexical_score-a.lexical_score).slice(0,30);
+}
 export function createEvidenceRepository({storage=null,embed=embedPublicTexts,now=Date.now}={}){
   const db=storage?.kind==='postgres'?storage.db:null;
-  async function index(market,evidence,{enabled=false,selectedTicker}={}){
+  async function backfill(ticker,pending,schema){
+    if(!await quota(storage,pending.length,now))return;
+    const vectors=await embed(pending.map(row=>row.content));
+    if(vectors.length!==pending.length||vectors.some(v=>!validVector(v)))return;
+    const embeddings=new Map(pending.map((row,index)=>[row.id,vectors[index]]));
+    if(!db){
+      const current=memory.get(ticker);
+      if(current)memory.set(ticker,current.map(row=>embeddings.has(row.id)&&Date.parse(row.expires_at)>now()
+        ?{...row,embedding:embeddings.get(row.id),model_id:EMBEDDING_MODEL.id,model_revision:EMBEDDING_MODEL.revision}:row));
+      return;
+    }
+    const values=[...embeddings].map(([id,embedding])=>({id,embedding,vector_literal:schema?'['+embedding.join(',')+']':null}));
+    await db.query(`UPDATE market_lab.public_evidence_chunks AS chunk SET embedding=x.embedding, model_id=$3, model_revision=$4${schema?', embedding_vector=x.vector_literal::"'+schema+'".vector':''}
+      FROM jsonb_to_recordset($2::jsonb) AS x(id char(64), embedding double precision[], vector_literal text)
+      WHERE chunk.ticker=$1 AND chunk.id=x.id AND chunk.expires_at>now()
+        AND (chunk.embedding IS NULL OR chunk.model_id IS DISTINCT FROM $3 OR chunk.model_revision IS DISTINCT FROM $4)`,
+    [ticker,JSON.stringify(values),EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision]);
+  }
+  function queueBackfill(ticker,pending,schema){
+    if(embed===embedPublicTexts&&process.env.SEMANTIC_MODEL_ENABLED==='0')return 'disabled';
+    if(embeddingBackfills.has(ticker)||embeddingBackfills.size>=4)return 'refreshing';
+    embeddingBackfills.add(ticker);
+    setImmediate(()=>backfill(ticker,pending,schema).catch(()=>{}).finally(()=>embeddingBackfills.delete(ticker)));
+    return 'queued';
+  }
+  async function index(market,evidence,{enabled=false,selectedTicker,deferEmbedding=false}={}){
     if(!enabled||selectedTicker!==market?.ticker)return {status:'not_indexed',reason:'Only an explicit evidence load for the exact selected contract can index public sources.'};
     const rows=publicEvidenceChunks(market,evidence,{now:now()});if(!rows.length)return {status:'empty',chunks:0};
     let pending=rows,fresh=rows;
@@ -79,9 +120,14 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
     else{const existing=(memory.get(market.ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());pending=rows.filter(r=>!existing.some(old=>old.id===r.id&&validVector(old.embedding)&&old.model_revision===EMBEDDING_MODEL.revision));fresh=rows.filter(r=>!existing.some(old=>old.id===r.id));}
     if(fresh.length&&!await quota(storage,fresh.length,now,'evidence-index-chunks'))return {status:'budget_reached',chunks:0,reason:'The shared daily public evidence storage allowance has been reached.'};
     let vectors=[],semanticStatus=pending.length?'unavailable':'already_indexed';
-    if(pending.length&&await quota(storage,pending.length,now))try{vectors=await embed(pending.map(row=>row.content));if(vectors.length!==pending.length||vectors.some(v=>!validVector(v)))throw new Error('Invalid vectors');semanticStatus='embedded';}catch{vectors=[];semanticStatus='unavailable';}
-    else if(pending.length)semanticStatus='budget_reached';
-    const embedded=new Map(pending.map((row,i)=>[row.id,vectors[i]])),normalized=rows.map(row=>({...row,embedding:embedded.get(row.id)||null,model_id:vectors.length?EMBEDDING_MODEL.id:null,model_revision:vectors.length?EMBEDDING_MODEL.revision:null}));
+    if(pending.length&&!deferEmbedding){
+      if(await quota(storage,pending.length,now))try{vectors=await embed(pending.map(row=>row.content));if(vectors.length!==pending.length||vectors.some(v=>!validVector(v)))throw new Error('Invalid vectors');semanticStatus='embedded';}catch{vectors=[];}
+      else semanticStatus='budget_reached';
+    }
+    const embedded=new Map(pending.map((row,i)=>[row.id,vectors[i]])),normalized=rows.map(row=>{
+      const embedding=embedded.get(row.id)||null;
+      return {...row,embedding,model_id:embedding?EMBEDDING_MODEL.id:null,model_revision:embedding?EMBEDDING_MODEL.revision:null};
+    });
     if(db){
       const schema=await vectorSchema(db);const values=normalized.map(row=>({...row,vector_literal:row.embedding?'['+row.embedding.join(',')+']':null}));
       await evidenceTransaction(storage,db,async client=>{
@@ -91,29 +137,45 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
         ON CONFLICT(ticker,id) DO UPDATE SET retrieved_at=excluded.retrieved_at,expires_at=excluded.expires_at,embedding=coalesce(excluded.embedding,public_evidence_chunks.embedding),model_id=coalesce(excluded.model_id,public_evidence_chunks.model_id),model_revision=coalesce(excluded.model_revision,public_evidence_chunks.model_revision)${schema?',embedding_vector=coalesce(excluded.embedding_vector,public_evidence_chunks.embedding_vector)':''}`,[JSON.stringify(values)]);
       await client.query('DELETE FROM market_lab.public_evidence_chunks WHERE expires_at<=now() OR (ticker=$1 AND id::text<>ALL($2::text[]))',[market.ticker,rows.map(row=>row.id)]);
       });
+      if(deferEmbedding&&pending.length)semanticStatus=queueBackfill(market.ticker,pending,schema);
       return {status:'retained',chunks:rows.length,embedded_chunks:vectors.length,semantic_status:semanticStatus,storage:schema?'postgres_pgvector':'postgres_array',model:EMBEDDING_MODEL};
     }
     const merged=normalized.map(r=>{const old=(memory.get(market.ticker)||[]).find(row=>row.id===r.id);return {...r,embedding:r.embedding||old?.embedding||null,model_id:r.model_id||old?.model_id||null,model_revision:r.model_revision||old?.model_revision||null};});memory.delete(market.ticker);memory.set(market.ticker,merged);
     while([...memory.values()].reduce((s,r)=>s+r.length,0)>2000)memory.delete(memory.keys().next().value);
+    if(deferEmbedding&&pending.length)semanticStatus=queueBackfill(market.ticker,pending,null);
     return {status:'retained_ephemeral',chunks:rows.length,embedded_chunks:vectors.length,semantic_status:semanticStatus,storage:'process_memory',model:EMBEDDING_MODEL,reason:'No relational evidence store is configured. Retention is local to this process and disappears on restart.'};
   }
   async function search(ticker,query,{limit=6}={}){
     validateTicker(ticker);if(typeof query!=='string'||query.trim().length<3||query.length>300||!Number.isInteger(limit)||limit<1||limit>8)throw new RangeError('Use a 3–300 character public evidence query and one to eight citations');query=query.trim();
-    let rows=[],lexical=[],schema=null;
+    let rows=[],lexical=[],schema=null,hasEmbeddings=false;
     if(db){try{
-      const count=await db.query('SELECT count(*)::int AS n FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now()',[ticker]);if(!count.rows[0]?.n)return emptySearch(ticker,query,'No retained evidence exists for this contract. Use Load contract news first.');
-      schema=await vectorSchema(db);const result=await db.query("SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,ts_rank_cd(search_document,websearch_to_tsquery('english',$2)) AS lexical_score FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND search_document@@websearch_to_tsquery('english',$2) ORDER BY lexical_score DESC,retrieved_at DESC LIMIT 30",[ticker,query]);lexical=result.rows;
-      if(!schema)rows=(await db.query('SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() ORDER BY retrieved_at DESC LIMIT 256',[ticker])).rows;
+      const count=await db.query('SELECT count(*)::int AS n, bool_or(embedding IS NOT NULL AND model_id=$2 AND model_revision=$3) AS embedded FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now()',[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision]);if(!count.rows[0]?.n)return emptySearch(ticker,query,'No retained evidence exists for this contract. Use Load contract news first.');
+      hasEmbeddings=count.rows[0].embedded===true;
+      const [vectorStore,result]=await Promise.all([hasEmbeddings?vectorSchema(db):null,
+        db.query(`WITH search AS (SELECT websearch_to_tsquery('english',$2) AS phrase,
+          CASE WHEN $3='' THEN NULL ELSE to_tsquery('english',$3) END AS terms)
+          SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,
+          2*ts_rank_cd(search_document,phrase)+coalesce(ts_rank_cd(search_document,terms),0) AS lexical_score
+          FROM market_lab.public_evidence_chunks CROSS JOIN search WHERE ticker=$1 AND expires_at>now()
+          AND (search_document@@phrase OR search_document@@terms) ORDER BY lexical_score DESC,retrieved_at DESC,id LIMIT 30`,[ticker,query,queryTerms(query).join(' | ')])]);
+      schema=vectorStore;lexical=result.rows;
+      if(hasEmbeddings&&!schema)rows=(await db.query('SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() ORDER BY retrieved_at DESC LIMIT 256',[ticker])).rows;
     }catch{return emptySearch(ticker,query,'The retained public evidence store or migration 006 is unavailable.');}}
-    else{rows=(memory.get(ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());if(!rows.length)return emptySearch(ticker,query,'No retained evidence exists in this process. Use Load contract news first.');lexical=localLexical(rows,query);}
+    else{rows=(memory.get(ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());if(!rows.length)return emptySearch(ticker,query,'No retained evidence exists in this process. Use Load contract news first.');lexical=localLexical(rows,query);hasEmbeddings=rows.some(row=>row.model_id===EMBEDDING_MODEL.id&&row.model_revision===EMBEDDING_MODEL.revision&&validVector(row.embedding));}
     let vector=null,semantic=[],semanticStatus='unavailable';
-    if(await quota(storage,1,now))try{[vector]=await embed([query]);if(!validVector(vector))throw new Error('Invalid vector');semanticStatus='available';}catch{semanticStatus='unavailable';}else semanticStatus='budget_reached';
+    if(hasEmbeddings){
+      if(await quota(storage,1,now))try{[vector]=await embed([query]);if(!validVector(vector))throw new Error('Invalid vector');semanticStatus='available';}catch{semanticStatus='unavailable';}else semanticStatus='budget_reached';
+    }else if(embeddingBackfills.has(ticker))semanticStatus='refreshing';
     try{
       if(vector&&schema){semantic=(await db.query(`WITH scoped AS MATERIALIZED(SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding_vector FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding_vector IS NOT NULL ORDER BY retrieved_at DESC LIMIT 256) SELECT *,1-(embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector) AS cosine_similarity FROM scoped ORDER BY embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector LIMIT 30`,[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision,'['+vector.join(',')+']'])).rows.filter(row=>row.cosine_similarity>=.15);}
       else if(vector)semantic=rows.filter(row=>validVector(row.embedding)&&row.model_revision===EMBEDDING_MODEL.revision&&row.model_id===EMBEDDING_MODEL.id).map(row=>({...row,cosine_similarity:cosineSimilarity(vector,row.embedding)})).filter(row=>row.cosine_similarity>=.15).sort((a,b)=>b.cosine_similarity-a.cosine_similarity).slice(0,30);
     }catch{semantic=[];semanticStatus='unavailable';}
     const current=rows=>rows.filter(row=>!explicitlyHistorical(row.title,row.source_url,now()));
-    const citations=reciprocalRankFusion(current(lexical),current(semantic),{limit}).map((row,index)=>({citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,cosine_similarity:row.cosine_similarity??null}));
+    const seenSources=new Set();
+    const citations=reciprocalRankFusion(current(lexical),current(semantic),{limit:60}).filter(row=>{
+      if(seenSources.has(row.source_url))return false;
+      seenSources.add(row.source_url);return true;
+    }).slice(0,limit).map((row,index)=>({citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,cosine_similarity:row.cosine_similarity??null}));
     return {ticker,query,status:citations.length?'available':'no_matches',citations,sources:citations.map(c=>({label:c.citation_id+' · '+c.publisher,url:c.url,retrieved_at:c.retrieved_at})),retrieval:{mode:semanticStatus==='available'?'hybrid_rrf':'lexical_only',semantic_status:semanticStatus,storage:db?(schema?'postgres_pgvector':'postgres_array'):'process_memory',fusion_constant:60,candidate_limit:256,model:EMBEDDING_MODEL},as_of:new Date(now()).toISOString(),scope:'Only retained public evidence for this exact ticker. Search makes no feed, news, X, Reddit or market requests. Cosine/RRF are retrieval ranks, not factual confidence or trading probabilities.'};
   }
   return {index,search};

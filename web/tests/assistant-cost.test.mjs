@@ -16,10 +16,10 @@ test('the built-in numeric explanation uses MCP and zero language-model calls or
   const calls=[],ticker='TEST-TICKER';let reads=0,closed=false;
   const packet={ticker,as_of:new Date().toISOString(),forecast:{probability:.6,interval:[.4,.8],source_as_of:new Date().toISOString()},sources:[{url:'https://example.com/public-evidence'}]};
   const response=await assistantResponse(new Request('https://predictir.dev/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker,messages:[{role:'user',content:'Explain the probability range and costs.'}]})}),{
-    createClient:async()=>({listTools:async()=>({tools:[{name:'get_research',description:'Read scoped research',inputSchema:{type:'object',properties:{ticker:{type:'string'}},required:['ticker']}}]}),callTool:async()=>{reads++;return {content:[{type:'text',text:JSON.stringify(packet)}]};},close:async()=>{closed=true;}}),
+    createClient:async()=>({listTools:async()=>assert.fail('A known tool needs no discovery call'),callTool:async({name})=>{assert.equal(name,'get_research');reads++;return {content:[{type:'text',text:JSON.stringify(packet)}]};},close:async()=>{closed=true;}}),
     fetcher:async(url,options)=>{calls.push({path:url.pathname,body:JSON.parse(options.body)});return {reservation_id:'numeric-fixture'};},generate:()=>{throw new Error('A numerical readback must not invoke an LLM');}});
   assert.match(await response.text(),/Model P\(YES\): 60\.0%/);assert.equal(response.headers.get('X-Research-Model'),'deterministic-research-readback');assert.equal(reads,1);assert.equal(closed,true);
-  assert.equal(calls[1].path,'/internal/assistant/settle');assert.equal(calls[1].body.billed_milliusd,0);
+  assert.equal(calls.length,0);
 });
 test('assistant token settlement is conservatively rounded and unknown usage retains the reservation',()=>{
   assert.equal(assistantChargeUnits({inputTokens:1000,outputTokens:1000,totalTokens:2500}),1);

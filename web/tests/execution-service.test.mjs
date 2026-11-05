@@ -72,14 +72,16 @@ test('execution assistant readback uses current trusted controls and actual tool
   const previous={backend:process.env.MARKET_BACKEND_URL,secret:process.env.ASSISTANT_SERVICE_SECRET};process.env.MARKET_BACKEND_URL='http://127.0.0.1:9999';process.env.ASSISTANT_SERVICE_SECRET='nonsecret-execution-fixture-'.repeat(3);
   t.after(()=>{for(const [key,value] of [['MARKET_BACKEND_URL',previous.backend],['ASSISTANT_SERVICE_SECRET',previous.secret]])if(value===undefined)delete process.env[key];else process.env[key]=value;});
   const current=Date.now(),dependencies=fixtures();dependencies.now=()=>current;dependencies.book=async()=>({...await fixtures().book(),as_of:new Date(current).toISOString()});
-  let settlement,closed=false,scope;
-  const client={listTools:async()=>({tools:[{name:'analyze_execution_lab',description:'Execution research',inputSchema:{type:'object',properties:{ticker:{type:'string'}},required:['ticker']}}]}),callTool:async()=>({content:[{type:'text',text:JSON.stringify(await workspaceExecutionResearch(ticker,{controls:scope},dependencies))}]}),close:async()=>{closed=true;}};
+  let closed=false,scope;
+  const client={listTools:async()=>assert.fail('A known tool needs no discovery call'),callTool:async({name})=>{
+    assert.equal(name,'analyze_execution_lab');return {content:[{type:'text',text:JSON.stringify(await workspaceExecutionResearch(ticker,{controls:scope},dependencies))}]};
+  },close:async()=>{closed=true;}};
   const result=await assistantResponse(new Request('https://predictir.dev/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker,execution_controls:{contracts:33,inventory_skew:false},messages:[{role:'user',content:'Explain the execution lab with my selected settings.'}]})}),{
     createClient:async(t,m,c)=>{assert.equal(t,ticker);scope=c;return client;},generate:()=>assert.fail('Deterministic readback must not invoke a language model'),
-    fetcher:async(url,options)=>{if(new URL(url).pathname.endsWith('/settle'))settlement=JSON.parse(options.body);return {reservation_id:'fixture-reservation'};}
+    fetcher:async()=>assert.fail('Deterministic readback requires no token reservation')
   });
   assert.equal(result.status,200);assert.equal(result.headers.get('x-research-model'),'deterministic-execution-readback');
-  const text=await result.text();assert.match(text,/33 hypothetical YES contracts/);assert.match(text,/independent outcome forecast is unchanged/);assert.equal(scope.inventory_skew,false);assert.equal(settlement.billed_milliusd,0);assert.equal(closed,true);
+  const text=await result.text();assert.match(text,/33 hypothetical YES contracts/);assert.match(text,/independent outcome forecast is unchanged/);assert.equal(scope.inventory_skew,false);assert.equal(closed,true);
   assert.match(explainExecutionMath({ticker:'OTHER'},ticker),/unavailable/);
 });
 

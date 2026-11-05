@@ -91,13 +91,30 @@ test('a newly indexed historical or different-opponent game page is excluded fro
     {...base,title:'Washington Wizards reported player availability update',url:'https://www.espn.com/nba/story/availability'}],selected,{sports:context,now:NOW});
   assert.equal(result.length,2);assert.ok(result.every(row=>!row.url.includes('cha')));assert.ok(result.some(row=>row.title.includes('availability')));
 });
-test('public Reddit collection stops at robots without requesting the post listing and shares the result',async()=>{
-  const durable=memoryStore();let pages=0;
-  const deps={env:{},store:durable,now:()=>NOW,publicPage:async()=>{pages++;return {status:'robots_blocked',reason:'Disallow: /',as_of:new Date(NOW).toISOString()};}};
+test('Reddit without approved OAuth returns a focused search without calling the provider or reserving quota',async()=>{
+  let calls=0;
+  const deps={env:{},store:{cached:async()=>{calls++;}},now:()=>NOW,sourceJSON:async()=>{calls++;}};
   assert.equal((await redditEvidence(market,{enabled:true,selectedTicker:'OTHER',sports},deps)).status,'not_queried');
   const options={enabled:true,selectedTicker:market.ticker,sports};
-  const results=await Promise.all([redditEvidence(market,options,deps),redditEvidence(market,options,deps)]);
-  assert.equal(pages,1);assert.ok(results.every(r=>r.status==='robots_blocked'&&r.search_url.startsWith('https://www.reddit.com/r/nba/search/')));
+  const result=await redditEvidence(market,options,deps);
+  assert.equal(calls,0);assert.equal(result.status,'not_configured');assert.match(result.search_url,/^https:\/\/www\.reddit\.com\/r\/nba\/search\//);
+});
+test('approved Reddit queries share one bounded provider read across outcomes with the same entities',async()=>{
+  const durable=memoryStore();let calls=0;
+  const deps={env:{REDDIT_DATA_API_APPROVED:'true',REDDIT_ACCESS_TOKEN:'fixture',REDDIT_USER_AGENT:'fixture'},store:durable,now:()=>NOW,
+    sourceJSON:async(id,url,options)=>{calls++;assert.equal(new URL(url).hostname,'oauth.reddit.com');assert.equal(options.timeoutMs,3500);
+      return {data:{data:{children:[]}},as_of:new Date(NOW).toISOString()};}};
+  const other={...market,ticker:market.ticker.replace(/LAL$/,'BOS')};
+  const results=await Promise.all([market,other].map(value=>redditEvidence(value,{enabled:true,selectedTicker:value.ticker,sports},deps)));
+  assert.equal(calls,1);assert.ok(results.every(row=>row.status==='empty'));
+});
+test('Ethereum alias reports are retained as asset context and stronger syndicated sources win deduplication',()=>{
+  const selected={ticker:'KXETH-26NOV0517-B2240',title:'Ethereum price at 5pm?',yes_sub_title:'$2,240 or above'};
+  const date=new Date(NOW-60000).toISOString();
+  const result=rankEvidence([{title:'Ethereum trading volume rises - ESPN',url:'https://example.org/eth',as_of:date},
+    {title:'Ethereum trading volume rises',url:'https://www.espn.com/eth',as_of:date},
+    {title:'Bitcoin trading volume rises',url:'https://example.org/btc',as_of:date}],selected,{now:NOW});
+  assert.equal(result.length,1);assert.equal(result[0].match_scope,'related');assert.equal(result[0].publisher,'ESPN');
 });
 test('robots matching honors specific agent groups, path allowance and blocks page fetches',async()=>{
   assert.equal(robotsAllowed('User-agent: *\nAllow: /\nUser-agent: GPTBot\nDisallow: /','/chart','GPTBot'),false);

@@ -10,6 +10,11 @@ export function evidenceTopicGroups(market){
   if(/^KXCPI/.test(ticker))return [['consumer price index','CPI'],['inflation']];
   if(/^KXU3/.test(ticker))return [['unemployment','jobless rate'],['jobs report','BLS','U.S.']];
   if(/^KXFED/.test(ticker))return [['Federal Reserve','FOMC'],['rate decision','interest rates']];
+  if(/^KXBTC[A-Z]*-/.test(ticker))return [['Bitcoin','BTC']];
+  if(/^KXETH[A-Z]*-/.test(ticker))return [['Ethereum','ETH']];
+  if(/^KXSOL[A-Z]*-/.test(ticker))return [['Solana','SOL']];
+  if(/^KXXRP[A-Z]*-/.test(ticker))return [['XRP']];
+  if(/^KXDOGE[A-Z]*-/.test(ticker))return [['Dogecoin','DOGE']];
   if(/^KX(?:LLM1|TOPMODEL)/.test(ticker))return [['AI leaderboard','Arena leaderboard','LMArena'],['model','LLM']];
   if(/^KXHURRICANE/.test(ticker)){
     const basin=rules.match(/\b(?:Eastern Pacific|Central Pacific|Atlantic)\b/i)?.[0];
@@ -65,34 +70,46 @@ export function explicitlyHistorical(title,url,now){
 }
 export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={}){
   const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
-  const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),seen=new Set(),ranked=[];
-  const titleTerms=topicWords(market?.title).slice(0,6),topicGroups=evidenceTopicGroups(market);
+  const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),ranked=[];
+  const titleTerms=topicWords(market?.title).slice(0,6),topicGroups=evidenceTopicGroups(market),assetContext=topicGroups.length===1;
+  const hoursToClose=(Date.parse(market?.close_time)-now)/3600000;
   for(const item of (items||[]).slice(0,200)){
     const title=String(item.title||item.excerpt||'').slice(0,500),excerpt=String(item.excerpt||item.description||'').slice(0,900),text=normalize(title+' '+excerpt),url=safePublicURL(item.url),asof=item.as_of||item.published_at||item.created_at,date=Date.parse(asof);
     if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||explicitlyHistorical(title,url,now)||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway|promo code|bonus bets|free bets|survivor pool|fantasy football|betting odds)\b/.test(text))continue;
     const tokens=new Set(text.split(' '));
     const matched=entities.filter(entity=>{const parts=words(entity),nickname=parts.at(-1),teamName=(sports?.teams||[]).some(t=>t.name===entity),distinctNickname=teamName&&nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname);return parts.length>0&&(parts.every(w=>tokens.has(w))||distinctNickname&&tokens.has(nickname));});
     const groupTerms=topicGroups.map(group=>group.find(term=>(' '+text+' ').includes(' '+normalize(term)+' '))).filter(Boolean);
+    if(assetContext&&(!groupTerms.length||groupTerms[0]==='ETH'&&/\beth zurich\b/.test(text)))continue;
     const relatedTerms=!matched.length&&!sportsTopics.has(topic)&&!['reddit','x'].includes(item.platform)?
       topicGroups.length?(groupTerms.length===topicGroups.length?groupTerms:[]):titleTerms.filter(term=>tokens.has(term)):[];
-    if(!matched.length&&relatedTerms.length<2)continue;
+    if(!matched.length&&relatedTerms.length<(assetContext?1:2))continue;
     const fixturePage=/\b(game details|game summary|match report|box ?score|live score|game preview|game recap|highlights)\b/.test(normalize(title));
     if(sportsTopics.has(topic)&&fixturePage&&(sports?.teams||[]).length===2&&sports.teams.some(team=>!matched.includes(team.name)))continue;
     const identityURL=new URL(safePublicURL(item.publisher_url)||url),postURL=new URL(url),source=SOURCE_CATALOG.find(s=>s.handle&&item.platform==='x'&&postURL.hostname==='x.com'&&postURL.pathname.split('/')[1]?.toLowerCase()===s.handle.toLowerCase()&&s.handle.toLowerCase()===String(item.author||'').toLowerCase()||s.domain&&(identityURL.hostname===s.domain||identityURL.hostname.endsWith('.'+s.domain)));
     const tier=item.platform==='reddit'?'community_context':source?.tier||'unverified_context';
     const specificity=specificUpdate.test(text);
     const reputation={primary:1,reported:.8,specialist_context:.55,community_context:.2,unverified_context:.35}[tier]??.35;
-    const relevance=matched.length?Math.min(1,matched.length/Math.min(2,entities.length)):Math.min(.5,relatedTerms.length/Math.max(1,topicGroups.length||titleTerms.length)),freshness=Math.exp(-(now-date)/(36*3600000)),score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity)));
-    const key=normalize(title).replace(/\b(espn|reuters|associated press|variety|the hollywood reporter)\b/g,'').trim();if(seen.has(key))continue;seen.add(key);
+    const relevance=matched.length?Math.min(1,matched.length/Math.min(2,entities.length)):Math.min(.5,relatedTerms.length/Math.max(1,topicGroups.length||titleTerms.length));
+    const freshness=Math.exp(-(now-date)/(36*3600000));
+    const distantHorizon=assetContext&&hoursToClose>=0&&hoursToClose<=24&&/\b(?:next \d+ (?:months?|years?)|in \d+ (?:months?|years?)|by (?:\w+ )?20\d{2})\b/.test(text);
+    const score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity))*(distantHorizon?.55:1));
     const teamMatches=(sports?.teams||[]).filter(team=>matched.includes(team.name)).length;
-    const match_scope=!matched.length||topicGroups.length&&groupTerms.length<topicGroups.length||sportsTopics.has(topic)&&sports?.teams?.length===2&&teamMatches!==2?'related':'matched';
+    const match_scope=assetContext||!matched.length||topicGroups.length&&groupTerms.length<topicGroups.length||sportsTopics.has(topic)&&sports?.teams?.length===2&&teamMatches!==2?'related':'matched';
     ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,match_scope,...interpretation(text,topic),
       confidence:tier==='primary'?'primary_source':tier==='reported'?'attributed_report':'unverified_context',metrics:item.metrics||{},
-      why_relevant:relatedTerms.length?'Shares the terms '+relatedTerms.join(', ')+'. Verify the subject, date and measurement before using it.':'Names '+matched.join(' and ')+'. '+(match_scope==='related'?(sportsTopics.has(topic)?'This is a team or player update. Check the exact game before applying it.':'This is an entity mention. Check whether it covers the specific contract measurement.'):specificity?'Includes a specific update to review.':'Provides context for the selected outcome.'),
+      why_relevant:assetContext?(distantHorizon?'Covers the asset over a longer horizon than this contract. Use it as background.':'Covers the same asset. Check the contract’s price source and measurement window.'):relatedTerms.length?'Shares the terms '+relatedTerms.join(', ')+'. Verify the subject, date and measurement before using it.':'Names '+matched.join(' and ')+'. '+(match_scope==='related'?(sportsTopics.has(topic)?'This is a team or player update. Check the exact game before applying it.':'This is an entity mention. Check whether it covers the specific contract measurement.'):specificity?'Includes a specific update to review.':'Provides context for the selected outcome.'),
       limitations:[...(item.limitations||[]),...(item.platform==='reddit'?['Community votes and heuristics do not prove authenticity or factual accuracy.']:[]),'Editorial relevance rank; not a probability, accuracy score or estimate of price impact.'],topic,matched_entities:matched});
   }
   ranked.sort((a,b)=>b.score-a.score||b.as_of.localeCompare(a.as_of));
-  const counts=new Map(),diverse=[],overflow=[];
-  for(const row of ranked){const n=counts.get(row.publisher)||0;if(n>=2)overflow.push(row);else{diverse.push(row);counts.set(row.publisher,n+1);}}
+  const counts=new Map(),seen=new Set(),urls=new Set(),diverse=[],overflow=[];
+  for(const row of ranked){
+    const suffix=row.title.match(/^(.*?)\s+[-–—|]\s+([^\n]+)$/),publisher=normalize(row.publisher);
+    const title=normalize(suffix&&normalize(suffix[2])===publisher?suffix[1]:row.title).replace(/\b(espn|reuters|associated press|variety|the hollywood reporter)\b/g,'').trim();
+    const url=new URL(row.url);url.hash='';for(const key of [...url.searchParams.keys()])if(/^(utm_.+|fbclid|gclid)$/i.test(key))url.searchParams.delete(key);
+    url.searchParams.sort();const canonical=url.href;
+    if(seen.has(title)||urls.has(canonical))continue;
+    seen.add(title);urls.add(canonical);
+    const n=counts.get(row.publisher)||0;if(n>=2)overflow.push(row);else{diverse.push(row);counts.set(row.publisher,n+1);}
+  }
   return [...diverse,...overflow].slice(0,Math.max(1,Math.min(30,maximum)));
 }

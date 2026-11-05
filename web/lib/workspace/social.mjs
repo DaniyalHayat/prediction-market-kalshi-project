@@ -1,7 +1,6 @@
 import {sourceJSON,recordProviderStatus} from './providers.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
-import {SOURCE_CATALOG,evidenceEntities,evidenceTopic,safePublicURL} from './source-ranking.mjs';
-import {permittedPublicPage} from './public-pages.mjs';
+import {SOURCE_CATALOG,evidenceSearchTerms,evidenceTopic,safePublicURL} from './source-ranking.mjs';
 import {createHash} from 'node:crypto';
 const boundedInteger=(value,fallback,maximum)=>Number.isInteger(Number(value))&&Number(value)>=1?Math.min(maximum,Number(value)):fallback;
 const empty=(status,reason)=>({status,posts:[],reason});
@@ -22,7 +21,7 @@ async function selectedXSearch(scope,{durable,get,env,now,reserve}){
       if(!await reserve(50+10*scope.accounts.length,10))throw Object.assign(new Error('Shared X search allowance reached'),{status:429,code:'X_BUDGET_REACHED'});
       const previous=await durable.get('x-search-cursor#'+scope.key),params=new URLSearchParams({query:scope.query,max_results:'10','tweet.fields':'created_at,public_metrics,author_id',expansions:'author_id','user.fields':'username',sort_order:'recency'});
       if(/^\d{1,19}$/.test(previous?.newest_id||''))params.set('since_id',previous.newest_id);
-      const response=await get('X selected-trade news','https://api.x.com/2/tweets/search/recent?'+params,{ttl:1,headers:{Authorization:'Bearer '+env.X_BEARER_TOKEN},maximumBytes:150000});
+      const response=await get('X selected-trade news','https://api.x.com/2/tweets/search/recent?'+params,{ttl:1,headers:{Authorization:'Bearer '+env.X_BEARER_TOKEN},maximumBytes:150000,timeoutMs:3500});
       if(response.data.errors?.length||!Array.isArray(response.data.data)&&response.data.meta?.result_count!==0)throw Object.assign(new Error('X search coverage was not established'),{status:502});
       const authors=new Map((response.data.includes?.users||[]).filter(row=>/^\d+$/.test(row.id)).map(row=>[row.id,scope.accounts.find(account=>account.handle.toLowerCase()===String(row.username).toLowerCase())]));
       const valid=(response.data.data||[]).filter(row=>/^\d{1,19}$/.test(row.id)&&typeof row.text==='string'&&Number.isFinite(Date.parse(row.created_at))&&Date.parse(row.created_at)<=now()+300000),rows=valid.flatMap(row=>{
@@ -120,28 +119,26 @@ export function filterRedditPosts(payload,{now=Date.now()}={}){
 }
 export async function redditEvidence(market,{enabled=false,selectedTicker,sports}={},dependencies={}){
   if(!enabled||selectedTicker!==market?.ticker)return empty('not_queried','Reddit is fetched only when enabled for the exact selected trade.');
-  const env=dependencies.env||process.env,durable=dependencies.store||(cloudEnabled()?store():null),get=dependencies.sourceJSON||sourceJSON;
-  const topic=evidenceTopic(market),community=communities[topic],entities=evidenceEntities(market,{sports});
+  const env=dependencies.env||process.env,get=dependencies.sourceJSON||sourceJSON;
+  const topic=evidenceTopic(market),community=communities[topic],entities=evidenceSearchTerms(market,{sports}).slice(0,4).sort();
   if(!community||!entities.length)return empty('not_applicable','There is no scoped subreddit search for this outcome.');
-  const now=dependencies.now||Date.now,key=String(market.ticker),day=new Date(now()).toISOString().slice(0,10),query=entities.map(e=>'"'+e.replace(/[^\p{L}\p{N} ]/gu,' ').slice(0,60)+'"').join(' OR ').slice(0,180);
+  const now=dependencies.now||Date.now,day=new Date(now()).toISOString().slice(0,10),query=entities.map(e=>'"'+e.replace(/[^\p{L}\p{N} ]/gu,' ').slice(0,36).trim()+'"').join(' OR ');
   const params=new URLSearchParams({q:query,restrict_sr:'on',sort:'new',t:'week',limit:'25',raw_json:'1'});
   const search_url='https://www.reddit.com/r/'+community+'/search/?'+params;
+  if(env.REDDIT_DATA_API_APPROVED!=='true'||!env.REDDIT_ACCESS_TOKEN||!env.REDDIT_USER_AGENT)
+    return {...empty('not_configured','Automatic retrieval requires approved Reddit Data API access. Open the focused search to see public discussion.'),search_url};
+  const durable=dependencies.store||(cloudEnabled()?store():null),key=createHash('sha256').update(community+'\n'+query).digest('hex').slice(0,32);
   if(!durable||['get','save','cached','consume'].some(k=>typeof durable[k]!=='function'))return {...empty('unavailable','Reddit feed is unavailable. Open the public search to review discussion directly.'),search_url};
-  try{return await durable.cached('reddit-selected#'+key,900,async()=>{
+  try{const result=await durable.cached('reddit-oauth-selected#'+key,900,async()=>{
     const cooldown=await durable.get('reddit-public-cooldown');if(cooldown?.until>now())return {...empty('cooldown','Shared Reddit reads are paused after a provider limit.'),retry_at:new Date(cooldown.until).toISOString()};
     const limit=boundedInteger(env.REDDIT_DAILY_REQUEST_LIMIT,100,1000);
-    const oauth=env.REDDIT_DATA_API_APPROVED==='true'&&env.REDDIT_ACCESS_TOKEN&&env.REDDIT_USER_AGENT;
-    if(!await durable.consume('reddit-public#'+day,limit,oauth?1:2,3*86400))return empty('budget_reached','Shared daily Reddit request allowance reached.');
-    let response;
-    if(oauth)response=await get('Reddit selected-trade context','https://oauth.reddit.com/r/'+community+'/search?'+params,{ttl:900,headers:{Authorization:'Bearer '+env.REDDIT_ACCESS_TOKEN,'User-Agent':env.REDDIT_USER_AGENT},maximumBytes:180000});
-    else{
-      const url='https://www.reddit.com/r/'+community+'/search.json?'+params,page=await (dependencies.publicPage||permittedPublicPage)('Reddit selected-trade context',url,{ttl:900,maximumBytes:180000});
-      if(page.status!=='available')return {...empty(page.status,page.reason),search_url,access_method:'public_page',as_of:page.as_of};
-      try{response={...page,data:JSON.parse(page.data.text)};}catch{return empty('unavailable','Public page structured data was unavailable; retrieval stopped.');}
-    }
+    if(!await durable.consume('reddit-public#'+day,limit,1,3*86400))return empty('budget_reached','Shared daily Reddit request allowance reached.');
+    const response=await get('Reddit selected-trade context','https://oauth.reddit.com/r/'+community+'/search?'+params,{ttl:1,headers:{Authorization:'Bearer '+env.REDDIT_ACCESS_TOKEN,'User-Agent':env.REDDIT_USER_AGENT},maximumBytes:180000,timeoutMs:3500});
     if(!Array.isArray(response.data?.data?.children))return empty('unavailable','Public post listing schema was unavailable; retrieval stopped.');
-    const result=filterRedditPosts(response.data,{now:now()});return {status:result.posts.length?'available':'empty',...result,posts:result.posts.map(row=>({...row,retrieved_at:response.as_of})),community,query,search_url,as_of:response.as_of,note:'Up to 25 public link posts are reviewed. Posts that pass the vote and spam filters remain unverified context.'};
-  });}catch(error){const status=Number(error.status),seconds=status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
+    const result=filterRedditPosts(response.data,{now:now()});return {status:result.posts.length?'available':'empty',...result,posts:result.posts.map(({author,...row})=>({...row,retrieved_at:response.as_of})),community,query,as_of:response.as_of,note:'Up to 25 public link posts are reviewed. Posts that pass the vote and spam filters remain unverified context.'};
+  });return {...result,search_url};}catch(error){
+    if(['CACHE_LEASE_LOST','CACHE_LEASE_BUSY'].includes(error.code))return {...empty('refreshing','A shared Reddit search is refreshing.'),search_url};
+    const status=Number(error.status),seconds=status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
     await durable.save({pk:'reddit-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
     return {...empty('unavailable',Number.isInteger(status)?'Public Reddit retrieval returned HTTP '+status+'.':'The Reddit feed is temporarily unavailable.'),search_url};}
 }

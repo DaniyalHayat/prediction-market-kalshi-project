@@ -1,5 +1,7 @@
 import {request, normalizeMarket, validateTicker} from '../live.mjs';
 import {recordProviderStatus} from './providers.mjs';
+import {cloudEnabled,store} from '../cloud/store.mjs';
+import {retainMarketHistory} from './warehouse.mjs';
 
 export const WORKSPACE_CATEGORIES = [
   {id:'sports',name:'Sports',sourceCategories:['Sports'],preferred:['KXNBAGAME','KXNFLGAME','KXEPLGAME','KXUCLGAME']},
@@ -71,6 +73,58 @@ export async function workspaceMarkets(id,{maximumSeries=8,getter=request,catalo
     as_of:new Date().toISOString(),coverage,errors,partial:errors.length>0||coverage.some(c=>c.truncated),
     scope:`Up to ${maximumSeries} source series, selected by named coverage and historical series volume; not the complete exchange`};
 }
+
+export function createCategorySnapshots({load=workspaceMarkets,storage=()=>cloudEnabled()?store():null,retain,now=Date.now}={}) {
+  const entries=new Map(),pending=new Map(),retryAt=new Map();
+  const freshFor=45000,retainFor=15*60000;
+  function response(value,stale){
+    return {...value,stale,markets:value.markets.filter(row=>Date.parse(row.close_time)>now())};
+  }
+  async function refresh(category,key,backend){
+    if(pending.has(category))return pending.get(category);
+    const task=(async()=>{
+      try{
+        const value=await load(category);
+        // Keep better coverage through a transient failed source, with its original observation time.
+        const prior=entries.get(category);
+        if(value.errors?.length&&prior&&now()-Date.parse(prior.as_of)<retainFor&&
+          prior.coverage?.length>value.coverage?.length){
+          retryAt.set(category,now()+15000);
+          return response(prior,true);
+        }
+        entries.set(category,value);
+        if(backend?.save)void backend.save({pk:key,sk:'value',value,expires_epoch:Math.ceil((now()+retainFor)/1000)},true).catch(()=>{});
+        if(retain)void retain(value).catch(()=>{});
+        return response(value,false);
+      }catch(error){
+        retryAt.set(category,now()+Math.max(5000,Math.min(60000,(error.retry_after_seconds||0)*1000)));
+        throw error;
+      }
+    })();
+    pending.set(category,task);
+    try{return await task;}finally{pending.delete(category);}
+  }
+  return async function categorySnapshot(category){
+    if(!WORKSPACE_CATEGORIES.some(row=>row.id===category))throw new RangeError('Choose a supported market category');
+    const backend=storage(),key='workspace-category#'+category;
+    let value=entries.get(category);
+    if(!value&&backend?.save){
+      const persisted=await backend.get(key).catch(()=>null);
+      value=entries.get(category)||persisted?.value;
+      if(value)entries.set(category,value);
+    }
+    const age=value?now()-Date.parse(value.as_of):Infinity;
+    const usable=value&&(!value.markets.length||value.markets.some(row=>Date.parse(row.close_time)>now()));
+    if(usable&&age<freshFor)return response(value,false);
+    if(usable&&age<retainFor){
+      if((retryAt.get(category)||0)<=now())void refresh(category,key,backend).catch(()=>{});
+      return response(value,true);
+    }
+    return refresh(category,key,backend);
+  };
+}
+
+export const categorySnapshot=createCategorySnapshots({retain:retainMarketHistory});
 export function inferCategory(market,series=[]) {
   const row=series.find(s=>market.ticker.startsWith(s.ticker+'-'));
   return WORKSPACE_CATEGORIES.find(c=>c.preferred.some(t=>market.ticker.startsWith(t+'-')))?.id ||

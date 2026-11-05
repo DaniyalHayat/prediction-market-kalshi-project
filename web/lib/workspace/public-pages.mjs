@@ -13,10 +13,10 @@ export function robotsAllowed(text,path,userAgent='KalshiMarketLab'){
   const applicable=matching.filter(g=>g.specificity===specificity).flatMap(g=>g.rules).filter(r=>new RegExp('^'+r.pattern.split('*').map(s=>s.replace(/[.+?^{}()|[\]\\]/g,'\\$&')).join('.*').replace(/\\\$$/,'$')).test(path)).sort((a,b)=>b.pattern.length-a.pattern.length||Number(b.allow)-Number(a.allow));
   return applicable[0]?.allow??true;
 }
-export async function permittedPublicPage(id,url,{maximumBytes=1_000_000,ttl=3600,fetcher=fetch}={}){
-  const target=new URL(url),robot=await sourceText(id+' robots',target.origin+'/robots.txt',{ttl:86400,maximumBytes:100000,fetcher});
+export async function permittedPublicPage(id,url,{maximumBytes=1_000_000,ttl=3600,fetcher=fetch,timeoutMs=3000}={}){
+  const target=new URL(url),robot=await sourceText(id+' robots',target.origin+'/robots.txt',{ttl:86400,maximumBytes:100000,fetcher,timeoutMs});
   if(!robotsAllowed(robot.data.text,target.pathname+target.search)||!robotsAllowed(robot.data.text,target.pathname+target.search,'GPTBot'))return {status:'robots_blocked',source_url:url,as_of:robot.as_of,reason:'The public source’s robots policy disallows automated retrieval. No page request was made.'};
-  const page=await sourceText(id,url,{ttl,maximumBytes,fetcher});
+  const page=await sourceText(id,url,{ttl,maximumBytes,fetcher,timeoutMs});
   if(/(?:captcha|access denied|verify you are human|blocked by network security)/i.test(page.data.text.slice(0,100000)))return {status:'access_blocked',source_url:url,as_of:page.as_of,reason:'The public source requested an access or human-verification check. Retrieval stopped.'};
   return {status:'available',...page};
 }

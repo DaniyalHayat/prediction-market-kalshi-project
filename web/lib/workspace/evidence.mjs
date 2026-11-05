@@ -4,7 +4,7 @@ import {SOURCE_CATALOG,evidenceTopic,evidenceEntities,evidenceSearchTerms,rankEv
 import {filmResearch} from './film.mjs';
 import {alternativeMusicSources} from './music-alternatives.mjs';
 import {nflContractIdentity} from './nfl-source.mjs';
-import {fetchPreviewHeadlines} from '../intelligence/brief.mjs';
+import {fetchContractHeadlines,fetchPreviewHeadlines,sportsNewsContext} from '../intelligence/brief.mjs';
 
 const sportFeeds={nfl:['football/nfl','NFL'],nba:['basketball/nba','NBA'],epl:['soccer/eng.1','Premier League']};
 const cleanText=(value,limit=350)=>String(value||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,limit);
@@ -72,13 +72,21 @@ export function evidenceSourceLinks(market,{sports,topic=evidenceTopic(market),s
   return links.slice(0,8);
 }
 function summaries(market,items,related,{sports,topic,music,film,sourceLinks}){
-  const lead=items.find(item=>!['reddit','x'].includes(item.platform))||related.find(item=>!['reddit','x'].includes(item.platform));
+  const reporting=[...items,...related].filter(item=>!['reddit','x'].includes(item.platform)),lead=reporting[0];
   const leadExcerpt=lead?.excerpt&&lead.excerpt!==lead.title?lead.excerpt:null;
-  const summary=lead?(leadExcerpt||lead.title).replace(/[.!?]+$/,'')+'. Reported by '+lead.publisher+'.':
+  const summary=lead?(leadExcerpt||lead.title).replace(/[.!?]+$/,'')+'. Reported by '+lead.publisher+'. '+lead.impact:
     sourceLinks.length?'Start with '+sourceLinks[0].label+'. '+sourceLinks[0].detail:'The selected outcome has no fresh matched report. Use the contract rules to identify the exact event and publisher.';
   const sections=[];
   if(lead)sections.push({heading:'What changed',text:summary,url:lead.url});
   if(lead?.impact)sections.push({heading:'Why it matters',text:lead.impact});
+  if(lead?.match_scope==='related')sections.push({heading:'How closely this fits the contract',text:lead.why_relevant+' Treat this report as a lead to verify before connecting it to the exact outcome.',url:lead.url});
+  const compared=new Set(lead?[lead.publisher]:[]);
+  for(const item of reporting.slice(1)){
+    if(compared.has(item.publisher))continue;
+    compared.add(item.publisher);
+    sections.push({heading:'Cross-check with '+item.publisher,text:(item.excerpt||item.title).replace(/[.!?]+$/,'')+'. '+item.impact,url:item.url});
+    if(compared.size>=3)break;
+  }
   const form=(sports?.teams||[]).flatMap(team=>{
     const last=team.form_last_five;
     if(!Number.isInteger(last?.games)||last.games<1||!Number.isInteger(last.wins))return [];
@@ -88,6 +96,8 @@ function summaries(market,items,related,{sports,topic,music,film,sourceLinks}){
   if(sports?.lineup_scenarios?.length)sections.push({heading:'Lineup comparisons',text:`Boxscores cover ${sports.boxscore_coverage?.returned||0} of ${sports.boxscore_coverage?.requested||0} requested games. Compare minutes, opponent and sample size before drawing a lineup conclusion.`});
   if(topic==='music')sections.push({heading:'Chart and territory',text:music?.status==='available'?`${music.scope}, dated ${music.measurement_date}, with ${music.matched_tracks?.length||0} exact selected-entity matches. ${music.settlement_note}`:'Check the specific artist or song, territory and reporting window. Apple song rank and Spotify artist catalog entries measure different things.'});
   if(film)sections.push({heading:'Reviews and demand',text:film.note});
+  const cutoff=Date.parse(market.close_time);
+  if(Number.isFinite(cutoff))sections.push({heading:'The trading clock',text:'Trading is scheduled to close at '+new Date(cutoff).toISOString().replace('T',' ').slice(0,16)+' UTC. Check the settlement rules for the separate measurement time and what happens if the official source is delayed.'});
   if(sourceLinks.length)sections.push({heading:'What to check next',text:sourceLinks[0].detail,url:sourceLinks[0].url});
   if(market.rules_primary)sections.push({heading:'Settlement check',text:cleanText(market.rules_primary,700)});
   const count=items.length+related.length;
@@ -99,28 +109,31 @@ export async function contractEvidence(market,{enabled=false,selectedTicker,redd
   if(!enabled||selectedTicker!==market?.ticker)return {ticker:market?.ticker,status:'not_queried',items:[],summary:'Load evidence for the exact selected contract to request public sources.',long_read:'',news_summary:'',news_long_read:'',feeds:[],source_catalog:SOURCE_CATALOG};
   const topic=evidenceTopic(market),getNews=dependencies.sportsNews||sportsNews,getX=dependencies.publicXFeed||publicXFeed,getReddit=dependencies.redditEvidence||redditEvidence;
   const nfl=topic==='nfl'?nflContractIdentity(market):null;
-  const context=!sports?.teams?.length&&nfl?.available?{...sports,teams:nfl.team_names.map(name=>({name}))}:sports;
+  const teamNames=nfl?.team_names||sportsNewsContext(market)?.teams;
+  const context=!sports?.teams?.length&&teamNames?.length?{...sports,teams:teamNames.map(name=>({name}))}:sports;
   const entities=evidenceEntities(market,{sports:context});
-  const [publisher,x,reddit,alternative,headlines]=await Promise.all([
+  const [publisher,x,reddit,alternative,headlines,references]=await Promise.all([
     getNews(topic,{sports:context}).catch(()=>({status:'unavailable',articles:[]})),includeX?getX({topic,entities:evidenceSearchTerms(market,{sports:context}),enabled:true}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'opt_in',posts:[],reason:'Enable X to check curated public accounts.'}),
     redditEnabled?getReddit(market,{enabled:true,selectedTicker,sports:context}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'opt_in',posts:[],reason:'Enable Reddit to check public discussion for this contract.'}),
     topic==='music'&&headlineMode!=='official'?(music?.alternatives?Promise.resolve(music.alternatives):(dependencies.alternativeMusicSources||alternativeMusicSources)(market,{artist:market.custom_strike?.Artist||(/\bartist\b/i.test(market.title||'')?entities[0]:null),song:/\bsong\b/i.test(market.title||'')?entities[0]:null}).catch(()=>({status:'unavailable'}))):Promise.resolve(null),
-    headlineMode==='official'&&!sportFeeds[topic]&&!news?.provider?
-      (dependencies.fetchPreviewHeadlines||fetchPreviewHeadlines)(market).catch(()=>({status:'unavailable',articles:[]})):Promise.resolve(news)
+    news?.provider?news:headlineMode==='official'&&!sportFeeds[topic]?
+      (dependencies.fetchPreviewHeadlines||fetchPreviewHeadlines)(market).catch(()=>({status:'unavailable',articles:[]})):
+      headlineMode==='full'?(dependencies.fetchContractHeadlines||fetchContractHeadlines)(market).catch(()=>({status:'unavailable',articles:[]})):news,
+    settlementSources
   ]);
   const normalized=(headlines?.articles||[]).map(row=>({...row,platform:'publisher_metadata',publisher:row.publisher||row.domain||'Unverified source',as_of:row.as_of||row.published_at||row.publishedAt||row.seen_at,excerpt:row.description||row.excerpt||'',time_basis:row.published_at||row.publishedAt?'publisher_reported_publication':'provider_first_seen',limitations:['Open the publisher for the full article.',...(!row.published_at&&!row.publishedAt?['The timestamp is when the index first saw the item.']:[])]}));
   const now=dependencies.now?.()??Date.now();
   const ranked=rankEvidence([...(publisher.articles||[]),...normalized,...(x.posts||[]),...(reddit.posts||[])],market,{sports:context,now});
   const items=ranked.filter(row=>row.match_scope==='matched'),related_items=ranked.filter(row=>row.match_scope==='related');
   const film=filmResearch(market,{observations:filmObservations,criticWeight,now});
-  const source_links=evidenceSourceLinks(market,{sports:context,topic,settlementSources,film});
+  const source_links=evidenceSourceLinks(market,{sports:context,topic,settlementSources:references,film});
   const feeds=[...(headlines?.provider?[{name:headlines.provider,status:headlines.status,as_of:headlines.retrieved_at,kind:'publisher',reason:headlines.error||headlines.reason}]:[]),
     ...(publisher.status!=='not_applicable'?[{name:'ESPN '+(sportFeeds[topic]?.[1]||'')+' news',status:publisher.status,reason:publisher.reason,as_of:publisher.as_of,kind:'publisher'}]:[]),
     {name:'X',kind:'x',status:x.status,reason:x.reason,as_of:x.as_of,scope:x.scope,query:x.query,coverage:x.coverage},
     {name:'Reddit',kind:'reddit',status:reddit.status,reason:reddit.reason,as_of:reddit.as_of,rejected:reddit.rejected,examined:reddit.examined,search_url:reddit.search_url},
     ...(alternative?[{name:'Kworb chart data',kind:'data',status:alternative.status,reason:alternative.reason,as_of:alternative.measurement_date}]:[])];
   const value={ticker:market.ticker,status:items.length?'available':related_items.length||source_links.length?'context_available':'no_matched_items',as_of:new Date(now).toISOString(),items,related_items,source_links,feeds,film,music_alternatives:alternative,
-    source_catalog:SOURCE_CATALOG.filter(s=>s.topics.includes(topic)),ranking_method:{classification:'editorial_heuristic',weights:{entity_relevance:.4,source_tier:.25,recency:.2,specific_update_terms:.15},publisher_diversity:'First two per publisher promoted; remaining items follow.',accuracy_validated:false},
+    source_catalog:SOURCE_CATALOG.filter(s=>s.topics.includes(topic)),ranking_method:{classification:'editorial_heuristic',weights:{entity_relevance:.4,source_tier:.25,recency:.2,specific_update_terms:.15},horizon_multiplier:{long_horizon_asset_story_for_same_day_contract:.55},publisher_diversity:'First two per publisher promoted; remaining items follow.',accuracy_validated:false},
     experimental_sensitivity:{status:'not_calibrated',affects_forecast:false,probability_adjustment:null,reason:'News and social opinions remain inspectable context. No held-out source-to-outcome evaluation supports a probability adjustment.'}};
   return {...value,...summaries(market,items,related_items,{sports:context,film,topic,music:alternative,sourceLinks:source_links})};
 }
