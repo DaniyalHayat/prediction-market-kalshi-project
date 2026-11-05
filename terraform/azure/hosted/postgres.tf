@@ -147,6 +147,7 @@ resource "azurerm_postgresql_flexible_server" "live" {
 
   lifecycle {
     prevent_destroy = true
+    ignore_changes  = [zone]
   }
 
   depends_on = [
