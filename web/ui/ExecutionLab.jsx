@@ -3,6 +3,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {ArrowDownToLine,ArrowUpRight,FlaskConical,Loader2,RefreshCw} from 'lucide-react';
 import {cents,count,dollars,exportJSON,percent} from './api.mjs';
 import {EXECUTION_DEFAULTS,EXECUTION_FEATURES,executionControls,executionDepth,executionFingerprint,requestExecution} from './execution-state.mjs';
+import QuantScenarios from './QuantScenarios.jsx';
 
 const number=(value,digits=4)=>Number.isFinite(value)?value.toLocaleString('en-US',{maximumFractionDigits:digits}):'Not available';
 const utc=value=>Number.isFinite(Date.parse(value))?new Date(value).toISOString().slice(0,19).replace('T',' ')+' UTC':'Not available';
@@ -55,7 +56,7 @@ export function ExecutionResults({value,outdated=false,onAssistant}){
   return <div className={'execution-results '+(outdated?'outdated':'')}>
     {outdated&&<p className="notice" role="status">Settings changed. These results use the previous settings. Run the scenario again to update them.</p>}
     <div className="execution-result-heading"><div><span className="eyebrow">{value.enabled===false?'Baseline scenario':'Execution research'}</span><h4>Cost, timing and position risk</h4><small>Book observed {utc(value.book_as_of||value.as_of)}</small></div><span className="tag">Paper only</span></div>
-    <div className="execution-result-actions"><button type="button" className="secondary" disabled={exporting} onClick={downloadPDF}>{exporting?<Loader2 size={14} className="spin"/>:<ArrowDownToLine size={14}/>} {exporting?'Preparing PDF…':'Download PDF'}</button>{onAssistant&&<button type="button" className="text-button" onClick={()=>onAssistant(value)}>Ask why <ArrowUpRight size={14}/></button>}</div>
+    <div className="execution-result-actions"><button type="button" className="secondary" disabled={exporting} onClick={downloadPDF}>{exporting?<Loader2 size={14} className="spin"/>:<ArrowDownToLine size={14}/>} {exporting?'Preparing PDF…':'Download PDF'}</button>{onAssistant&&<button type="button" className="text-button" aria-label="Ask why about the submitted execution scenario" onClick={()=>onAssistant(value)}>Ask why <ArrowUpRight size={14}/></button>}</div>
     {exportError&&<p className="notice error" role="alert">{exportError}</p>}
     {immediate&&<p className="execution-note"><strong>{buy?'Buy':'Sell'} {side} · {count(immediate.requested)} contracts.</strong> The scenario book estimates {count(immediate.filled)} filled and {count(immediate.unfilled)} unfilled. {Number.isFinite(difference)&&Math.abs(difference)>=.005?`The selected schedule’s modeled risk-adjusted cost is ${dollars(Math.abs(difference))} ${difference>0?'lower':'higher'} than even pacing under the stated assumptions.`:'The modeled cost comparison uses the same inputs for both schedules.'}</p>}
     <div className="execution-metrics"><div><small>Scenario {side} bid / ask</small><strong>{cents(market.bid)} <span>/</span> {cents(market.ask)}</strong></div><div><small>{side} spread</small><strong>{cents(market.spread)}</strong></div><div><small>{outcomes?'YES team win chance':'Independent P(YES)'}</small><strong>{Number.isFinite(forecast.probability)?percent(forecast.probability):'No eligible estimate'}</strong></div></div>
@@ -79,7 +80,7 @@ export function ExecutionResults({value,outdated=false,onAssistant}){
     <div className="execution-result-actions"><button type="button" className="secondary" onClick={()=>exportJSON(value,`${value.ticker}-execution-research.json`)}><ArrowDownToLine size={14}/>Export scenario JSON</button></div>
   </div>;
 }
-export default function ExecutionLab({market,book,fees,clock,closed,onRefreshDepth,onControlsChange,onAssistant,initialControls=null,model='validated'}){
+export default function ExecutionLab({market,book,fees,clock,closed,onRefreshDepth,onControlsChange,onAssistant,initialControls=null,model='validated',paperWorkspace=false}){
   const [controls,setControls]=useState(()=>executionControls(initialControls||EXECUTION_DEFAULTS)),[result,setResult]=useState(null),[submitted,setSubmitted]=useState(null),[loading,setLoading]=useState(false),[error,setError]=useState('');
   const request=useRef(null),revision=useRef(0),notify=useRef(onControlsChange),resultsHeading=useRef(null);notify.current=onControlsChange;
   useEffect(()=>()=>request.current?.abort(),[]);
@@ -103,5 +104,9 @@ export default function ExecutionLab({market,book,fees,clock,closed,onRefreshDep
     </form>{error&&<p className="notice error" role="alert">{error}</p>}{loading&&<p className="execution-loading" role="status">Checking the current book and calculating the selected model components…</p>}
     <p className="execution-note"><a href="/research/execution-research-audit.pdf" target="_blank" rel="noreferrer">Methods, tests and source audit (PDF)</a></p>
     {result?<section ref={resultsHeading} tabIndex={-1} aria-label="Submitted execution scenario"><ExecutionResults value={result} outdated={outdated} onAssistant={onAssistant}/></section>:<div className="execution-empty"><FlaskConical size={21}/><div><strong>A comparison you can inspect</strong><p>Run the scenario to see its schedule, cost assumptions, live-data coverage and the unchanged independent outcome forecast.</p></div></div>}
+    <details className="execution-feature-result">
+      <summary>Compare quantitative model components</summary>
+      <QuantScenarios key={market.ticker} workspaceTicker={paperWorkspace?market.ticker:null}/>
+    </details>
   </section>;
 }

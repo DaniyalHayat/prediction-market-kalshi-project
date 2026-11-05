@@ -1,0 +1,13 @@
+.azure-replay{--page:#0b0c0e;--panel:#111317;--ink:#f2f3f5;--muted:#bec3cd;--line:#3d424d;--soft:#1c2027;--accent:#aecbff;--accent-soft:#26364e;min-height:100dvh;background:var(--page);color:var(--ink)}
+.azure-replay header{display:flex;gap:16px;align-items:center;padding:16px max(20px,calc((100% - 940px)/2));border-bottom:1px solid var(--line)}
+.azure-replay header>a{margin-left:auto}.azure-replay a{color:var(--accent)}
+.replay-content{max-width:980px;margin:auto;padding:32px 20px 48px}.replay-content h1{font-size:clamp(1.75rem,4vw,2.5rem);margin:.35em 0}.replay-content>p{max-width:66ch;color:var(--muted);line-height:1.6}
+.replay-score,.replay-status{margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.replay-status,.replay-score-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px 24px}.replay-score-controls{margin:16px 0}
+.replay-score-controls>div{display:grid;gap:5px}.replay-score-controls strong{font-size:1.4rem;font-variant-numeric:tabular-nums}
+.azure-replay label{display:grid;gap:6px}.azure-replay select,.azure-replay input:not([type=checkbox]){background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:5px;min-height:44px;padding:0 10px;max-width:100%}
+.azure-replay button{min-height:44px}.azure-replay small{color:var(--muted)}
+.quant-scenarios{margin:24px 0;padding-top:18px;border-top:1px solid var(--line)}.quant-scenarios fieldset{padding:0;margin:0 0 16px;border:0;min-width:0}.quant-scenarios legend{margin-bottom:10px}
+.quant-scenarios .execution-form>label{margin:14px 0}.quant-scenarios .execution-form>label input{width:100%}.quant-scenarios .execution-run{flex-wrap:wrap}
+.quant-scenarios caption{text-align:left;padding:12px 0}.quant-scenarios th[scope=row]{text-align:left}
+.azure-attribution{background:#0b0c0e;color:#cbd0d8;font-size:.75rem;padding:8px 20px}.azure-attribution a{color:inherit}

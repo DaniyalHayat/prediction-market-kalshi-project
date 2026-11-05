@@ -19,6 +19,7 @@ import ContractNews,{ReadMode,ReadText} from './ContractNews.jsx';
 import useAccount,{toggleSavedMarket} from './useAccount.jsx';
 import Account from './Account.jsx';
 import {CONTRACT_TABS,moveContractTab} from './contract-tabs.mjs';
+import {assistantContext} from './assistant-context.mjs';
 import './execution-lab.css';
 const Portfolio=dynamic(()=>import('./Portfolio.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading portfolio…</div>});
 const Recommendations=dynamic(()=>import('./Recommendations.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading research screen…</div>});
@@ -27,6 +28,9 @@ const ExecutionLab=dynamic(()=>import('./ExecutionLab.jsx'),{loading:()=> <div c
 const categories=[['sports','Sports',Trophy],['macro','Economy',Landmark],['crypto','Crypto',Bitcoin],['travel','Travel',Plane],
   ['weather','Weather',CloudSun],['science','Tech & science',FlaskConical],['climate','Climate',Leaf],['culture','Culture',Music2]];
 const safeURL=value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
+function AskWhy({panel,onAsk,label}){
+  return <button type="button" className="text-button" onClick={()=>onAsk(panel)} aria-label={'Ask why about '+label}>Ask why <ArrowUpRight size={14}/></button>;
+}
 
 const MarketRow=memo(function MarketRow({row,selected,opinion,onSelect,onResearch,livePrices}) {
   const side=opinion?.side;
@@ -60,8 +64,29 @@ function PricePath({signal,now}){
         <details><summary>How this was tested</summary><p>{signal.scope} Coverage on the replay segment was {percent(signal.replay.residual_range_coverage)}. The modeled quantity is the quote midpoint.</p></details></>:<p>{signal.scope} A holdout needs more observations.</p>}</>:
       <p className="muted">{signal.reason||'Waiting for a recent candle before showing the next-minute estimate.'}</p>}</section>;
 }
+function ResearchReading({value,long,stale}){
+  const forecast=value.forecast,validation=forecast?.validation,coverage=value.extensions?.sports?.coverage;
+  const analysis=long?value.analysis?.long_read:value.analysis?.summary;
+  if(analysis)return <div className="reading-copy"><ReadText value={analysis}/></div>;
+  const reason=stale?'The inputs are being refreshed. Recheck the current research before relying on the displayed figures.':
+    value.decision?.reasons?.[0]||forecast?.reason||value.opinion?.reason;
+  const otherReasons=[...new Set(value.decision?.reasons||[])].filter(row=>row!==reason).slice(0,4);
+  const qualified=Number.isFinite(forecast?.probability)&&!stale;
+  return <section className="reading-copy" aria-label="Analysis explanation">
+    <h4>{long?'How to read the result':'What drove this view'}</h4>
+    {reason&&<p>{reason}</p>}
+    {qualified&&<p>{forecast.model_name||'The independent model'} estimates the contract outcome. Paper entry also depends on the quoted price, fees and the available depth.</p>}
+    {long&&<>{otherReasons.map(row=><p key={row}>{row}</p>)}
+      {value.model_selection?.reason&&<p>{value.model_selection.reason}</p>}
+      {validation?.reason&&validation.reason!==reason&&!otherReasons.includes(validation.reason)&&<p>{validation.reason}</p>}
+      {coverage?.partial&&<p>{Number.isFinite(coverage.schedules_expected)&&Number.isFinite(coverage.schedules_returned)?`The source returned ${count(coverage.schedules_returned)} of ${count(coverage.schedules_expected)} requested schedules.`:'Schedule coverage is incomplete.'} Missing games stay out of the matchup history.</p>}
+      {value.decision?.validation_note&&<p>{value.decision.validation_note}</p>}
+      <p>Compare the settlement rule and its named source with the inputs to the estimate. Quoted depth can change before a hypothetical fill.</p>
+    </>}
+  </section>;
+}
 function Research({value,loading,onAssistant,onPaper,history,now,compact=false}) {
-  const [readMode,setReadMode]=useState('summary'),[loadedEvidence,setLoadedEvidence]=useState(null);
+  const [readMode,setReadMode]=useState('summary');
   if(loading&&!value)return <div className="loading-section"><Loader2 className="spin" size={18}/><div><strong>Checking sources and models</strong><p>Quotes remain available while the research loads.</p></div></div>;
   if(!value)return <p className="empty">Research is not available for this contract.</p>;
   const forecast=value.forecast,screen=researchScreenOpinion(value,now),stale=Boolean(screen?.stale),side=screen?.side||'PASS';
@@ -71,7 +96,7 @@ function Research({value,loading,onAssistant,onPaper,history,now,compact=false})
   const opinion=<div className={'opinion-card '+side.toLowerCase()}><div className="section-title"><h3>{compact?'Entry check':'Outcome research'}</h3><span className={'verdict '+(side==='PASS'?'unchecked':side.toLowerCase())}>{label}</span></div>
     <p>{stale?'Checking current model inputs and depth.':forecast?.outcomes?value.summary:Number.isFinite(forecast?.probability)?(value.summary||value.opinion?.reason):'Compare YES and NO entry prices with the payout needed to make each paper trade worthwhile.'}</p>
     {!stale&&Number.isFinite(forecast?.probability)&&<div className="model-numbers"><div><small>{forecast.outcomes?'YES team win chance':'Independent P(YES)'}</small><strong>{percent(forecast.probability)}</strong></div><div><small>{forecast.outcomes?'Tie chance':'Model range'}</small><strong>{forecast.outcomes?percent(forecast.outcomes.tie):forecast.interval?.map(percent).join(' – ')||'Unavailable'}</strong></div><div><small>{forecast.outcomes?'Expected YES payout':'Evidence'}</small><strong>{forecast.outcomes?cents(forecast.expected_settlement_value):forecast.evidence?.label||'Research scenario'}</strong></div></div>}
-    <small className="screen-stamp">Checked {dateLabel(value.as_of)}</small><button className="text-button" onClick={onAssistant}>Ask why <ArrowUpRight size={14}/></button></div>;
+    <small className="screen-stamp">Checked {dateLabel(value.as_of)}</small><button className="text-button" onClick={()=>onAssistant('analysis',{detail:readMode==='long'?'full':'brief'})} aria-label="Ask why about this analysis">Ask why <ArrowUpRight size={14}/></button></div>;
   const paper=setups.length>0&&<section className="method"><div className="section-title"><h3>Trade a $20 paper scenario</h3><small>Fees and visible depth included</small></div><div className="scenario-comparison">{setups.map(row=><div key={row.side}><small>{row.side} · {count(row.contracts)} contracts</small><strong>{cents(row.break_even)} all-in per contract</strong><span>{dollars(row.cost)} entry · {dollars(row.win_value)} balance at full payout</span>
     <span>{Number.isFinite(row.expected_profit)?`${dollars(row.expected_profit)} model expected P/L`:Number.isFinite(row.required_edge)?`Needs ${cents(row.required_edge)} above the quote midpoint to break even`:'A two-sided quote is needed to compare the midpoint.'}</span>
     {Number.isFinite(row.tie_value)&&<span>{dollars(row.tie_value)} balance on a tie</span>}<button className="text-button" onClick={()=>onPaper(row)}>{row.scenario_eligible?'Try':'Compare'} {row.side} in Paper <ArrowUpRight size={14}/></button></div>)}</div></section>;
@@ -80,12 +105,12 @@ function Research({value,loading,onAssistant,onPaper,history,now,compact=false})
   const diagnostic=value.settlement_diagnostic;
   return <div className="research-content"><div className="readout-heading"><div><span className="eyebrow">Contract analysis</span><h3>The research brief</h3></div><ReadMode value={readMode} onChange={setReadMode} label="Contract analysis reading length"/></div>{opinion}
     {paper}{path}{!stale&&diagnostic?.available&&<details className="method"><summary>Settlement calibration experiment · {percent(diagnostic.probability)} YES</summary><p>Uses the exchange midpoint as its input. On {diagnostic.validation.overall.n} held-out events, the calibrated model scored {diagnostic.validation.overall.challenger_brier.toFixed(4)} Brier versus {diagnostic.validation.overall.midpoint_brier.toFixed(4)} for the midpoint. Lower is better. This estimate stays out of paper sizing.</p><p>{diagnostic.category_coverage.holdout_n} held-out events in this category. <a href={diagnostic.validation_url} target="_blank" rel="noreferrer">View validation data</a></p></details>}
-    <div className="reading-copy"><ReadText value={readMode==='long'?(value.analysis?.long_read||loadedEvidence?.long_read||value.evidence?.long_read):(value.analysis?.summary||loadedEvidence?.summary||value.evidence?.summary)}/></div>
+    <ResearchReading value={value} long={readMode==='long'} stale={stale}/>
     <div className="section-title"><h3>What matters here</h3></div><div className="driver-list">{value.drivers?.slice(0,readMode==='long'?12:3).map(driver=><div key={driver.name}><Check size={15}/><div><strong>{driver.name}</strong><p>{driver.detail}</p></div></div>)}</div>
     {readMode==='long'&&value.extensions?.sports&&<SportsResearch value={value.extensions.sports}/>}
     {readMode==='long'&&value.extensions?.music&&<MusicResearch value={value.extensions.music}/>}
     {readMode==='summary'&&(value.extensions?.sports||value.extensions?.music)&&<button className="text-button long-read-link" onClick={()=>setReadMode('long')}>Read model details and supporting evidence <ArrowUpRight size={14}/></button>}
-    <ContractNews key={value.ticker} ticker={value.ticker} model={value.view_model} initial={value.evidence} articles={value.news?.articles} onEvidence={setLoadedEvidence}/>
+    <ContractNews ticker={value.ticker} model={value.view_model} initial={value.evidence} articles={value.news?.articles} onAssistant={options=>onAssistant('evidence',options)}/>
     <details className="method"><summary>Method, validation and limitations</summary><p>{value.summary}</p><p>{value.decision?.validation_note}</p>{value.errors?.map((error,i)=><p key={i}>{error.source}: {error.error}</p>)}</details>
   </div>;
 }
@@ -130,7 +155,7 @@ function MarketAttribution({value}) {
   </details>;
 }
 
-export default function App() {
+export default function App({paperWorkspace=false}={}) {
   const account=useAccount();
   const [category,setCategory]=useState('sports'),[markets,setMarkets]=useState([]),[query,setQuery]=useState(''),[listLabel,setListLabel]=useState('Sports'),
     [listLoading,setListLoading]=useState(true),[listError,setListError]=useState(''),[coverage,setCoverage]=useState(null),
@@ -148,7 +173,7 @@ export default function App() {
   const openMarket=useCallback(market=>{setView('markets');setPaperPreset(null);select(market);},[select]);
   const selectResearch=useCallback(market=>{openMarket(market);setTab('research');},[openMarket]);
   function changeCategory(id){setMobileDetail(false);if(view==='portfolio')setView('markets');if(id===category)return;lookupRequest.current?.abort();listIntent.current++;dispatch({type:'clear'});setHistory(null);setCoverage(null);setResearchLoading(false);setAssistant(false);setPaperPreset(null);setCategory(id);}
-  function updatePreferences(value){const next=appearance(value);setPreferences(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));setPreferenceError(false);}catch{setPreferenceError(true);}}
+  function updatePreferences(value){const next=appearance(value);if(next.model!==preferences.model)setAssistant(false);setPreferences(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));setPreferenceError(false);}catch{setPreferenceError(true);}}
   useEffect(()=>{try{setPreferences(appearance(localStorage.getItem(PREFERENCE_KEY)));}catch{setPreferenceError(true);}},[]);
   useEffect(()=>{document.documentElement.dataset.theme=preferences.theme;},[preferences.theme]);
   useEffect(()=>{const id=setInterval(()=>{if(!document.hidden&&activeView.current!=='ranked')setClock(Date.now());},1000);const key=e=>{if(e.key==='Escape'){setAssistant(false);setJournal(false);setSources(false);setAppearanceOpen(false);setArchiveOpen(false);}if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)&&!document.querySelector('.overlay,.assistant-panel')){e.preventDefault();setView('markets');setMobileDetail(false);requestAnimationFrame(()=>search.current?.focus());}};document.addEventListener('keydown',key);return()=>{clearInterval(id);document.removeEventListener('keydown',key);lookupRequest.current?.abort();};},[]);
@@ -218,18 +243,17 @@ export default function App() {
   const selectedResearch=selection.research?.ticker===market?.ticker&&selection.research?.view_model===preferences.model?selection.research:null;
   const selectedOpinion=researchScreenOpinion(selectedResearch,clock);
   const assistantLaunch=assistant?.ticker===market?.ticker&&assistant?.model===preferences.model?assistant:null;
-  function openAssistant({question,label,executionControls}={}){
+  function openAssistant(context={}){
     if(!market)return;
-    setAssistant({id:++assistantSequence.current,ticker:market.ticker,model:preferences.model,question,label,executionControls});
+    setAssistant({...context,id:++assistantSequence.current,ticker:market.ticker,model:preferences.model});
   }
-  function askResearch(){
-    const verdict=selectedOpinion?.side||'unavailable',asOf=selectedResearch?.as_of;
-    openAssistant({label:'Research view',question:`Explain the research view for ${market.ticker}. The screen showed ${verdict}${asOf?` and was checked at ${asOf}`:''}. What evidence, model assumptions and execution costs drove that result?`});
+  function askPanel(panel,options){
+    if(!market)return;
+    const context=assistantContext(panel,market.ticker,options);
+    if(context)openAssistant(context);
   }
   function askExecution(result){
-    if(result?.ticker!==market?.ticker||!result.controls)return;
-    const {action,side,contracts,horizon_seconds}=result.controls;
-    openAssistant({label:'Execution lab result',executionControls:result.controls,question:`Explain the execution lab result for ${market.ticker}: ${action} ${side.toUpperCase()}, ${contracts} contracts over ${horizon_seconds} seconds. The scenario used the book observed at ${result.book_as_of||result.as_of||'an unverified time'}. Explain the fill estimate, cost comparison and limits of this paper scenario.`});
+    if(result)askPanel('execution',{result,detail:'full'});
   }
   async function refreshExecutionBook(signal){
     const {ticker,generation}=selection;
@@ -280,11 +304,11 @@ export default function App() {
         {selection.error&&<div className="notice error" role="alert">{selection.error}</div>}
         <div className="contract-tabs" role="tablist" aria-label="Contract details">{CONTRACT_TABS.map(([id,label])=><button key={id} id={'contract-tab-'+id} role="tab" aria-selected={tab===id} aria-controls="contract-tabpanel" tabIndex={tab===id?0:-1} onKeyDown={event=>{const next=moveContractTab(id,event.key);if(next){event.preventDefault();setTab(next);document.getElementById('contract-tab-'+next)?.focus();}}} onClick={()=>setTab(id)}>{label}{id==='research'&&researchLoading&&<Loader2 size={12} className="spin"/>}</button>)}<button className="ask-button" onClick={()=>assistantLaunch?setAssistant(false):openAssistant()} aria-expanded={Boolean(assistantLaunch)} aria-label="Ask about this contract"><MessageSquare size={15}/><span>Ask</span></button></div>
         <div className="contract-scroll" key={market.ticker} id="contract-tabpanel" role="tabpanel" aria-labelledby={'contract-tab-'+tab} tabIndex={0}>
-          {tab==='overview'&&<><div className="section-title"><h3>Exchange price history</h3><span className="tag">24h</span></div><Chart rows={history?.rows||[]} error={history?.error} theme={preferences.theme} label={'Observed exchange price history for '+contractTitle(market)}/>{history?.as_of&&<p className="history-scope footnote">Checked {dateLabel(history.as_of)}. {history.scope||'Exchange candle closes; missing observations are not filled.'}</p>}<div className="section-title"><h3>Order book</h3><small>{book?.transport==='exchange-websocket'?'Native exchange stream':'Observed depth'}</small></div><Depth book={book}/><div className="section-title"><h3>Research view</h3><button className="text-button" onClick={()=>setTab('research')}>Full analysis <ArrowUpRight size={14}/></button></div><Research compact value={selectedResearch} history={history?.ticker===market.ticker?history:null} now={clock} loading={researchLoading} onAssistant={askResearch} onPaper={openSelectedPaper}/></>}
-          {tab==='research'&&<Research key={market.ticker+'#'+preferences.model} value={selectedResearch} history={history?.ticker===market.ticker?history:null} now={clock} loading={researchLoading} onAssistant={askResearch} onPaper={openSelectedPaper}/>}
-          {tab==='paper'&&<Paper key={market.ticker} market={market} book={book} forecast={selectedResearch?.forecast} fees={selection.fees} now={clock} preset={paperPreset} onPortfolio={()=>setView('portfolio')}/>}
-          {tab==='execution'&&<ExecutionLab key={market.ticker+'#'+preferences.model} market={market} book={book} fees={selection.fees} clock={clock} closed={closed} onRefreshDepth={refreshExecutionBook} model={preferences.model} initialControls={executionContext?.ticker===market.ticker?executionContext.controls:null} onControlsChange={controls=>setExecutionContext({ticker:market.ticker,controls})} onAssistant={askExecution}/>}
-          {tab==='rules'&&<><div className="section-title"><h3>Settlement rules</h3></div><p className="rule-text">{market.rules_primary||'No primary rule text was returned. Inspect the exchange contract.'}</p>{market.rules_secondary&&<details className="method"><summary>Secondary rules</summary><p>{market.rules_secondary}</p></details>}<dl className="definition-list"><div><dt>Trading close</dt><dd>{dateLabel(market.close_time)}</dd></div><div><dt>Expected expiration</dt><dd>{dateLabel(market.expected_expiration_time)}</dd></div><div><dt>Status / outcome</dt><dd>{market.status||'Unknown'} / {market.result||'Unsettled'}</dd></div></dl><h3>Source records</h3><SourceRows sources={selection.research?.sources||[]}/><p className="footnote">Close, expiration and settlement are separate events. Source timestamps and missing evidence remain visible.</p></>}
+          {tab==='overview'&&<><div className="section-title"><h3>Exchange price history <span className="tag">24h</span></h3><AskWhy panel="history" onAsk={askPanel} label="exchange price history"/></div><Chart rows={history?.rows||[]} error={history?.error} theme={preferences.theme} label={'Observed exchange price history for '+contractTitle(market)}/>{history?.as_of&&<p className="history-scope footnote">Checked {dateLabel(history.as_of)}. {history.scope||'Exchange candle closes; missing observations are not filled.'}</p>}<div className="section-title"><h3>Order book</h3><small>{book?.transport==='exchange-websocket'?'Native exchange stream':'Observed depth'}</small></div><Depth book={book}/><div className="section-title"><h3>Research view</h3><button className="text-button" onClick={()=>setTab('research')}>Full analysis <ArrowUpRight size={14}/></button></div><Research compact value={selectedResearch} history={history?.ticker===market.ticker?history:null} now={clock} loading={researchLoading} onAssistant={askPanel} onPaper={openSelectedPaper}/></>}
+          {tab==='research'&&<Research key={market.ticker+'#'+preferences.model} value={selectedResearch} history={history?.ticker===market.ticker?history:null} now={clock} loading={researchLoading} onAssistant={askPanel} onPaper={openSelectedPaper}/>}
+          {tab==='paper'&&<Paper key={market.ticker} market={market} book={book} forecast={selectedResearch?.forecast} fees={selection.fees} now={clock} preset={paperPreset} onPortfolio={()=>setView('portfolio')} assistantAction={<AskWhy panel="paper" onAsk={askPanel} label="paper position sizing"/>}/>}
+          {tab==='execution'&&<ExecutionLab key={market.ticker+'#'+preferences.model} market={market} book={book} fees={selection.fees} clock={clock} closed={closed} onRefreshDepth={refreshExecutionBook} model={preferences.model} initialControls={executionContext?.ticker===market.ticker?executionContext.controls:null} onControlsChange={controls=>setExecutionContext({ticker:market.ticker,controls})} onAssistant={askExecution} paperWorkspace={paperWorkspace}/>}
+          {tab==='rules'&&<><div className="section-title"><h3>Settlement rules</h3><AskWhy panel="rules" onAsk={askPanel} label="settlement rules"/></div><p className="rule-text">{market.rules_primary||'No primary rule text was returned. Inspect the exchange contract.'}</p>{market.rules_secondary&&<details className="method"><summary>Secondary rules</summary><p>{market.rules_secondary}</p></details>}<dl className="definition-list"><div><dt>Trading close</dt><dd>{dateLabel(market.close_time)}</dd></div><div><dt>Expected expiration</dt><dd>{dateLabel(market.expected_expiration_time)}</dd></div><div><dt>Status / outcome</dt><dd>{market.status||'Unknown'} / {market.result||'Unsettled'}</dd></div></dl><div className="section-title"><h3>Source records</h3><AskWhy panel="sources" onAsk={askPanel} label="source records"/></div><SourceRows sources={selectedResearch?.sources||[]}/><p className="footnote">Close, expiration and settlement are separate events. Source timestamps and missing evidence remain visible.</p></>}
         </div></>:<div className="contract-placeholder"><Activity size={28}/><h2>Select a contract</h2><p>Its rules, prices and analysis will appear here.</p></div>}</section>
       {assistantLaunch&&<Assistant key={assistantLaunch.id} market={market} research={selectedResearch} model={assistantLaunch.model} launch={assistantLaunch} onClose={()=>setAssistant(false)}/>}
       </div>}

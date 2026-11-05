@@ -12,9 +12,10 @@ const publish=patch=>{state={...state,...patch};listeners.forEach(listener=>list
 const subscribe=listener=>{listeners.add(listener);return()=>listeners.delete(listener);};
 const notifyPaper=()=>window.dispatchEvent(new Event(PAPER_EVENT));
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
-const ownerMetaKey=email=>accountCacheKey('owner-meta:'+email.toLowerCase());
+const ownerCacheId=session=>session?.owner?.key||session?.owner?.email?.toLowerCase()||'';
+const ownerMetaKey=id=>accountCacheKey('owner-meta:'+id);
 const accountAPI=(path,options={})=>fetchJSON(path,{cache:'no-store',source:'Account',credentials:'same-origin',...options});
-function ownerMeta(){return parse(localStorage.getItem(ownerMetaKey(state.session?.owner?.email||'')));}
+function ownerMeta(){return parse(localStorage.getItem(ownerMetaKey(ownerCacheId(state.session))));}
 export async function loadAccountSession(force=false){
   if(loading&&!force)return loading;
   const intent=++loadIntent;
@@ -24,9 +25,9 @@ export async function loadAccountSession(force=false){
       const session=await accountAPI('/api/session',{signal:AbortSignal.timeout(15000)});
       if(intent!==loadIntent)return loading;
       if(session.kind==='owner'){
-        const email=session.owner?.email;if(typeof email!=='string')throw new Error('Your account could not be identified. Sign in again.');
-        switchPaperAccount(localStorage,'owner:'+email.toLowerCase(),{guest:session.guest});
-        const saved=await accountAPI('/api/account/portfolio',{signal:AbortSignal.timeout(15000)}),local=parse(localStorage.getItem(PAPER_STORAGE)),meta=parse(localStorage.getItem(ownerMetaKey(email)));
+        const id=ownerCacheId(session);if(typeof id!=='string'||!id)throw new Error('Your account could not be identified. Sign in again.');
+        switchPaperAccount(localStorage,'owner:'+id,{guest:session.guest});
+        const saved=await accountAPI('/api/account/portfolio',{signal:AbortSignal.timeout(15000)}),local=parse(localStorage.getItem(PAPER_STORAGE)),meta=parse(localStorage.getItem(ownerMetaKey(id)));
         if(intent!==loadIntent)return loading;
         revision=saved.revision||0;synced=meta?.synced??null;
         const localChanged=local&&JSON.stringify(local)!==synced;
@@ -35,7 +36,7 @@ export async function loadAccountSession(force=false){
         else if(saved.ledger&&!localChanged){localStorage.setItem(PAPER_STORAGE,JSON.stringify(saved.ledger));synced=JSON.stringify(saved.ledger);}
         else if(localChanged&&JSON.stringify(local)===JSON.stringify(saved.ledger))synced=JSON.stringify(local);
         const watchlist=[...new Set([...(saved.watchlist||[]),...(meta?.watchlist||[])])].slice(0,200);
-        localStorage.setItem(ownerMetaKey(email),JSON.stringify({revision,synced,watchlist}));
+        localStorage.setItem(ownerMetaKey(id),JSON.stringify({revision,synced,watchlist}));
         publish({session,status:'ready',watchlist,sync:state.conflict?'Review saved versions':localChanged&&synced!==JSON.stringify(local)?'Changes saved on this browser':'Saved to your account'});
         notifyPaper();
         if(!state.conflict&&(localChanged&&synced!==JSON.stringify(local)||JSON.stringify(watchlist)!==JSON.stringify(saved.watchlist||[])))queueOwnerSave(local||saved.ledger||initializePaperAccount({version:1,positions:[],trades:[]}));
@@ -51,7 +52,7 @@ export async function loadAccountSession(force=false){
 }
 export function assertPaperSession(){
   if(state.status!=='ready')throw new Error('Your paper account is still loading. Try again shortly.');
-  const expected=state.session.kind==='owner'?'owner:'+state.session.owner.email.toLowerCase():'guest:'+state.session.guest.id;
+  const expected=state.session.kind==='owner'?'owner:'+ownerCacheId(state.session):'guest:'+state.session.guest.id;
   if(localStorage.getItem(ACTIVE_ACCOUNT)!==expected){loadAccountSession(true);throw new Error('Your account changed in another tab. Wait for the current account to finish loading.');}
   if(state.session.kind==='guest'){
     const guest=parse(localStorage.getItem(GUEST_STORAGE));
@@ -66,16 +67,17 @@ export function queueOwnerSave(ledger){
   if(!state.conflict)saveTimer=setTimeout(flushOwnerSave,750);
 }
 async function flushOwnerSave(){
-  if(saving||!pendingSave||state.conflict||state.status!=='ready'||state.session?.kind!=='owner'||localStorage.getItem(ACTIVE_ACCOUNT)!=='owner:'+state.session.owner.email.toLowerCase())return;
-  saving=true;const ledger=pendingSave,email=state.session.owner.email;pendingSave=null;
-  const currentOwner=()=>state.status==='ready'&&state.session?.kind==='owner'&&state.session.owner.email===email&&localStorage.getItem(ACTIVE_ACCOUNT)==='owner:'+email.toLowerCase();
+  const id=ownerCacheId(state.session);
+  if(saving||!pendingSave||state.conflict||state.status!=='ready'||state.session?.kind!=='owner'||localStorage.getItem(ACTIVE_ACCOUNT)!=='owner:'+id)return;
+  saving=true;const ledger=pendingSave;pendingSave=null;
+  const currentOwner=()=>state.status==='ready'&&state.session?.kind==='owner'&&ownerCacheId(state.session)===id&&localStorage.getItem(ACTIVE_ACCOUNT)==='owner:'+id;
   try{
     const response=await fetch('/api/account/portfolio',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({ledger,watchlist:ownerMeta()?.watchlist||[],revision}),cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(15000)});
     const value=await response.json();
     if(!currentOwner())return;
     if(response.status===409){publish({conflict:{local:pendingSave||ledger,remote:value,revision:value.revision},sync:'Review saved versions'});return;}
     if(!response.ok)throw new Error(value.error||'Account save failed.');
-    revision=value.revision;synced=JSON.stringify(ledger);localStorage.setItem(ownerMetaKey(state.session.owner.email),JSON.stringify({revision,synced,watchlist:state.watchlist}));
+    revision=value.revision;synced=JSON.stringify(ledger);localStorage.setItem(ownerMetaKey(id),JSON.stringify({revision,synced,watchlist:state.watchlist}));
     publish({sync:pendingSave?'Saving…':'Saved to your account'});
   }catch{if(currentOwner()){pendingSave=pendingSave||ledger;publish({sync:'Saved on this browser · account sync unavailable'});}}
   finally{saving=false;if(pendingSave&&state.sync==='Saving…'&&!state.conflict)saveTimer=setTimeout(flushOwnerSave,750);}
@@ -86,6 +88,7 @@ export async function signInOwner(email,password){
 }
 export async function signOutOwner(){
   clearTimeout(saveTimer);if(saving)throw new Error('Your account is saving. Try signing out in a moment.');
+  if(state.session?.login_provider==='entra'){pendingSave=null;window.location.assign('/.auth/logout?post_logout_redirect_uri=%2F');return;}
   await accountAPI('/api/account/logout',{method:'POST',signal:AbortSignal.timeout(15000)});pendingSave=null;loading=null;publish({conflict:null});return loadAccountSession(true);
 }
 export function resolveAccountConflict(choice){
@@ -94,7 +97,7 @@ export function resolveAccountConflict(choice){
   if(!ledger)throw new Error('This saved version has no paper account.');
   localStorage.setItem(PAPER_STORAGE,JSON.stringify(ledger));
   publish({conflict:null,sync:'Saving…'});notifyPaper();
-  if(choice==='account'){pendingSave=null;synced=JSON.stringify(ledger);localStorage.setItem(ownerMetaKey(state.session.owner.email),JSON.stringify({revision,synced,watchlist:conflict.remote.watchlist||[]}));publish({sync:'Saved to your account',watchlist:conflict.remote.watchlist||[]});}
+  if(choice==='account'){pendingSave=null;synced=JSON.stringify(ledger);localStorage.setItem(ownerMetaKey(ownerCacheId(state.session)),JSON.stringify({revision,synced,watchlist:conflict.remote.watchlist||[]}));publish({sync:'Saved to your account',watchlist:conflict.remote.watchlist||[]});}
   else queueOwnerSave(ledger);
 }
 export function toggleSavedMarket(ticker){
@@ -102,7 +105,7 @@ export function toggleSavedMarket(ticker){
   assertPaperSession();const removed=state.watchlist.includes(ticker),watchlist=removed?state.watchlist.filter(value=>value!==ticker):[...state.watchlist,ticker];
   if(watchlist.length>200)throw new Error('Your watchlist has reached 200 contracts. Remove a contract before saving another.');
   if(state.session.kind==='owner'){
-    localStorage.setItem(ownerMetaKey(state.session.owner.email),JSON.stringify({...ownerMeta(),watchlist}));
+    localStorage.setItem(ownerMetaKey(ownerCacheId(state.session)),JSON.stringify({...ownerMeta(),watchlist}));
     const ledger=parse(localStorage.getItem(PAPER_STORAGE))||initializePaperAccount({version:1,positions:[],trades:[]});queueOwnerSave(ledger);
   }else localStorage.setItem(accountCacheKey('watchlist:guest:'+state.session.guest.id),JSON.stringify(watchlist));
   publish({watchlist});emitAnalytics('saved_market',{ticker,action:removed?'remove':'save'});

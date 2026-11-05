@@ -11,7 +11,7 @@ test('the execution lab renders usable scenario controls without an automatic ca
     onRefreshDepth:async()=>{},onControlsChange:()=>{},onAssistant:()=>{}}));
   assert.match(html,/Execution lab/);assert.match(html,/Run scenario/);assert.match(html,/Risk-aware schedule/);assert.match(html,/Editable, not fitted by default/);
   assert.match(html,/min="30"/);assert.match(html,/Scenario assumptions/);assert.ok(!html.includes('Modeled execution cost'));assert.ok(!html.includes('No eligible estimate'));
-  assert.equal((html.match(/type="checkbox"/g)||[]).length,5);
+  assert.equal((html.match(/type="checkbox"/g)||[]).length,9);
 });
 
 test('execution results retain zero values, show missing coverage and label conditional costs separately from settlement probability',()=>{

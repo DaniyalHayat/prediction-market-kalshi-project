@@ -19,6 +19,8 @@ import {traceContext} from '../lib/runtime-observability.mjs';
 import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
 import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
+import {azureMode,azureOrigin} from '../lib/workspace/azure-mode.mjs';
+import {createPaperScenarioActions,paperActionError} from '../lib/workspace/paper-actions.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
@@ -46,7 +48,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     logger?.(event,safe);logPipeline.log(event,safe,level);
   }
   const eventLoop=monitorEventLoopDelay({resolution:20});
-  const allowedOrigins=new Set(['https://predictir.dev','https://www.predictir.dev']);
+  const isAzure=azureMode()==='live';
+  const allowedOrigins=new Set(isAzure?[azureOrigin()]:['https://predictir.dev','https://www.predictir.dev']);
   function validOrigin(origin){
     if(!origin)return true;if(allowedOrigins.has(origin))return true;
     if(!production){try{const u=new URL(origin);return u.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(u.hostname);}catch{}}
@@ -107,7 +110,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(ticks%600===0&&!checking){checking=true;try{if(!await consumeMinute())res.end();}catch{res.end();}finally{checking=false;}}
       if(disabled)res.end();
     },100);
-    const timeout=setTimeout(()=>res.end(),840000);res.on('close',cleanup);
+    const timeout=setTimeout(()=>res.end(),isAzure?215000:840000);res.on('close',cleanup);
     try{
       for(const ticker of tickers){
         const remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest.set(ticker,{...message,ticker});
@@ -145,7 +148,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       const identity=requestIdentity(req,edgeVerified);
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
-      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:'Railway Node backend',market_data_only:true,
+      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:azureMode()==='live'?'Azure Container Apps':'Railway Node backend',market_data_only:true,
         streaming:{connections,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
       const internal=url.pathname==='/mcp'||url.pathname.startsWith('/internal/');
       if(internal){
@@ -174,6 +177,22 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
           return json(res,{operation:'database_latency',samples_ms:milliseconds,mean_ms:milliseconds.reduce((a,b)=>a+b,0)/milliseconds.length,
             runtime_region:process.env.RAILWAY_REGION||'unknown',pool:{total:storage().db.totalCount,idle:storage().db.idleCount,waiting:storage().db.waitingCount}});
         }
+        if(url.pathname==='/internal/assistant/reserve-azure'){
+          if(!isAzure)return json(res,{error:'Unknown service path'},404);
+          if(!/^[a-f0-9]{64}$/.test(input.fingerprint||'')||!['research','foundry'].includes(input.kind))throw new RangeError('Invalid Azure assistant quota request');
+          if(!storageEnabled())return json(res,{error:'Assistant quota storage is unavailable'},503);
+          const date=new Date(now()).toISOString(),day=date.slice(0,10),month=date.slice(0,7);
+          const consume=(key,limit,ttl)=>storage().consume('azure-assistant#'+key,limit,1,ttl);
+          if(input.kind==='research'){
+            await quota();
+            const allowed=await consume(day+'#'+input.fingerprint,30,172800);
+            return json(res,{allowed},allowed?200:429);
+          }
+          const daily=Number(process.env.AZURE_FOUNDRY_DAILY_CALLS||0),monthly=Number(process.env.AZURE_FOUNDRY_MONTHLY_CALLS||0);
+          const enabled=process.env.AZURE_FOUNDRY_ENABLED==='1'&&Number.isInteger(daily)&&daily>=1&&daily<=30&&Number.isInteger(monthly)&&monthly>=daily&&monthly<=300;
+          const allowed=enabled&&await consume('foundry#'+day,daily,172800)&&await consume('foundry#'+month,monthly,45*86400);
+          return json(res,{allowed});
+        }
         if(url.pathname==='/internal/assistant/reserve')return json(res,await reserveAssistant(input.fingerprint,{storage:storageEnabled()?storage():null,monthlyDollars:monthlyAssistantDollars,now:now()}));
         if(url.pathname==='/internal/assistant/settle'){
           if(!storageEnabled()||typeof storage().settleAssistantBudget!=='function')return json(res,{error:'Usage settlement is unavailable'},503);
@@ -184,12 +203,22 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
           const rawExecution=req.headers['x-market-execution'];
           if(rawExecution&&Buffer.byteLength(String(rawExecution))>2000)throw new RangeError('Execution controls exceed their limit');
           const executionScope=rawExecution?JSON.parse(rawExecution):undefined;
-          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope,executionScope});
+          let paperActions;
+          if(req.headers['x-market-paper-action']!==undefined){
+            if(!isAzure||req.headers['x-market-paper-action']!=='1'||!edgeVerified||!allowedOrigins.has(req.headers.origin)||
+              !isCountryAllowed(String(req.headers['x-market-country']||''))){
+              return json(res,{error:'Open the public application to access its paper workspace.'},403);
+            }
+            try{paperActions=createPaperScenarioActions({ticker,now,secure:production,cookie:req.headers.cookie,
+              secret:process.env.ACCOUNT_COOKIE_SECRET,storage:storageEnabled()?storage():null});}
+            catch(error){const result=paperActionError(error);return json(res,{error:result.error},result.status);}
+          }
+          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope,executionScope,paperActions});
         }
         return json(res,{error:'Unknown service path'},404);
       }
       if(!url.pathname.startsWith('/api/'))return await serveStatic(req,res,decodeURIComponent(url.pathname));
-      if(production&&!edgeVerified)return json(res,{error:'Open the application at predictir.dev'},403);
+      if(production&&!edgeVerified)return json(res,{error:'Open the public application to access its API'},403);
       if(edgeVerified&&!isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'This service is unavailable in your region'},403);
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
       if(!['GET','POST','PUT'].includes(req.method))return json(res,{error:'Method not allowed'},405);

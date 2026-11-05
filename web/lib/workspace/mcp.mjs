@@ -9,6 +9,7 @@ import {searchRetainedEvidence} from './semantic.mjs';
 import {workspaceExecutionResearch,executionToolPacket} from './execution-service.mjs';
 import {normalizeExecutionControls} from './execution-research.mjs';
 import {contractEvidence} from './evidence.mjs';
+import {paperActionError,paperTools} from './paper-actions.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
@@ -43,7 +44,7 @@ export function boundPacket(value,maximum=14000){
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
-export function createResearchServer({tickerScope,modelScope='baseline',executionScope,dependencies={}}={}) {
+export function createResearchServer({tickerScope,modelScope='baseline',executionScope,paperActions,dependencies={}}={}) {
   const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,searchRetainedEvidence,workspaceExecutionResearch,contractEvidence,...dependencies};
   const server=new McpServer({name:'predictir',version:'4.0.0'});
   if(tickerScope)validateTicker(tickerScope);
@@ -85,11 +86,30 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
       sources:[...links,...matches.map(row=>({label:row.publisher||'Attributed reporting',url:row.url})),...packet.sources].slice(0,8)};
   });
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{
-    const value=await deps.contractHistory(ticker,Number(hours));return {...value,units:{price:'USD per contract',volume:'Contracts'},rows:value.rows.slice(-120).map(({value:price,volume,...row})=>({...row,price_usd_per_contract:price,volume_contracts:volume}))};
+    const value=await deps.contractHistory(ticker,Number(hours));
+    return {...value,units:{price:'USD per contract',volume:'Contracts'},
+      rows:value.rows.slice(-48).map(({value:price,volume,...row})=>({...row,price_usd_per_contract:price,volume_contracts:volume})),
+      sources:value.source_url?[{label:'Kalshi public price candles',url:value.source_url,retrieved_at:value.as_of}]:[]};
   });
   register('get_source_status','Read public provider availability and warehouse coverage counts. No credentials or private records.',{},async()=>({as_of:new Date().toISOString(),providers:deps.providerStatus(),warehouse:await deps.warehouseStatus()}));
   register('search_retained_evidence','Search only already retained public evidence for the selected ticker using lexical and real local semantic retrieval. Returns bounded source citations. Does not load news/social feeds, index private data, change probabilities or access journals. If empty, the user must explicitly Load contract news.',{ticker,query:z.string().min(3).max(300),limit:z.number().int().min(1).max(8).default(6)},async({ticker,query,limit})=>deps.searchRetainedEvidence(ticker,query,{limit}));
   register('analyze_execution_lab','Compare the selected contract execution schedule, continuous observed order flow, quote-arrival clustering and inventory-risk scenarios using the user-selected lab controls. Missing live sequences remain unavailable. The result cannot change the independent outcome forecast or access accounts. Parameter assumptions and failed validation gates must be preserved.',{ticker},async({ticker})=>executionToolPacket(await deps.workspaceExecutionResearch(ticker,{controls:executionControls,model:modelScope})));
+  if(paperActions&&tickerScope){
+    const descriptions={
+      preview:'Run a bounded hypothetical quant scenario for this guest session and selected contract. Returns a review draft without saving a scenario.',
+      list:'Read saved hypothetical scenarios for this guest session and selected contract.',
+      save:'Save the exact reviewed hypothetical scenario to this guest session after explicit user confirmation.',
+      discard:'Remove a selected saved hypothetical scenario from this guest session after explicit user confirmation.',
+    };
+    for(const [operation,tool] of Object.entries(paperTools)){
+      server.registerTool(tool.name,{description:descriptions[operation],inputSchema:tool.input,
+        annotations:{readOnlyHint:operation==='list',destructiveHint:operation==='discard',idempotentHint:operation!=='preview',openWorldHint:false}},async input=>{
+        if(input.ticker!==tickerScope)return {isError:true,...output({status:404,error:'This action is scoped to the selected contract.'})};
+        try{return output(await paperActions[operation](input));}
+        catch(error){return {isError:true,...output(paperActionError(error))};}
+      });
+    }
+  }
   return server;
 }
 export async function handleMCP(req,res,body,options={}){

@@ -9,7 +9,7 @@ import usePaperLedger from './usePaperLedger.jsx';
 import PaperCash from './PaperCash.jsx';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 import {attachEntryContext} from './paper-state.mjs';
-export default function Paper({market,book,forecast,fees,now=Date.now(),preset,onPortfolio}) {
+export default function Paper({market,book,forecast,fees,now=Date.now(),preset,onPortfolio,assistantAction}) {
   const {engine,ledger,bankroll,adjustCash,commit,storageError,retry,retrying}=usePaperLedger();
   const [budget,setBudget]=useState(25),
     [low,setLow]=useState(''),[point,setPoint]=useState(''),[high,setHigh]=useState(''),[side,setSide]=useState('yes'),[quantity,setQuantity]=useState(10),
@@ -70,7 +70,7 @@ export default function Paper({market,book,forecast,fees,now=Date.now(),preset,o
       body:JSON.stringify({ticker:market.ticker,probability:Number(point)/100,probability_low:Number(low)/100,probability_high:Number(high)/100})});setMessage('Forecast registered. It will be scored after the exchange reports a binary settlement.');}
     catch(e){setError(e.message);}finally{acting.current=false;setBusy(false);}
   }
-  return <div className="paper-panel"><div className="section-title"><h3>Paper position</h3><button className="text-button" onClick={onPortfolio}>Live portfolio</button></div><p className="muted">Set a probability range, inspect the size and record a paper entry against fresh depth.</p>
+  return <div className="paper-panel"><div className="section-title"><h3>Paper position</h3><div className="contract-links">{assistantAction}<button className="text-button" onClick={onPortfolio}>Live portfolio</button></div></div><p className="muted">Set a probability range, inspect the size and record a paper entry against fresh depth.</p>
     {forecast?.experimental&&<p className="notice experimental-note">Experimental model scenario selected. Its promotion gate remains separate from this manual paper setup.</p>}
     <PaperCash compact capital={capital} ledger={ledger} onAdjust={adjustCash}/>
     <div className="field-grid"><label>Maximum entry loss, $<input type="number" min="0.01" step="1" value={budget} onChange={e=>setBudget(e.target.value)}/></label><div className="field-action"><p className="muted">Includes contract cost and modeled fees.</p></div></div>

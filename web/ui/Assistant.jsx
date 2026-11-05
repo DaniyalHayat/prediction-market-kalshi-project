@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {ArrowUp,Check,MessageSquare,Square,X} from 'lucide-react';
 import {contractTitle} from './selection.mjs';
 import {usePanelFocus} from './Modal.jsx';
+import {assistantPayload} from './assistant-context.mjs';
 function Answer({text}) {
   return <div className="answer">{text.split('\n').map((line,i)=><p key={i}>{line.split(/(\[[^\]]+\]\(https:\/\/[^\s)]+\))/g).map((part,j)=>{
     const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);return link?<a key={j} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>:part;
@@ -15,7 +16,7 @@ function requestHistory(history) {
 }
 export default function Assistant({market,research,onClose,model='validated',launch}) {
   const [messages,setMessages]=useState([]),[input,setInput]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const cancel=useRef(null),turns=useRef([]),retryHistory=useRef(null),tail=useRef(null),panel=useRef(null);
+  const cancel=useRef(null),turns=useRef([]),retryHistory=useRef(null),tail=useRef(null),panel=useRef(null),prepared=useRef(false);
   const executionControls=launch?.executionControls;
   usePanelFocus(panel,onClose,{modal:false});
   useEffect(()=>()=>{
@@ -36,8 +37,13 @@ export default function Assistant({market,research,onClose,model='validated',lau
     const deadline=setTimeout(()=>controller.abort(new DOMException('Timed out','TimeoutError')),65000);
     let text='',reader;
     try {
+      if(!prepared.current&&launch?.prepare){
+        await launch.prepare(controller.signal);
+        controller.signal.throwIfAborted();
+        prepared.current=true;
+      }
       const response=await fetch('/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
-        body:JSON.stringify({ticker:market.ticker,model,messages:requestHistory(history),...(executionControls?{execution_controls:executionControls}:{})})});
+        body:JSON.stringify(assistantPayload(market.ticker,model,requestHistory(history),launch))});
       if(!response.ok) {let detail;try{detail=await response.json();}catch{}throw new Error(detail?.error||'The assistant is temporarily unavailable');}
       if(!response.body||!(response.headers.get('content-type')||'').includes('text/plain'))throw new Error('The assistant returned an unexpected response');
       reader=response.body.getReader();const decoder=new TextDecoder();
@@ -62,7 +68,7 @@ export default function Assistant({market,research,onClose,model='validated',lau
   const prompts=['What would change this view?','Which source matters for settlement?',executionControls?'Explain the execution lab with my selected settings.':'Explain the probability range and costs.'];
   return <aside ref={panel} tabIndex={-1} className="assistant-panel" aria-label="Contract research assistant">
     <div className="assistant-heading"><div><MessageSquare size={17}/><strong>Ask about this contract</strong></div><button className="icon-button" aria-label="Close assistant" onClick={onClose}><X size={18}/></button></div>
-    <div className="assistant-context"><span>{launch?.label||'Selected contract'}</span><strong>{contractTitle(market)}</strong><small>{market.ticker}</small>{executionControls&&<small>{executionControls.action==='sell'?'Sell':'Buy'} {executionControls.side.toUpperCase()} · {executionControls.contracts} contracts · {executionControls.horizon_seconds}s</small>}</div>
+    <div className="assistant-context"><span>{launch?.label||'Selected contract'}</span><strong>{contractTitle(market)}</strong><small>{market.ticker}{launch?.panel&&` · ${model==='challenger'?'Challenger view':'Validated view'} · ${launch.detail==='full'?'Long read':'Summary'}`}</small>{executionControls&&<small>{executionControls.action==='sell'?'Sell':'Buy'} {executionControls.side.toUpperCase()} · {executionControls.contracts} contracts · {executionControls.horizon_seconds}s</small>}</div>
     <div className="assistant-messages" aria-live="polite">
       {!messages.length&&<div className="assistant-start"><h3>What would you like to check?</h3><p>I can inspect the rules, explain the model and compare the evidence. Calculations come from the research tools.</p>{prompts.map(prompt=><button key={prompt} onClick={()=>send(prompt)}>{prompt}<ArrowUp size={14}/></button>)}</div>}
       {messages.map((message,i)=>(message.content||busy)&&<div className={'chat-message '+message.role} key={i}><small>{message.role==='user'?'You':'Research assistant'}</small>{message.content?<Answer text={message.content}/>:<p className="muted">Checking the selected contract and source tools…</p>}</div>)}

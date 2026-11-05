@@ -1,6 +1,8 @@
 import {createCipheriv,createDecipheriv,createHash,randomBytes,randomUUID} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
 import {observeProviderAttempt} from '../runtime/telemetry.mjs';
+import {azureOwnerConfig,azureOwnerLogout,verifyAzureOwner} from './azure-owner.mjs';
+import {azureOrigin} from './azure-mode.mjs';
 import '../../public/dashboard/paper.js';
 const SIX_HOURS=6*3600000,EIGHT_HOURS=8*3600000,SEVEN_DAYS=7*86400000;
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
@@ -122,14 +124,23 @@ async function jsonBody(request,maximum=1500000){
 }
 export function makeAccountHandler({storage,secret=process.env.ACCOUNT_COOKIE_SECRET||process.env.ASSISTANT_SERVICE_SECRET,ownerEmail=process.env.MARKET_OWNER_EMAIL,
   authFactory=()=>createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}),
-  configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY&&ownerEmail),now=Date.now,secure=process.env.NODE_ENV==='production'}={}){
+  configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY&&ownerEmail),now=Date.now,secure=process.env.NODE_ENV==='production',
+  env=process.env,verifyEntraOwner=verifyAzureOwner}={}){
   const owner=String(ownerEmail||'').trim().toLowerCase();
-  configured=Boolean(configured&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)&&typeof storage?.get==='function'&&typeof storage?.save==='function'&&typeof storage?.consume==='function');
+  const azureLive=env.PREDICTIR_MODE==='live',entra=secure?azureOwnerConfig(env):null;
+  configured=azureLive?Boolean(entra&&['consume','readOwnerPortfolio','saveOwnerPortfolio'].every(method=>typeof storage?.[method]==='function')):
+    Boolean(configured&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner)&&typeof storage?.get==='function'&&typeof storage?.save==='function'&&typeof storage?.consume==='function');
   const methods={session:['GET'],'account/login':['POST'],'account/logout':['POST'],'account/profile':['GET'],'account/portfolio':['GET','PUT']};
   const readCookie=(request,name)=>cookieValue(request,(secure?'__Host-':'')+name);
   const response=value=>Response.json(value,{headers:{'Cache-Control':'no-store','Vary':'Cookie','X-Content-Type-Options':'nosniff'}});
+  const ownerView=user=>azureLive?{key:user.key,display_name:user.display_name}:{email:user.email};
   async function quota(key,limit,amount=1,ttl=900){if(!storage||!await storage.consume(key,limit,amount,ttl))throw fail('This account action is temporarily rate limited.',429);}
   async function identity(request){
+    if(azureLive){
+      const user=await verifyEntraOwner(request,entra);
+      if(!user)throw fail('Sign in with the authorized Microsoft account to continue.',401);
+      return {user};
+    }
     const session=openSession(readCookie(request,ownerCookie),secret,'owner');
     if(!session||!Number.isSafeInteger(session.expires)||session.expires<=now()||!uuid(session.id)||!uuid(session.user_id)||typeof session.access_token!=='string'||typeof session.refresh_token!=='string')throw fail('Sign in to access this saved portfolio.',401);
     const retained=await storage?.get('owner-session#'+hash(session.id));
@@ -151,27 +162,29 @@ export function makeAccountHandler({storage,secret=process.env.ACCOUNT_COOKIE_SE
       secretKey(secret,'configuration');
       if(!methods[path])throw fail('Unknown account action.',404);
       if(!methods[path].includes(request.method))return Response.json({error:'Method not allowed.'},{status:405,headers:{'Allow':methods[path].join(', '),'Cache-Control':'no-store'}});
-      const origin=request.headers.get('origin'),allowedOrigins=['https://predictir.dev','https://www.predictir.dev'];
+      const origin=request.headers.get('origin'),allowedOrigins=azureLive?[azureOrigin(env.APP_ORIGIN||'')]:['https://predictir.dev','https://www.predictir.dev'];
       if(!secure){try{const local=new URL(origin||request.url);if(local.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(local.hostname))allowedOrigins.push(local.origin);}catch{}}
       if(origin&&!allowedOrigins.includes(origin)||['POST','PUT'].includes(request.method)&&!origin)throw fail('Open this action from the application.',403);
       if(request.headers.get('sec-fetch-site')==='cross-site')throw fail('Open this action from the application.',403);
       if(path==='session'&&request.method==='GET'){
         const guest=guestSession(openSession(readCookie(request,guestCookie),secret,'guest'),now());let account,invalidOwner=false;
-        if(configured&&readCookie(request,ownerCookie)){try{account=await identity(request);}catch(error){if(error.status!==401)throw error;invalidOwner=true;}}
+        if(configured&&(azureLive||readCookie(request,ownerCookie))){try{account=await identity(request);}catch(error){if(error.status!==401)throw error;invalidOwner=!azureLive;}}
         const out=response({kind:account?'owner':'guest',guest:{id:guest.id,created_at:new Date(guest.created).toISOString(),last_active_at:new Date(guest.last).toISOString(),expires_at:new Date(guest.expires).toISOString()},
-          ...(account?{owner:{email:account.user.email}}:{}),login_configured:configured,signup_enabled:false});
+          ...(account?{owner:ownerView(account.user)}:{}),...(azureLive?{login_provider:'entra'}:{}),login_configured:configured,signup_enabled:false});
         setCookie(out,guestCookie,sealSession(guest,secret,'guest'),(guest.expires-now())/1000,secure);
         if(account?.refreshed)setCookie(out,ownerCookie,sealSession(account.session,secret,'owner'),(account.session.expires-now())/1000,secure);
         if(invalidOwner)setCookie(out,ownerCookie,'',0,secure);
         return out;
       }
       if(path==='account/logout'&&request.method==='POST'){
+        if(azureLive)return response({signed_out:false,logout_path:azureOwnerLogout});
         const session=openSession(readCookie(request,ownerCookie),secret,'owner');
         if(session?.id&&storage){const record=await storage.get('owner-session#'+hash(session.id));if(record)await storage.save({...record,revoked:true},true);}
         const out=response({signed_out:true});setCookie(out,ownerCookie,'',0,secure);return out;
       }
       if(!configured)throw fail('Account activation is pending. Public research and guest paper trading remain available.',503);
       if(path==='account/login'&&request.method==='POST'){
+        if(azureLive)throw fail('Use Sign in with Microsoft from the account menu.',405);
         const input=await jsonBody(request,4096),email=typeof input.email==='string'?input.email.trim().toLowerCase():'',password=input.password;
         const fingerprint=hash(secret+'\0'+(request.headers.get('x-market-client-ip')||'local'));
         await quota('login-ip#'+fingerprint,8);await quota('login-email#'+hash(secret+'\0'+email),10);
@@ -186,7 +199,7 @@ export function makeAccountHandler({storage,secret=process.env.ACCOUNT_COOKIE_SE
       const account=await identity(request),id=account.user.id;
       await quota('account-actions#'+hash(id)+'#'+Math.floor(now()/60000),60,1,120);
       let out;
-      if(path==='account/profile'&&request.method==='GET')out=response({email:account.user.email,signup_enabled:false});
+      if(path==='account/profile'&&request.method==='GET')out=response({...ownerView(account.user),signup_enabled:false});
       else if(path==='account/portfolio'&&request.method==='GET')out=response(await storage.readOwnerPortfolio(id));
       else if(path==='account/portfolio'&&request.method==='PUT'){
         const input=validatePortfolio(await jsonBody(request)),saved=await storage.saveOwnerPortfolio(id,input);

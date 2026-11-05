@@ -64,7 +64,7 @@ export async function warehouseStatus() {
     (SELECT count(*) FROM market_lab.source_observations)::int AS source_observations,
     (SELECT count(*) FROM market_lab.sports_games)::int AS completed_games,
     (SELECT max(ingested_at) FROM market_lab.source_batches) AS latest_ingestion`);
-  return {configured:true,storage:'Supabase Postgres and private evidence storage',...r.rows[0]};
+  return {configured:true,storage:process.env.PREDICTIR_MODE==='live'?'Azure Database for PostgreSQL':'Supabase Postgres and private evidence storage',...r.rows[0]};
 }
 export async function marketAttribution(){
   const s=active();if(!s)return {rows:[],scope:'Relational history is not configured'};
