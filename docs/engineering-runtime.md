@@ -1,6 +1,6 @@
 # Runtime engineering review
 
-Status: implemented as isolated, tested modules and review tools. No live deployment, infrastructure creation, external telemetry subscription, broker, self-hosted production app or advertising optimizer has been enabled. Existing stack and connection limits remain the baseline.
+Status: implemented as tested modules and review tools, with account routes and bounded telemetry integrated into the pending backend code. No live deployment, infrastructure creation, external telemetry subscription, broker, self-hosted production app or advertising optimizer has been enabled. Existing stack and connection limits remain the baseline.
 
 ## Measured structures and scope
 
@@ -25,6 +25,8 @@ The listener always binds to loopback and requires a separate internal bearer to
 ## Telemetry, log filtering and operator surface
 
 `createRuntimeTelemetry` tracks request and provider durations using bounded route/provider allowlists, rolling samples and cumulative Prometheus histogram buckets. Snapshots show p95/p99 for the last 4,096 observations per process by default. They are not fleet percentiles. A provider measurement belongs around each actual outbound attempt, including failure, while a request measurement includes the caller-visible duration; retries must not be mistaken for one network attempt. Aggregate histogram buckets in an external collector before calculating fleet percentiles. Do not average per-process p99s.
+
+The pending backend now records request completion, Kalshi and external-source HTTP attempts, and Supabase Auth SDK calls. HTTP attempt timing ends at response headers; caller-visible request timing includes subsequent body parsing and handler work. Cache hits do not create provider attempts. PostgreSQL timing currently covers the explicit diagnostic probe, not every application query. Service-authenticated `POST /internal/diagnostics` accepts `runtime_snapshot` for the safe `{telemetry, logs}` operator snapshot or `runtime_metrics` for Prometheus text. The public frontend proxy does not expose these paths. No telemetry destination has been registered or enabled.
 
 `createLogPipeline` accepts operational allowlisted fields, strips raw bodies, URLs, tokens, user identifiers and free-form errors, deterministically samples ordinary records at 2%, and caps 480 ordinary plus 120 warning/error records per minute. Warnings/errors bypass ordinary sampling but still have their own hard cap. Its counters expose sampling and throttling. This is bounded diagnostic evidence, not an exhaustive audit trail. Domain events, journals and required security evidence must not use a sampled diagnostic sink.
 
@@ -55,4 +57,4 @@ Publishable keys identify an application; user authentication and RLS determine 
 
 Run the engineering, event-store, operator and log-drain Node tests. Set `MARKET_TEST_DATABASE_URL` only to a disposable PostgreSQL database to execute the integration test. It applies migration 005 and creates immutable fixture history; never point it at production. The actual PG17 fixture verifies durable idempotency, version conflicts, mutation rejection, replay, projection rollback/cursor progress and outbox retry semantics. Terraform validation/mocked plans and Docker build/start are separate checks described in `terraform/README.md`.
 
-Pending decisions are external telemetry destination/retention, actual event-path wiring, broker adapter selection, cloud migration, external drain ingress and production deployment. No purchase or live action is implied by the implemented modules.
+Pending decisions are account activation, external telemetry destination/retention, actual event-path wiring, broker adapter selection, cloud migration, external drain ingress and production deployment. No purchase or live action is implied by the implemented modules.

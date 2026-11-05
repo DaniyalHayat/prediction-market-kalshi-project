@@ -5,12 +5,15 @@ import { marketCandles, listForward, readForward, startForward, checkpointForwar
 import { marketBrief } from "../../../lib/intelligence/brief.mjs";
 import {workspaceGET} from '../../../lib/workspace/router.mjs';
 import {proxyBackend} from '../../../lib/workspace/proxy.mjs';
+import {makeAccountHandler} from '../../../lib/workspace/account.mjs';
+import {cloudEnabled,store} from '../../../lib/cloud/store.mjs';
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function GET(request, context) {
   const {path} = await context.params, endpoint = path.join("/"), params = new URL(request.url).searchParams;
   const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(endpoint==='session'||endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   const vertical = params.get("vertical") || "Macro", ticker = params.get("ticker"), contracts = params.has("contracts") ? Number(params.get("contracts")) : 100;
   const headers = {"Cache-Control":"no-store"};
   try {
@@ -41,6 +44,7 @@ export async function GET(request, context) {
 export async function POST(request,context) {
   const {path}=await context.params,endpoint=path.join("/"),headers={"Cache-Control":"no-store"};
   const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   try {
     if(!["intelligence/forward/start","intelligence/forward/checkpoint"].includes(endpoint))return Response.json({error:"Unknown paper-research path"},{status:404,headers});
     const text=await request.text();
@@ -49,4 +53,10 @@ export async function POST(request,context) {
     const result=endpoint.endsWith("/start") ? await startForward(input) : await checkpointForward(input.id);
     return Response.json(result,{status:endpoint.endsWith("/start") ? 201 : 200,headers});
   } catch(error) {return Response.json({error:error.message},{status:error.status || (error instanceof RangeError || error instanceof SyntaxError ? 400 : 503),headers});}
+}
+export async function PUT(request,context){
+  const {path}=await context.params,endpoint=path.join('/');
+  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(endpoint==='account/portfolio')return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
+  return Response.json({error:'Unknown API route'},{status:404});
 }

@@ -18,6 +18,7 @@ test('PostgreSQL event sourcing enforces versions, durable idempotency, append-o
   await pool.query('CREATE SCHEMA IF NOT EXISTS market_lab');
   await pool.query(await readFile(new URL('../database/005_engineering_events.sql', import.meta.url), 'utf8'));
   await pool.query('CREATE TABLE IF NOT EXISTS market_lab.event_projection_fixture(stream_id text NOT NULL, version bigint NOT NULL, PRIMARY KEY(stream_id,version))');
+  await pool.query('ALTER TABLE market_lab.event_projection_fixture ENABLE ROW LEVEL SECURITY');
   const streamId = 'paper:test:' + crypto.randomUUID(), event = {streamId, expectedVersion: 0, commandId: 'first', eventType: 'PaperOrderPlaced', payload: {quantity: 3, paper_only: true}};
   const first = await store.append(event); assert.equal(Number(first.version), 1);
   const duplicate = await store.append(event); assert.equal(duplicate.event_id, first.event_id); assert.equal(duplicate.duplicate, true);
@@ -43,7 +44,7 @@ test('PostgreSQL event sourcing enforces versions, durable idempotency, append-o
   assert.deepEqual(published.map(row => Number(row.version)), [1, 2]);
   const deliveredBeforeFailure = [];
   await assert.rejects(store.publishStream({destination: 'failure', streamId, publish: async row => { deliveredBeforeFailure.push(row.id); if (deliveredBeforeFailure.length === 2) throw new Error('broker unavailable'); }}), /broker unavailable/);
-  assert.equal((await pool.query("SELECT * FROM market_lab.event_deliveries WHERE destination='failure'")).rowCount, 0);
+  assert.equal((await pool.query("SELECT d.* FROM market_lab.event_deliveries d JOIN market_lab.domain_events e USING(event_id) WHERE d.destination='failure' AND e.stream_id=$1",[streamId])).rowCount, 0);
   const replayed = []; await store.publishStream({destination: 'failure', streamId, publish: async row => replayed.push(row.id)});
   assert.equal(replayed[0], deliveredBeforeFailure[0]); assert.equal(replayed.length, 2);
 });

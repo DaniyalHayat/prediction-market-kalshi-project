@@ -9,6 +9,7 @@ export function sanitizeOperationalRecord(event, fields = {}, level = 'info') {
   if (!/^[a-z][a-z0-9_.-]{0,63}$/.test(event) || !levels.has(level)) throw new RangeError('Invalid operational log');
   const record = {time: new Date().toISOString(), event, level};
   for (const [key, value] of Object.entries(fields)) {
+    if (key === 'baggage_dropped' && typeof value === 'boolean') record[key] = value;
     if (numeric.has(key) && Number.isFinite(value) && value >= 0) record[key] = value;
     if (identifiers.has(key) && typeof value === 'string' && new RegExp(`^[a-f0-9]{${key === 'trace_id' ? 32 : 16}}$`).test(value)) record[key] = value;
     if (safeLabels.has(key) && typeof value === 'string' && /^[a-zA-Z0-9_./:-]{1,80}$/.test(value)) record[key] = value;

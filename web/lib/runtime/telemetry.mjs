@@ -52,3 +52,11 @@ export function createRuntimeTelemetry({routes = [], providers = [], sampleSize 
     }
   };
 }
+
+export const runtimeTelemetry = createRuntimeTelemetry({routes: ['/api/health', '/api/session', '/api/account/login', '/api/account/logout', '/api/account/profile', '/api/account/portfolio', '/api/book', '/api/market', '/api/markets', '/api/trades', '/api/history', '/api/stream', '/api/portfolio/stream', '/api/journal', '/api/paper/size', '/api/workspace/catalog', '/api/workspace/markets', '/api/workspace/context', '/api/workspace/history', '/api/workspace/research', '/api/workspace/opinions', '/api/workspace/recommendations', '/api/workspace/search', '/api/workspace/evidence', '/api/workspace/evidence/search', '/mcp', '/internal/diagnostics', '/internal/assistant/reserve', '/internal/assistant/settle'], providers: ['kalshi', 'espn', 'apple_music', 'x', 'spotify', 'reddit', 'kworb', 'supabase_auth', 'postgres']});
+
+export async function observeProviderAttempt(provider, run, telemetry = runtimeTelemetry) {
+  const started = performance.now(); let failed = true;
+  try { const result = await run(); failed = Boolean(result?.error || result?.ok === false); return result; }
+  finally { telemetry.observeProvider({provider, durationMs: performance.now() - started, failed}); }
+}

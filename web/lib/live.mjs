@@ -1,6 +1,7 @@
 import { createHash, createPrivateKey, sign, constants } from "node:crypto";
 import {cloudEnabled,store} from './cloud/store.mjs';
 import {readJSON} from './transport.mjs';
+import {observeProviderAttempt} from './runtime/telemetry.mjs';
 
 export const BASE = "https://external-api.kalshi.com/trade-api/v2";
 // Optional public-data service; credentials are sent only to the official exchange.
@@ -120,7 +121,7 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
     await reserveProviderRead();
     const base = { Accept: "application/json", "User-Agent": "Mozilla/5.0 KalshiMarketLab/2.0" };
     const transportUrl = DATA_SERVICE ? DATA_SERVICE + path + "?" + query : url;
-    const send = headers => fetcher(transportUrl, { headers, signal: AbortSignal.timeout(12000), cache: "no-store" });
+    const send = headers => observeProviderAttempt('kalshi',()=>fetcher(transportUrl, { headers, signal: AbortSignal.timeout(12000), cache: "no-store" }));
     const auth = DATA_SERVICE || state.authRejected ? {} : signedHeaders("GET", url, now());
     let response = await send({ ...base, ...auth });
     // A rejected key must not hide public market data; fall back to an unsigned read.
