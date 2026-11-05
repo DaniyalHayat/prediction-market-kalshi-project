@@ -18,7 +18,7 @@ export function ExecutionResults({value,outdated=false,onAssistant}){
   const ofi=value.order_flow||{},arrivals=value.arrival_model||{},quotes=value.inventory_quotes||{},settlement=value.settlement||{};
   return <div className={'execution-results '+(outdated?'outdated':'')}>
     {outdated&&<p className="notice" role="status">Settings changed. These results use the previous settings. Run the scenario again to update them.</p>}
-    <div className="execution-result-heading"><div><span className="eyebrow">{value.enabled===false?'Baseline scenario':'Execution research'}</span><h4>Cost, timing and position risk</h4><small>Book observed {dateLabel(value.as_of)}</small></div><span className="tag">Paper only</span></div>
+    <div className="execution-result-heading"><div><span className="eyebrow">{value.enabled===false?'Baseline scenario':'Execution research'}</span><h4>Cost, timing and position risk</h4><small>Book observed {dateLabel(value.book_as_of||value.as_of)}</small></div><span className="tag">Paper only</span></div>
     <div className="execution-metrics"><div><small>Current {side} bid / ask</small><strong>{cents(market.bid)} <span>/</span> {cents(market.ask)}</strong></div><div><small>{side} spread</small><strong>{cents(market.spread)}</strong></div><div><small>Independent P(YES)</small><strong>{Number.isFinite(forecast.probability)?percent(forecast.probability):'No eligible estimate'}</strong></div></div>
     <p className="execution-note">The outcome forecast stays separate. Execution assumptions change the cost and timing scenario; they do not create a new probability of settlement.</p>
     {gaps.length>0&&<div className="execution-gaps"><strong>Data coverage</strong><ul>{gaps.map((gap,index)=><li key={index}>{typeof gap==='string'?gap:gap.reason||gap.detail||'A required observation is missing.'}</li>)}</ul></div>}
@@ -37,7 +37,7 @@ export function ExecutionResults({value,outdated=false,onAssistant}){
     <div className="execution-result-actions"><button type="button" className="secondary" onClick={()=>exportJSON(value,`${value.ticker}-execution-research.json`)}><ArrowDownToLine size={14}/>Export scenario</button>{onAssistant&&<button type="button" className="text-button" onClick={onAssistant}>Ask about this result <ArrowUpRight size={14}/></button>}</div>
   </div>;
 }
-export default function ExecutionLab({market,onControlsChange,onAssistant,initialControls=null}){
+export default function ExecutionLab({market,onControlsChange,onAssistant,initialControls=null,model='validated'}){
   const [controls,setControls]=useState(()=>executionControls(initialControls||EXECUTION_DEFAULTS)),[result,setResult]=useState(null),[submitted,setSubmitted]=useState(null),[loading,setLoading]=useState(false),[error,setError]=useState('');
   const request=useRef(null),revision=useRef(0),notify=useRef(onControlsChange);notify.current=onControlsChange;
   useEffect(()=>()=>request.current?.abort(),[]);
@@ -45,7 +45,7 @@ export default function ExecutionLab({market,onControlsChange,onAssistant,initia
   function change(key,value){request.current?.abort();revision.current++;setLoading(false);setError('');setControls(current=>({...current,[key]:value}));}
   async function run(event){
     event.preventDefault();request.current?.abort();const controller=new AbortController();request.current=controller;const generation=++revision.current;setLoading(true);setError('');
-    try{const normalized=executionControls(controls),value=await requestExecution(market.ticker,normalized,{signal:controller.signal});if(!controller.signal.aborted&&generation===revision.current){setResult(value);setSubmitted(executionFingerprint(normalized));}}
+    try{const normalized=executionControls(controls),value=await requestExecution(market.ticker,normalized,{signal:controller.signal,model});if(!controller.signal.aborted&&generation===revision.current){setResult(value);setSubmitted(executionFingerprint(normalized));}}
     catch(failure){if(failure.name!=='AbortError'&&!controller.signal.aborted&&generation===revision.current)setError(failure.message);}
     finally{if(!controller.signal.aborted&&generation===revision.current)setLoading(false);}
   }
