@@ -5,7 +5,7 @@ import {PAPER_STORAGE,PAPER_EVENT,initializePaperAccount} from './paper-state.mj
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 import {ACTIVE_ACCOUNT,GUEST_STORAGE,guestExpired,switchPaperAccount,accountCacheKey} from './guest-session.mjs';
 const listeners=new Set(),initial={session:null,status:'loading',error:'',sync:'',conflict:null,watchlist:[]};
-let state=initial,loading=null,saveTimer=null,revision=0,synced=null,pendingSave=null,saving=false;
+let state=initial,loading=null,loadIntent=0,saveTimer=null,revision=0,synced=null,pendingSave=null,saving=false;
 export const accountSnapshot=()=>state;
 const serverSnapshot=()=>initial;
 const publish=patch=>{state={...state,...patch};listeners.forEach(listener=>listener());};
@@ -17,14 +17,17 @@ const accountAPI=(path,options={})=>fetchJSON(path,{cache:'no-store',source:'Acc
 function ownerMeta(){return parse(localStorage.getItem(ownerMetaKey(state.session?.owner?.email||'')));}
 export async function loadAccountSession(force=false){
   if(loading&&!force)return loading;
+  const intent=++loadIntent;
   loading=(async()=>{
     publish({status:'loading',error:''});
     try{
       const session=await accountAPI('/api/session',{signal:AbortSignal.timeout(15000)});
+      if(intent!==loadIntent)return loading;
       if(session.kind==='owner'){
         const email=session.owner?.email;if(typeof email!=='string')throw new Error('Your account could not be identified. Sign in again.');
         switchPaperAccount(localStorage,'owner:'+email.toLowerCase());
         const saved=await accountAPI('/api/account/portfolio',{signal:AbortSignal.timeout(15000)}),local=parse(localStorage.getItem(PAPER_STORAGE)),meta=parse(localStorage.getItem(ownerMetaKey(email)));
+        if(intent!==loadIntent)return loading;
         revision=saved.revision||0;synced=meta?.synced??null;
         const localChanged=local&&JSON.stringify(local)!==synced;
         const remoteChanged=JSON.stringify(saved.ledger)!==synced;
@@ -42,12 +45,14 @@ export async function loadAccountSession(force=false){
         publish({session,status:'ready',watchlist,sync:'',conflict:null});notifyPaper();
       }
       return session;
-    }catch(error){publish({status:'error',error:error.message});return null;}
+    }catch(error){if(intent!==loadIntent)return loading;publish({status:'error',error:error.message});return null;}
   })();
   return loading;
 }
 export function assertPaperSession(){
   if(state.status!=='ready')throw new Error('Your paper account is still loading. Try again shortly.');
+  const expected=state.session.kind==='owner'?'owner:'+state.session.owner.email.toLowerCase():'guest:'+state.session.guest.id;
+  if(localStorage.getItem(ACTIVE_ACCOUNT)!==expected){loadAccountSession(true);throw new Error('Your account changed in another tab. Wait for the current account to finish loading.');}
   if(state.session.kind==='guest'){
     const guest=parse(localStorage.getItem(GUEST_STORAGE));
     if(guestExpired(guest)){loadAccountSession(true);throw new Error('Your guest session ended. A fresh paper account is loading.');}
@@ -61,16 +66,18 @@ export function queueOwnerSave(ledger){
   if(!state.conflict)saveTimer=setTimeout(flushOwnerSave,750);
 }
 async function flushOwnerSave(){
-  if(saving||!pendingSave||state.conflict||state.session?.kind!=='owner')return;
-  saving=true;const ledger=pendingSave;pendingSave=null;
+  if(saving||!pendingSave||state.conflict||state.status!=='ready'||state.session?.kind!=='owner'||localStorage.getItem(ACTIVE_ACCOUNT)!=='owner:'+state.session.owner.email.toLowerCase())return;
+  saving=true;const ledger=pendingSave,email=state.session.owner.email;pendingSave=null;
+  const currentOwner=()=>state.status==='ready'&&state.session?.kind==='owner'&&state.session.owner.email===email&&localStorage.getItem(ACTIVE_ACCOUNT)==='owner:'+email.toLowerCase();
   try{
     const response=await fetch('/api/account/portfolio',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({ledger,watchlist:ownerMeta()?.watchlist||[],revision}),cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(15000)});
     const value=await response.json();
+    if(!currentOwner())return;
     if(response.status===409){publish({conflict:{local:pendingSave||ledger,remote:value,revision:value.revision},sync:'Review saved versions'});return;}
     if(!response.ok)throw new Error(value.error||'Account save failed.');
     revision=value.revision;synced=JSON.stringify(ledger);localStorage.setItem(ownerMetaKey(state.session.owner.email),JSON.stringify({revision,synced,watchlist:state.watchlist}));
     publish({sync:pendingSave?'Saving…':'Saved to your account'});
-  }catch{pendingSave=pendingSave||ledger;publish({sync:'Saved on this browser · account sync unavailable'});}
+  }catch{if(currentOwner()){pendingSave=pendingSave||ledger;publish({sync:'Saved on this browser · account sync unavailable'});}}
   finally{saving=false;if(pendingSave&&state.sync==='Saving…'&&!state.conflict)saveTimer=setTimeout(flushOwnerSave,750);}
 }
 export async function signInOwner(email,password){
@@ -103,7 +110,12 @@ export function toggleSavedMarket(ticker){
 export default function useAccount(){
   const value=useSyncExternalStore(subscribe,accountSnapshot,serverSnapshot);
   useEffect(()=>{loadAccountSession();},[]);
-  useEffect(()=>{const retry=()=>flushOwnerSave();window.addEventListener('online',retry);return()=>window.removeEventListener('online',retry);},[]);
+  useEffect(()=>{
+    const retry=()=>flushOwnerSave();
+    const changed=event=>{if(event.key===ACTIVE_ACCOUNT)loadAccountSession(true);};
+    window.addEventListener('online',retry);window.addEventListener('storage',changed);
+    return()=>{window.removeEventListener('online',retry);window.removeEventListener('storage',changed);};
+  },[]);
   useEffect(()=>{
     if(value.session?.kind!=='guest'||value.status!=='ready')return;
     const timer=setTimeout(()=>loadAccountSession(true),Math.max(0,Date.parse(value.session.guest.expires_at)-Date.now())+50);
