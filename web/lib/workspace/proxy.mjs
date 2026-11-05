@@ -1,6 +1,14 @@
 import {isCountryAllowed} from './geo.mjs';
 import {traceContext} from '../runtime-observability.mjs';
-const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|context|history|research|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
+const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|context|history|research|execution-research|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
+export function applicationOriginMatches(origin,url,{development=process.env.NODE_ENV==='development'}={}){
+  try{const supplied=new URL(origin),own=new URL(url);
+    if(supplied.username||supplied.password)return false;
+    if(supplied.origin===own.origin)return true;
+    const loopback=host=>['localhost','127.0.0.1','[::1]'].includes(host);
+    return development&&loopback(supplied.hostname)&&loopback(own.hostname)&&supplied.protocol===own.protocol&&supplied.port===own.port;
+  }catch{return false;}
+}
 export async function readProxyBody(request,maximum=20000){
   if(Number(request.headers.get('content-length')||0)>maximum)throw Object.assign(new RangeError('Request too large'),{status:413});
   const reader=request.body?.getReader(),chunks=[];let size=0;
@@ -15,7 +23,7 @@ export async function proxyBackend(request,path,{fetcher=fetch}={}){
   if(!known.test(route)||!['GET','POST','OPTIONS',...(route==='/account/portfolio'?['PUT']:[])].includes(request.method))return Response.json({error:'Unknown API route'},{status:404});
   if(privateRoute&&request.headers.get('sec-fetch-site')==='cross-site')return Response.json({error:'Open this action from the application.'},{status:403});
   const origin=request.headers.get('origin'),own=new URL(request.url).origin;
-  if(origin&&origin!==own)return Response.json({error:'Use the application origin'},{status:403});
+  if(origin&&!applicationOriginMatches(origin,own))return Response.json({error:'Use the application origin'},{status:403});
   if(privateRoute&&['POST','PUT'].includes(request.method)&&!origin)return Response.json({error:'Use the application origin'},{status:403});
   const country=request.headers.get('x-vercel-ip-country');
   if(process.env.VERCEL==='1'&&!isCountryAllowed(country))return Response.json({error:'This service is unavailable in your region'},{status:403});
