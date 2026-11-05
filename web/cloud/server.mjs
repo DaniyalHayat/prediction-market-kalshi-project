@@ -70,9 +70,11 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     };
     return update('global',1200)&&update(identity,120);
   }
-  async function quota(weight=1){
+  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000};
+  const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history']);
+  async function quota(weight=1,kind='work'){
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
-    if(storageEnabled()&&!await storage().consume('work#'+new Date(now()).toISOString().slice(0,10),6000,weight))throw Object.assign(new Error('Daily work allowance reached'),{status:429});
+    if(storageEnabled()&&!await storage().consume(kind+'#'+new Date(now()).toISOString().slice(0,10),workLimits[kind],weight))throw Object.assign(new Error('Daily '+kind.replace('-',' ')+' allowance reached'),{status:429});
   }
   async function sse(req,res,tickers,identity,multiplex=false){
     tickers=[...new Set(tickers.map(validateTicker))];
@@ -162,7 +164,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
             const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
               ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
               ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
-              ['daily_work','work#'+day,6000],['daily_cpu_ms','cpu-ms#'+day,1800000]];
+              ...Object.entries(workLimits).map(([key,limit])=>['daily_'+key.replace('-','_'),key+'#'+day,limit]),
+              ['daily_cpu_ms','cpu-ms#'+day,1800000]];
             const rows=(await storage().db.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',[resources.map(row=>row[1])])).rows;
             const used=new Map(rows.map(row=>[row.key,row.used]));
             return json(res,{as_of:new Date(now()).toISOString(),allowances:resources.map(([resource,key,limit])=>({resource,limit,used:used.get(key)||0,
@@ -194,7 +197,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
       if(!['GET','POST','PUT'].includes(req.method))return json(res,{error:'Method not allowed'},405);
       if(url.pathname==='/api/session'||url.pathname.startsWith('/api/account/')){
-        await quota(2);const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
+        await quota(2,req.method==='GET'?'paper-reads':'work');const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
         const handler=makeAccountHandler({storage:storageEnabled()?storage():null,secret:process.env.ACCOUNT_COOKIE_SECRET||serviceSecret,secure:production,...accountOptions});
         const output=await handler(new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(body?{body}:{})}),url.pathname.slice(5));
         const outputHeaders=Object.fromEntries(output.headers),cookies=output.headers.getSetCookie();if(cookies.length)outputHeaders['set-cookie']=cookies;
@@ -218,7 +221,9 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
+      if(url.pathname==='/api/workspace/position-review')await quota(5,'paper-scans');
+      else if(req.method==='GET'&&paperReadRoutes.has(url.pathname))await quota(1,'paper-reads');
+      else await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);

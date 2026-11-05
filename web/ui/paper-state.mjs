@@ -16,7 +16,7 @@ export function adjustPaperCash(ledger,action,amount,{id,time=new Date().toISOSt
   const next={...current,cash_movements:[...(current.cash_movements||[]),{id,action,amount:Math.round(amount*100)/100,occurred_at:time}]};
   paperCapital(next,next.starting_balance);return next;
 }
-export function portfolioTickers(positions){return [...new Set((positions||[]).filter(row=>row.remaining_quantity>1e-8&&/^[A-Za-z0-9_.-]{1,140}$/.test(row.ticker||'')).map(row=>row.ticker))].sort().slice(0,20);}
+export function portfolioTickers(positions){return [...new Set((positions||[]).filter(row=>row.remaining_quantity>1e-8&&/^[A-Za-z0-9_.-]{1,140}$/.test(row.ticker||'')).map(row=>row.ticker))].sort().slice(0,48);}
 export function attachEntryContext(ledger,id,{probability,interval,source='subjective',model=null,as_of=null}={}){
   if(!Number.isFinite(probability)||probability<0||probability>1||!Array.isArray(interval)||interval.length!==2||
     !interval.every(Number.isFinite)||interval[0]<0||interval[0]>probability||interval[1]<probability||interval[1]>1)return ledger;

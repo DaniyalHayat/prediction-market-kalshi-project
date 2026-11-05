@@ -7,11 +7,30 @@ import {acceptPortfolioBook,portfolioTotals} from '../ui/portfolio-state.mjs';
 import {paperCapital} from '../ui/paper-capital.mjs';
 import {mergeResearchRefresh,researchRefreshDelay} from '../ui/research-state.mjs';
 import {initialSelection,selectionReducer,refreshMarketRows} from '../ui/selection.mjs';
+import {automaticReviewSignal,duePositionReviews,positionReviewInput,REVIEW_INTERVAL_MS} from '../ui/position-review-state.mjs';
 const paper=globalThis.KalshiPaper,now=Date.parse('2026-11-04T17:00:00Z');
 const book={ticker:'KXTEST-YES',as_of:'2026-11-04T16:59:50Z',source_url:'https://api.elections.kalshi.com/trade-api/v2/markets/KXTEST-YES/orderbook',raw:{orderbook_fp:{yes_dollars:[['.35','100']],no_dollars:[['.6','100']]}}};
 const entry=()=>paper.estimate(book,book.ticker,'yes','buy',10,{now});
 const opened=()=>paper.applyOpen(paper.emptyLedger(),entry(),{id:'p',time:'2026-11-04T16:59:55Z'});
 const settlement=(result='yes')=>({market:{ticker:book.ticker,status:'finalized',result,market_type:'binary'},as_of:new Date(now).toISOString(),source_url:'https://api.elections.kalshi.com/trade-api/v2/markets/'+book.ticker});
+test('all 40 contracts remain trackable and scheduled scans honor toggles and intervals',()=>{
+  const positions=Array.from({length:40},(_,i)=>({id:'p'+i,ticker:'KXTEST-'+i,side:'yes',opened_at:new Date(now).toISOString(),remaining_quantity:1,remaining_basis:.4}));
+  assert.equal(portfolioTickers(positions).length,40);
+  assert.equal(duePositionReviews(positions,{},now+119999).length,0);
+  const settings={p0:{paused:true},p1:{checked:now+1}};
+  assert.equal(duePositionReviews(positions,settings,now+120000).length,38);
+  assert.equal(duePositionReviews(positions,settings,now+REVIEW_INTERVAL_MS+1).length,39);
+  assert.equal(positionReviewInput(positions[0],[...positions,{...positions[0],remaining_quantity:3}],'validated').shared_quantity,4);
+});
+test('sell notifications persist until dismissed and rearm only after a clear signal',()=>{
+  const first=automaticReviewSignal('SELL');
+  assert.deepEqual(first,{notify:true,sell:true,unread:true});
+  assert.deepEqual(automaticReviewSignal('SELL',{...first,unread:false}),{notify:false,sell:true,unread:false});
+  assert.equal(automaticReviewSignal('REVIEW',first).sell,true);
+  assert.equal(automaticReviewSignal('HOLD',first).unread,false);
+  assert.equal(automaticReviewSignal('SELL',automaticReviewSignal('HOLD',first)).notify,true);
+  assert.equal(automaticReviewSignal('SELL',{paused:true}).notify,false);
+});
 test('all appearance options retain readable body, secondary text and interactive colors',()=>{
   assert.deepEqual(appearance('{broken'),DEFAULT_PREFERENCES);
   assert.deepEqual(appearance({theme:'other',layout:'full-screen',density:'tiny',model:'magic'}),DEFAULT_PREFERENCES);

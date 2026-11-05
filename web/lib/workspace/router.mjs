@@ -3,7 +3,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {marketFees} from '../cloud/resolve.mjs';
 import {marketBrief} from '../intelligence/brief.mjs';
 import {executionEstimate} from '../intelligence/math.mjs';
-import {workspaceCatalog,categorySnapshot,inferCategory,inferResearchFamily} from './catalog.mjs';
+import {workspaceCatalog,categorySnapshot,inferCategory,inferResearchFamily,WORKSPACE_CATEGORIES} from './catalog.mjs';
 import {warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
 import {sportsResearch} from './sports.mjs';
 import {musicResearch} from './music.mjs';
@@ -11,6 +11,7 @@ import {contractEvidence} from './evidence.mjs';
 import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
 import {tradeCandidates,rankCandidates} from './recommendations.mjs';
+import {usableForecast} from './positions.mjs';
 import {paperScenarios,rankPaperScenarios} from './paper-scenario.mjs';
 import {marketSignal} from './market-signal.mjs';
 import {settlementCalibrationDiagnostic} from './settlement-calibration.mjs';
@@ -18,6 +19,7 @@ import settlementValidation from '../../public/research/settlement-calibration.j
 const researchCache=new Map(),researchInflight=new Map();
 const scanCache=new Map(),scanInflight=new Map();
 const evidenceCache=new Map(),evidenceInflight=new Map();
+let positionIdeasPending;
 function modelChoice(model='baseline'){
   if(!['baseline','validated','challenger'].includes(model))throw new RangeError('Choose the validated baseline or experimental challenger');
   return model==='validated'?'baseline':model;
@@ -83,7 +85,7 @@ export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeV
       fee_note:feeVerified?'General taker formula with the exchange series multiplier; individual-market exceptions still require inspection.':'Explicit general taker-fee assumption; a market-specific schedule was not verified.'},
     validation_note:'A historical team-strength holdout and parameter range do not establish calibrated contract uncertainty, injury effects, profitable fills or optimal real-world trades. Position size remains conditional on your own budget and assumptions.'};
 }
-export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline',evidence=false}={},dependencies={}) {
+export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline',evidence=false,marketPacket,orderBook}={},dependencies={}) {
   validateTicker(ticker);
   model=modelChoice(model);
   const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full')+'#'+Number(evidence),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
@@ -91,9 +93,9 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
   if(useCache&&researchInflight.has(key))return researchInflight.get(key);
   const deps={marketDetails,book,marketBrief,marketFees,sportsResearch,musicResearch,contractHistory,...dependencies};
   const task=(async()=>{
-    const detail=await deps.marketDetails(ticker),market=detail.market;
+    const detail=await (marketPacket||deps.marketDetails(ticker)),market=detail.market;
     if(market?.ticker!==ticker)throw new Error('Research identity does not match the selected contract');
-    const depthPromise=deps.book(ticker,1).catch(()=>null),feesPromise=deps.marketFees(ticker).catch(()=>null);
+    const depthPromise=(orderBook||deps.book(ticker,1)).catch(()=>null),feesPromise=deps.marketFees(ticker).catch(()=>null);
     const briefPromise=deps.marketBrief(ticker,{contracts:1},{marketDetails:async()=>detail,book:()=>depthPromise,
       ...((fast||assistant||!evidence)?{headlines:async()=>({status:'not_queried',articles:[],reason:'Use Load contract news for explicit evidence retrieval.'})}:{})});
     const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant}).catch(()=>({reason:'Matched sports evidence could not be refreshed. Its source or shared cache is temporarily unavailable.',error:true}));
@@ -135,14 +137,14 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
   if(useCache)researchInflight.set(key,task);
   try{return await task;}finally{if(useCache)researchInflight.delete(key);}
 }
-export async function workspaceEvidence(ticker,{reddit=false,includeX=false,model='baseline',preview=false}={},dependencies={}){
+export async function workspaceEvidence(ticker,{reddit=false,includeX=false,model='baseline',preview=false,marketPacket}={},dependencies={}){
   validateTicker(ticker);model=modelChoice(model);
   if(typeof reddit!=='boolean'||typeof includeX!=='boolean')throw new RangeError('Evidence source toggles must be booleans');
   const deps={marketDetails,request,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX),Number(preview)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&evidenceInflight.has(key))return evidenceInflight.get(key);
   const task=(async()=>{
-    const {market}=await deps.marketDetails(ticker);
+    const {market}=await (marketPacket||deps.marketDetails(ticker));
     if(market?.ticker!==ticker)throw new Error('Evidence identity does not match the selected contract');
     const series=[market.series_ticker,market.series,market.event_ticker?.split('-')[0],ticker.split('-')[0]]
       .find(value=>typeof value==='string'&&/^[A-Za-z0-9_.-]{1,140}$/.test(value)&&!value.includes('..'));
@@ -230,9 +232,59 @@ export async function workspaceRecommendations(category='sports',budget=20,model
       risk_size:{drawdown_floor:.8,drawdown_probability:.1},budget_scope:'Each row is a separate use of this budget; do not add the scenarios as if each had its own extra cash.'}};
 }
 
+export async function recentPositionIdeas() {
+  if(positionIdeasPending)return positionIdeasPending;
+  const load=async()=>{
+    const now=Date.now(),recent=new Map(),categories=new Set(),books=new Map();
+    for(const {rows,as_of} of scanCache.values()){
+      if(now-Date.parse(as_of)>30000)continue;
+      for(const {market,research,depth} of rows){
+        if(market?.category)categories.add(market.category);
+        if(usableForecast(research,now,market?.ticker).eligible&&!research.forecast.experimental){
+          recent.set(market.ticker,{market,research});
+          if(depth&&now-Date.parse(depth.as_of)<=30000)books.set(market.ticker,depth);
+        }
+      }
+    }
+    for(const {until,value:research} of researchCache.values()){
+      const market=research.market;
+      if(!market?.ticker||until<now)continue;
+      const category=inferCategory(market);
+      if(category!=='other')categories.add(category);
+      if(!recent.has(market.ticker)&&usableForecast(research,now,market.ticker).eligible&&!research.forecast.experimental)
+        recent.set(market.ticker,{market:{...market,category},research});
+    }
+    const perCategory=new Map();
+    const candidates=[...recent.values()].sort((a,b)=>Number(b.market.volume_24h_fp||b.market.volume_24h||0)-Number(a.market.volume_24h_fp||a.market.volume_24h||0))
+      .filter(({market})=>{
+        const count=perCategory.get(market.category)||0;
+        if(count>=2||Date.parse(market.close_time)<=now||!['active','open'].includes(market.status))return false;
+        perCategory.set(market.category,count+1);return true;
+      }).slice(0,12);
+    const needDepth=candidates.filter(({market})=>!books.has(market.ticker)).map(({market})=>market.ticker);
+    if(needDepth.length)for(const [ticker,depth] of await batchBooks(needDepth).catch(()=>new Map()))books.set(ticker,depth);
+    const as_of=new Date().toISOString();
+    const ranked=rankCandidates(candidates.flatMap(({market,research})=>books.has(market.ticker)?
+      tradeCandidates(market,books.get(market.ticker),research,{now:Date.parse(as_of),budget:20,coefficient:research.fee_coefficient??.07}):[]));
+    return {rows:ranked.candidates.map(row=>({ticker:row.ticker,event_ticker:row.event_ticker,title:row.title,
+      side:row.side,category:row.category,as_of:row.quote_as_of,conservative_edge:row.conservative_edge,
+      expected_edge:row.point_edge,expected_profit:row.expected_profit,budget:20,contracts:row.contracts,
+      cost:row.cost,probability_yes:row.probability_yes,interval_yes:row.interval_yes,model:row.model,source_as_of:row.source_as_of})),
+      checked_categories:[...categories].filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
+      category_count:WORKSPACE_CATEGORIES.length,scanned_contracts:candidates.length,as_of};
+  };
+  positionIdeasPending=load();
+  try{return await positionIdeasPending;}finally{positionIdeasPending=undefined;}
+}
+
 export async function workspaceGET(endpoint,params,dependencies={}) {
   const deps={workspaceEvidence,searchRetainedEvidence,...dependencies};
   if(endpoint==='workspace/catalog')return workspaceCatalog();
+  if(endpoint==='workspace/portfolio-books'){
+    const tickers=(params.get('tickers')||'').split(',').map(validateTicker);
+    const books=await (deps.batchBooks||batchBooks)(tickers);
+    return {books:[...books.values()]};
+  }
   if(endpoint==='workspace/markets')return categorySnapshot(params.get('category')||'sports');
   if(endpoint==='workspace/context') {
     const ticker=validateTicker(params.get('ticker'));

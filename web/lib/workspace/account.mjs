@@ -73,7 +73,7 @@ function validateFinancialHistory(ledger){
     }else{
       const trade=event.trade,position=positions.get(trade.position_id);let state=states.get(trade.position_id);
       if(trade.action==='buy'){
-        if(state||trade.id!==trade.position_id+':buy'||trade.cash<0||trade.cash>Math.max(0,cash)+cashTolerance||++open>20)invalid();
+        if(state||trade.id!==trade.position_id+':buy'||trade.cash<0||trade.cash>Math.max(0,cash)+cashTolerance||++open>48)invalid();
         state={original_quantity:trade.filled,remaining_quantity:trade.filled,entry_cost:trade.notional,entry_fee:trade.fee,remaining_basis:trade.cash,realized_pnl:0,opened_at:trade.occurred_at};
         states.set(trade.position_id,state);cash=round(cash-trade.cash);
       }else{

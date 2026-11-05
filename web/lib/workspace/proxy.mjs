@@ -1,6 +1,6 @@
 import {isCountryAllowed} from './geo.mjs';
 import {traceContext,structuredLog} from '../runtime-observability.mjs';
-const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|context|history|research|execution-research|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
+const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|portfolio-books|context|history|research|execution-research|position-review|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
 export const STREAM_CONNECT_TIMEOUT_MS=5000,STREAM_LIFETIME_MS=750000;
 export function applicationOriginMatches(origin,url,{development=process.env.NODE_ENV==='development'}={}){
   try{const supplied=new URL(origin),own=new URL(url);
@@ -39,11 +39,14 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
   if(!process.env.MARKET_BACKEND_URL)return null;
   if(!Array.isArray(path)||path.length>5||path.some(part=>typeof part!=='string'))return Response.json({error:'Unknown API route'},{status:404});
   const route='/'+path.join('/');
+  const positionReview=route==='/workspace/position-review';
   const privateRoute=route==='/session'||route.startsWith('/account/');
   if(!known.test(route)||!['GET','POST','OPTIONS',...(route==='/account/portfolio'?['PUT']:[])].includes(request.method))return Response.json({error:'Unknown API route'},{status:404});
   if(privateRoute&&request.headers.get('sec-fetch-site')==='cross-site')return Response.json({error:'Open this action from the application.'},{status:403});
   const origin=request.headers.get('origin'),own=new URL(request.url).origin;
   if(origin&&!applicationOriginMatches(origin,own))return Response.json({error:'Use the application origin'},{status:403});
+  if(positionReview&&(request.headers.get('sec-fetch-site')==='cross-site'||!origin&&request.headers.get('sec-fetch-site')!=='same-origin'))
+    return Response.json({error:'Open this review from the application.'},{status:403});
   if(privateRoute&&['POST','PUT'].includes(request.method)&&!origin)return Response.json({error:'Use the application origin'},{status:403});
   const country=request.headers.get('x-vercel-ip-country');
   if(process.env.VERCEL==='1'&&!isCountryAllowed(country))return Response.json({error:'This service is unavailable in your region'},{status:403});
@@ -62,17 +65,18 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
   if(privateRoute&&request.headers.get('sec-fetch-site'))headers['Sec-Fetch-Site']=request.headers.get('sec-fetch-site');
   let upstream,connectTimer;
   try{
-    let body;if(['POST','PUT'].includes(request.method)){body=await readProxyBody(request,route==='/account/portfolio'?1500000:20000);headers['Content-Type']='application/json';}
+    let body;if(['POST','PUT'].includes(request.method)){body=await readProxyBody(request,route==='/account/portfolio'?1500000:positionReview?4000:20000);headers['Content-Type']='application/json';}
     if(streaming){
       if(!Number.isInteger(streamConnectTimeoutMs)||streamConnectTimeoutMs<1||streamConnectTimeoutMs>STREAM_CONNECT_TIMEOUT_MS||!Number.isInteger(streamLifetimeMs)||streamLifetimeMs<1||streamLifetimeMs>STREAM_LIFETIME_MS)throw new RangeError('Invalid stream deadline');
       upstream=new AbortController();connectTimer=setTimeout(()=>upstream.abort(),streamConnectTimeoutMs);
     }
-    const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,streaming?upstream.signal:AbortSignal.timeout(50000)])});
+    const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,streaming?upstream.signal:AbortSignal.timeout(positionReview?7600:50000)])});
     clearTimeout(connectTimer);
     const type=result.headers.get('content-type')||'';
     if(/text\/html/i.test(type)){upstream?.abort();return Response.json({error:'The data service returned a web page instead of data. Try again shortly.'},{status:502});}
     const outputHeaders={'Cache-Control':'no-store','Content-Type':result.headers.get('content-type')||'application/json','X-Content-Type-Options':'nosniff',traceparent:trace.traceparent};
     if(result.headers.has('retry-after'))outputHeaders['Retry-After']=result.headers.get('retry-after');
+    if(positionReview&&result.headers.has('server-timing'))outputHeaders['Server-Timing']=result.headers.get('server-timing');
     if(streaming)outputHeaders['X-Accel-Buffering']='no';
     let outputBody=result.body;
     if(streaming){
