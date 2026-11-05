@@ -74,6 +74,8 @@ Google AI Pro can include a claimed Google Developer Program cloud-credit benefi
 
 The bounded live Gateway comparison made exactly four requests: one scoped tool-routing step and one grounded follow-up per model. Both Gemini 2.5 Flash-Lite and GPT-5 nano passed both tasks. Gemini used 487 input and 123 output tokens, took 2.151 seconds across the two steps and cost $0.00009790; nano with minimal reasoning used 799 input and 179 output tokens, took 2.745 seconds and cost $0.00011155. Gateway-reported costs agree with the recorded token rates. Gemini remains the route because nano was 13.94% costlier and 27.58% slower in this tiny sample. This is not a general quality or p95 comparison and excludes remote MCP transport. `ai-gateway-benchmark.json` and the opt-in benchmark script preserve the exact requests, grading and costs.
 
+The built-in probability-and-cost explanation now reads the scoped MCP packet directly, checks freshness and prints explicitly typed numerical facts with zero model calls. One hosted request completed in 1.36 seconds. General questions retain the low-cost assistant; contract quantities, side probabilities, dollar totals and per-contract costs are separate fields.
+
 ## Ranking the requested integration surfaces
 
 | Priority | Surface | Benefit and implementation decision |
