@@ -8,10 +8,11 @@ import {monitorEventLoopDelay} from 'node:perf_hooks';
 import {GET,POST} from '../app/api/[...path]/route.js';
 import {sizePaperPosition} from '../lib/paper/risk.ts';
 import {marketFeed} from '../lib/cloud/feed.mjs';
+import {PublicBookFeed} from '../lib/cloud/public-book-feed.mjs';
 import {cloudEnabled,store} from '../lib/cloud/store.mjs';
 import {freezeForecast,listForecasts,ownerKey} from '../lib/cloud/journal.mjs';
 import {resolveContracts,marketFees} from '../lib/cloud/resolve.mjs';
-import {validateTicker} from '../lib/live.mjs';
+import {authStatus,validateTicker} from '../lib/live.mjs';
 import {handleMCP} from '../lib/workspace/mcp.mjs';
 import {serviceAuthorized,reserveAssistant} from '../lib/workspace/assistant.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
@@ -36,7 +37,7 @@ export async function readBody(req,maximum=16000){
   for await(const chunk of req){bytes+=chunk.length;if(bytes>maximum)throw Object.assign(new RangeError('Request exceeds the size limit'),{status:413});chunks.push(chunk);}
   return Buffer.concat(chunks).toString('utf8');
 }
-export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
+export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
   getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
@@ -49,6 +50,9 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   }
   const eventLoop=monitorEventLoopDelay({resolution:20});
   const isAzure=azureMode()==='live';
+  const publicFeed=!injectedFeed&&isAzure&&authStatus()!=='configured'?new PublicBookFeed({now,
+    reserve:stamp=>!disabled&&storageEnabled()&&storage().consume('azure-public-book-poll#'+new Date(stamp).toISOString().slice(0,10),2400,1,172800)}):null;
+  const feed=injectedFeed||publicFeed||marketFeed,quoteTransport=feed.transport||'exchange-websocket';
   const allowedOrigins=new Set(isAzure?[azureOrigin()]:['https://predictir.dev','https://www.predictir.dev']);
   function validOrigin(origin){
     if(!origin)return true;if(allowedOrigins.has(origin))return true;
@@ -90,6 +94,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
     try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
     catch(error){releaseCount();throw error;}
+    if(req.aborted||res.destroyed){releaseCount();return;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
     const removers=[],latest=new Map();let ticks=0,closed=false,blockedSince=0,checking=false,refilling=false,bytesRemaining=65536;
     const refill=async()=>{if(refilling||closed)return;refilling=true;try{if(await consumeBytes())bytesRemaining+=65536;else res.end();}catch{res.end();}finally{refilling=false;}};
@@ -106,18 +111,21 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(blockedSince&&now()-blockedSince>20000){res.destroy();return;}
       if(!blockedSince)for(const [ticker,value] of latest)if(send(value,multiplex?'book':null))latest.delete(ticker);else break;
       ticks++;
-      if(ticks%100===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:'exchange-websocket'},multiplex?'heartbeat':null);
+      if(ticks%100===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:quoteTransport},multiplex?'heartbeat':null);
       if(ticks%600===0&&!checking){checking=true;try{if(!await consumeMinute())res.end();}catch{res.end();}finally{checking=false;}}
       if(disabled)res.end();
     },100);
     const timeout=setTimeout(()=>res.end(),isAzure?215000:840000);res.on('close',cleanup);
     try{
       for(const ticker of tickers){
-        const remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest.set(ticker,{...message,ticker});
-          else send(multiplex?{ticker,status:message.status,reason:message.reason}:message,multiplex?'status':null);});
+        const remove=await feed.add(ticker,message=>{
+          const value={...message,ticker,transport:message.transport||quoteTransport};
+          if(value.kind==='quote')latest.set(ticker,value);
+          else send(value,multiplex?'status':null);});
         if(closed)remove();else removers.push(remove);
       }
-    }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',reason:'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
+    }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',transport:quoteTransport,
+      reason:publicFeed?'Public quote polling is unavailable. Direct snapshots remain available.':'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
   }
   async function serveStatic(req,res,path){
     if(req.method!=='GET'&&req.method!=='HEAD')return json(res,{error:'Method not allowed'},405);
@@ -149,7 +157,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
       if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:azureMode()==='live'?'Azure Container Apps':'Railway Node backend',market_data_only:true,
-        streaming:{connections,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
+        streaming:{connections,transport:quoteTransport,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
       const internal=url.pathname==='/mcp'||url.pathname.startsWith('/internal/');
       if(internal){
         if(!serviceAuthorized(req.headers.authorization,serviceSecret))return json(res,{error:'Service authorization required'},401);
@@ -250,7 +258,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
-      const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
+      const context={privateRuntime:true,params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');
       res.writeHead(output.status,Object.fromEntries(output.headers));res.end(buffer);
     }catch(error){
@@ -269,7 +277,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(!storageEnabled())return;
     try{const stop=await storage().get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await storage().consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
     catch{disabled=true;}
-  },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();});
+  },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();publicFeed?.close();});
   return server;
 }
 export const server=createMarketServer();

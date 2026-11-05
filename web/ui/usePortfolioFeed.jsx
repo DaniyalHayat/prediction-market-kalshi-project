@@ -26,7 +26,8 @@ export default function usePortfolioFeed(tickers,model='validated'){
     async function refreshBooks(force=false){
       if(stopped||document.hidden||bookBusy)return;bookBusy=true;
       try{await bounded(tracked,async ticker=>{
-        if(!force&&stream&&streamed.includes(ticker)&&Date.now()-Date.parse(latest.current[ticker]?.as_of)<15000)return;
+        const previous=latest.current[ticker],freshness=previous?.transport==='public-rest-poll'?45000:15000;
+        if(!force&&stream&&streamed.includes(ticker)&&Date.now()-Date.parse(previous?.as_of)<freshness)return;
         try{const value=await api('/api/book?ticker='+encodeURIComponent(ticker)+'&contracts=1',{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)])});receive({...value,transport:'public-rest-snapshot'});}
         catch(error){if(!stopped&&error.name!=='AbortError')setStatus(current=>({...current,[ticker]:'Quote unavailable'}));}
       });}finally{bookBusy=false;}
@@ -44,7 +45,9 @@ export default function usePortfolioFeed(tickers,model='validated'){
     function connect(){
       if(stopped||document.hidden||stream||!streamed.length)return;
       stream=new EventSource(API_BASE+'/api/portfolio/stream?tickers='+encodeURIComponent(streamed.join(',')));
-      stream.addEventListener('book',event=>{try{const value=JSON.parse(event.data);if(!tracked.includes(value.ticker))return;receive({...value,transport:'exchange-websocket'});retries=0;setStatus(current=>({...current,[value.ticker]:'Live stream'}));}catch{}});
+      stream.addEventListener('book',event=>{try{const value=JSON.parse(event.data);if(!tracked.includes(value.ticker))return;receive(value);retries=0;
+        const label=value.transport==='public-rest-poll'?'Public quote polling':value.transport==='exchange-websocket'?'Live stream':'Observed depth';
+        setStatus(current=>({...current,[value.ticker]:label}));}catch{}});
       stream.addEventListener('status',event=>{try{const value=JSON.parse(event.data);if(tracked.includes(value.ticker))setStatus(current=>({...current,[value.ticker]:String(value.status||'Connecting')}));}catch{}});
       stream.onerror=()=>{stream?.close();stream=null;if(!stopped&&!document.hidden){refreshBooks();retryTimer=setTimeout(connect,Math.min(30000,1000*2**Math.min(retries++,5)));}};
     }

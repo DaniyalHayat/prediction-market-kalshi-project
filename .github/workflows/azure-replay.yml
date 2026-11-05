@@ -38,13 +38,18 @@ jobs:
           git diff --exit-code -- public/research/quant-scenario-validation.json
       - name: Exercise contextual research in Chromium
         working-directory: web
+        timeout-minutes: 5
         run: |
           npm install --prefix "$RUNNER_TEMP/predictir-browser" --no-audit --no-fund --ignore-scripts playwright@1.61.1
-          "$RUNNER_TEMP/predictir-browser/node_modules/.bin/playwright" install --with-deps chromium
+          if command -v google-chrome >/dev/null; then
+            export CHROMIUM_EXECUTABLE="$(command -v google-chrome)"
+          else
+            "$RUNNER_TEMP/predictir-browser/node_modules/.bin/playwright" install chromium
+          fi
           npm run dev -- --hostname 127.0.0.1 --port 37641 > "$RUNNER_TEMP/predictir-next.log" 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
-          curl --retry 20 --retry-all-errors --retry-delay 1 --max-time 30 --fail --silent http://127.0.0.1:37641/ >/dev/null
+          curl --retry 20 --retry-all-errors --retry-delay 1 --retry-max-time 90 --max-time 10 --fail --silent http://127.0.0.1:37641/ >/dev/null
           PLAYWRIGHT_CORE_PATH="$RUNNER_TEMP/predictir-browser/node_modules/playwright-core/index.mjs" node tests/assistant-workspace.browser.mjs
       - uses: hashicorp/setup-terraform@v3
         with:

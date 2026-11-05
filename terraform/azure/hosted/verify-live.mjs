@@ -3,7 +3,7 @@ import {pathToFileURL} from 'node:url';
 
 const comparisonOrigin = 'https://predictir.dev';
 const regionRejection = /^This service is unavailable in your region\.?$/i;
-const usage = 'node terraform/azure/hosted/smoke.mjs <https://azure-frontend> [--compare] [--backend <https://internal-backend>] [--allow-region-block]';
+const usage = 'node terraform/azure/hosted/verify-live.mjs <https://azure-frontend> [--compare] [--backend <https://internal-backend>] [--allow-region-block]';
 
 function httpsOrigin(input) {
   const url = new URL(input);
@@ -31,7 +31,7 @@ function liquidMarkets(rows, now) {
   ).sort((a, b) => b.volume_24h - a.volume_24h || a.ticker.localeCompare(b.ticker));
 }
 
-export async function smoke({origin, compare = false, backend, allowRegionBlock = false, fetcher = fetch, now = Date.now()} = {}) {
+export async function verifyLive({origin, compare = false, backend, allowRegionBlock = false, fetcher = fetch, now = Date.now()} = {}) {
   const primary = httpsOrigin(origin);
   const internal = backend ? httpsOrigin(backend) : null;
   if (primary === comparisonOrigin || (internal && !/^[a-z0-9-]+\.internal\.[a-z0-9.-]+\.azurecontainerapps\.io$/.test(new URL(internal).hostname))) {
@@ -133,7 +133,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       compare: {type: 'boolean'}, backend: {type: 'string'}, 'allow-region-block': {type: 'boolean'},
     }});
     if (positionals.length !== 1) throw new Error('Supply exactly one Azure frontend origin');
-    const result = await smoke({origin: positionals[0], compare: values.compare,
+    const result = await verifyLive({origin: positionals[0], compare: values.compare,
       backend: values.backend, allowRegionBlock: values['allow-region-block']});
     console.log(JSON.stringify(result, null, 2));
     process.exitCode = result.ok ? 0 : 1;

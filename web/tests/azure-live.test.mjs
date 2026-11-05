@@ -75,13 +75,14 @@ test('private DNS and database preflight reject public answers, absent TLS and n
 });
 
 test('Azure live app paths require edge authorization and MCP remains a separate scoped read-only service', {timeout: 12000}, async t => {
-  const env = {PREDICTIR_MODE: process.env.PREDICTIR_MODE, APP_ORIGIN: process.env.APP_ORIGIN, ACCOUNT_COOKIE_SECRET: process.env.ACCOUNT_COOKIE_SECRET};
+  const env = {PREDICTIR_MODE: process.env.PREDICTIR_MODE, APP_ORIGIN: process.env.APP_ORIGIN, ACCOUNT_COOKIE_SECRET: process.env.ACCOUNT_COOKIE_SECRET,
+    MARKET_BACKEND_URL: process.env.MARKET_BACKEND_URL};
   Object.assign(process.env, {PREDICTIR_MODE: 'live', APP_ORIGIN: origin, ACCOUNT_COOKIE_SECRET: account});
+  delete process.env.MARKET_BACKEND_URL;
   t.after(() => { for (const [name, value] of Object.entries(env)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
   const ticker = 'KX-AZURE-FIXTURE', counters = {tools: 0, removals: 0};
   const server = createMarketServer({production: true, edgeSecret: edge, serviceSecret: assistant, logger: () => {},
     storageEnabled: () => true, storage: () => ({consume: async () => true}),
-    getRoute: async () => Response.json({ticker}),
     feed: {status: 'fixture', add: async (seen, listener) => {
       assert.equal(seen, ticker);
       queueMicrotask(() => listener({kind: 'quote', ticker, as_of: new Date().toISOString()}));
@@ -101,7 +102,9 @@ test('Azure live app paths require edge authorization and MCP remains a separate
   assert.equal((await fetch(base + '/api/workspace/markets')).status, 403);
   assert.equal((await fetch(base + '/api/workspace/markets', {headers: {...headers, Origin: 'https://other.example'}})).status, 403);
   assert.equal((await fetch(base + '/api/workspace/markets', {headers: {...headers, 'x-market-country': 'RU'}})).status, 403);
-  assert.deepEqual(await (await fetch(base + '/api/workspace/markets', {headers})).json(), {ticker});
+  const catalog = await fetch(base + '/api/intelligence/catalog', {headers});
+  assert.equal(catalog.status, 200);
+  assert.ok(Array.isArray((await catalog.json()).categories));
 
   const stream = await fetch(base + '/api/stream?ticker=' + ticker, {headers, signal: AbortSignal.timeout(3000)});
   assert.match(stream.headers.get('content-type'), /text\/event-stream/);

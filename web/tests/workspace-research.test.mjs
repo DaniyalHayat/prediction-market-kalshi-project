@@ -5,6 +5,14 @@ import {parseGames,parseMinutes,matchGame,sportsContractDate,bookmakerComparison
 import {parseApple,rankPersistence,musicIdentity} from '../lib/workspace/music.mjs';
 import {workspaceMarkets,inferCategory,selectSeries,WORKSPACE_CATEGORIES} from '../lib/workspace/catalog.mjs';
 import {screenSportsForecast,workspaceResearch,workspaceOpinions,candleRows} from '../lib/workspace/router.mjs';
+
+test('a fully rate-limited category preserves the provider retry interval',async()=>{
+  const failure=Object.assign(new Error('Kalshi cooldown'),{upstream_status:429,retry_after_seconds:60});
+  await assert.rejects(workspaceMarkets('sports',{
+    maximumSeries:1,catalogGetter:async()=>({rows:[{ticker:'KXNBAGAME',category:'Sports',categories:[],volume:1}]}),
+    getter:async()=>{throw failure;},
+  }),error=>error===failure);
+});
 const NOW=Date.now(),ticker='KXNBAGAME-26NOV07SASPOR-SAS';
 const market={ticker,event_ticker:'KXNBAGAME-26NOV07SASPOR',title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',
   close_time:new Date(NOW+86400000).toISOString(),rules_primary:'If San Antonio wins the San Antonio vs Portland Pro Basketball game originally scheduled for Nov 7, 2026, then the market resolves to Yes.'};

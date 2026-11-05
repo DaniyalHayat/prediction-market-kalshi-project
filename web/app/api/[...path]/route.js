@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 800;
 export async function GET(request, context) {
   const {path} = await context.params, endpoint = path.join("/"), params = new URL(request.url).searchParams;
-  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(!context.privateRuntime){const proxied=await proxyBackend(request,path);if(proxied)return proxied;}
   if(endpoint==='session'||endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   const vertical = params.get("vertical") || "Macro", ticker = params.get("ticker"), contracts = params.has("contracts") ? Number(params.get("contracts")) : 100;
   const headers = {"Cache-Control":"no-store"};
@@ -41,11 +41,16 @@ export async function GET(request, context) {
     else if(endpoint==="export.xlsx") return new Response(await workbook(vertical),{headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=\"kalshi-live-research.xlsx\""}});
     else return Response.json({error:"Unknown API path"},{status:404,headers});
     return Response.json(result,{headers});
-  } catch(error) {return Response.json({error:error.message,status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});}
+  } catch(error) {
+    if(error.upstream_status===429&&Number.isSafeInteger(error.retry_after_seconds)&&error.retry_after_seconds>0){
+      return Response.json({error:error.message,status:"unavailable"},{status:429,headers:{...headers,"Retry-After":String(error.retry_after_seconds)}});
+    }
+    return Response.json({error:error.message,status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});
+  }
 }
 export async function POST(request,context) {
   const {path}=await context.params,endpoint=path.join("/"),headers={"Cache-Control":"no-store"};
-  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(!context.privateRuntime){const proxied=await proxyBackend(request,path);if(proxied)return proxied;}
   if(endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   try {
     if(endpoint==='workspace/execution-research'){
@@ -63,7 +68,7 @@ export async function POST(request,context) {
 }
 export async function PUT(request,context){
   const {path}=await context.params,endpoint=path.join('/');
-  const proxied=await proxyBackend(request,path);if(proxied)return proxied;
+  if(!context.privateRuntime){const proxied=await proxyBackend(request,path);if(proxied)return proxied;}
   if(endpoint==='account/portfolio')return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   return Response.json({error:'Unknown API route'},{status:404});
 }

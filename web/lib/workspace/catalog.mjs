@@ -20,7 +20,8 @@ export async function seriesCatalog(id='sports') {
   const settled=await Promise.allSettled(category.sourceCategories?category.sourceCategories.map(name=>request('/series',{category:name,include_volume:'true'})):
     category.preferred.map(ticker=>request('/series/'+ticker)));
   const results=settled.filter(r=>r.status==='fulfilled').map(r=>r.value),errors=settled.filter(r=>r.status==='rejected').map(r=>String(r.reason.message).slice(0,200));
-  if(!results.length)throw new Error(errors[0]||'The exchange series catalog is unavailable');
+  if(!results.length)throw settled.find(row=>row.status==='rejected'&&row.reason?.upstream_status===429)?.reason||
+    new Error(errors[0]||'The exchange series catalog is unavailable');
   const unique=new Map();
   for(const result of results)for(const row of result.data.series instanceof Array?result.data.series:[result.data.series])if(row?.ticker)unique.set(row.ticker,row);
   const rows=[...unique.values()].map(row=>({ticker:row.ticker,title:row.title,category:row.category,
@@ -50,7 +51,7 @@ export async function workspaceMarkets(id,{maximumSeries=8,getter=request,catalo
   const results=[];
   for(let at=0;at<selected.length;at+=3)results.push(...await Promise.all(selected.slice(at,at+3).map(async series=>{
     try { const response=await getter('/markets',{series_ticker:series.ticker,status:'open',limit:'200'});
-      return {series,response}; } catch(error) {return {series,error:error.message};}
+      return {series,response}; } catch(error) {return {series,error:error.message,failure:error};}
   })));
   const byTicker=new Map(),coverage=[],errors=(catalog.errors||[]).map(error=>({source:'Series catalog',error}));
   for(const result of results) {
@@ -65,7 +66,8 @@ export async function workspaceMarkets(id,{maximumSeries=8,getter=request,catalo
       byTicker.set(row.ticker,row);
     }
   }
-  if(!coverage.length)throw new Error(errors[0]?.error||'No catalog sources are currently available');
+  if(!coverage.length)throw results.find(row=>row.failure?.upstream_status===429)?.failure||
+    new Error(errors[0]?.error||'No catalog sources are currently available');
   recordProviderStatus('Kalshi public exchange',{status:errors.length?'partial':'available',as_of:new Date().toISOString(),detail:'Bounded category catalog; exact contract coverage is shown separately.'});
   return {category:id,markets:[...byTicker.values()].sort((a,b)=>(b.volume_24h||0)-(a.volume_24h||0)),
     as_of:new Date().toISOString(),coverage,errors,partial:errors.length>0||coverage.some(c=>c.truncated),

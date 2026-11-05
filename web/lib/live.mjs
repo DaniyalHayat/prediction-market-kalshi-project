@@ -15,7 +15,7 @@ state.requestInflight ||= new Map();
 async function reserveProviderRead() {
   const now=Date.now(),slot=Math.max(now,state.nextReadAt || 0);
   if(slot-now>10000)throw new Error("Kalshi read queue busy; retry shortly");
-  state.nextReadAt=slot+125;
+  state.nextReadAt=slot+(process.env.PREDICTIR_MODE==='live'?300:125);
   if(slot>now)await new Promise(resolve=>setTimeout(resolve,slot-now));
   if(state.providerCooldown?.until>Date.now())throw upstreamError(429,Math.ceil((state.providerCooldown.until-Date.now())/1000),true);
 }
