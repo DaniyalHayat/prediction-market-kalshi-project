@@ -52,8 +52,8 @@ jobs:
         run: npm run verify:artifacts
       - name: Install pgTAP in the disposable database
         run: |
-          docker exec -u 0 ${{ job.services.postgres.id }} sh -c 'apt-get update -qq && apt-get install -y --no-install-recommends postgresql-17-pgtap >/dev/null'
-          docker exec -u postgres ${{ job.services.postgres.id }} psql -d marketlab_test -c 'CREATE EXTENSION IF NOT EXISTS pgtap'
+          docker exec -u 0 ${{ job.services.postgres.id }} sh -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postgresql-17-pgtap >/dev/null'
+          docker exec -u postgres ${{ job.services.postgres.id }} psql -U marketlab -d marketlab_test -c 'CREATE EXTENSION IF NOT EXISTS pgtap'
       - name: Check database safety assertions
         run: node tools/test_database.mjs
         env:
