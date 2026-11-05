@@ -51,6 +51,11 @@ test('provider sub-minute decimal clocks preserve elapsed time and regulation sa
     status.displayClock=display;
     assert.equal(parseNBALiveScore(payload,game,new Date(now).toISOString()).clock_seconds,null);
   }
+  status.displayClock='6.9';status.clock=360;
+  assert.equal(parseNBALiveScore(payload,game,new Date(now).toISOString()).clock_seconds,null);
+  status.clock=7;
+  assert.equal(parseNBALiveScore(payload,game,new Date(now).toISOString()).clock_seconds,6.9);
+  delete status.clock;
   status.displayClock='6.9';status.period=4;
   const parsed=parseNBALiveScore(payload,game,new Date(now-8000).toISOString());
   assert.equal(estimateNBAInPlay(parsed,prior,parameters,now).available,false);
