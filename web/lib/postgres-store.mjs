@@ -15,7 +15,6 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   const db = pool || new pg.Pool({connectionString,max:4,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'kalshi-market-lab',
     ...(remote ? {ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}} : {})});
   const storage = storageURL && storageKey ? createClient(storageURL,storageKey,{auth:{persistSession:false,autoRefreshToken:false}}).storage.from(bucket) : null;
-  const denied = new Map();
   db.on?.('error',()=>structuredLog('database.pool_error',{error_code:'IDLE_CONNECTION_ERROR'}));
   async function transaction(fn) {
     const client=await db.connect();
@@ -24,23 +23,20 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
     finally { client.release(); }
   }
   async function get(pk,sk='value') {
-    const r=await db.query('SELECT payload FROM market_lab.records WHERE pk=$1 AND sk=$2 AND (expires_at IS NULL OR expires_at>now())',[pk,sk]);
+    const r=await db.query('SELECT payload FROM market_lab.records WHERE pk=$1 AND sk=$2 AND (expires_at IS NULL OR expires_at>clock_timestamp())',[pk,sk]);
     return r.rows[0]?.payload;
   }
   async function save(item,overwrite=false) {
     const expiry=Number.isFinite(item.expires_epoch) ? new Date(item.expires_epoch*1000) : null;
-    try { await db.query('INSERT INTO market_lab.records(pk,sk,payload,expires_at) VALUES($1,$2,$3,$4)'+
-      (overwrite?' ON CONFLICT(pk,sk) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at':''),[item.pk,item.sk,JSON.stringify(item),expiry]); }
+    try { await db.query('INSERT INTO market_lab.records AS retained(pk,sk,payload,expires_at) VALUES($1,$2,$3,$4)'+
+      (overwrite?' ON CONFLICT(pk,sk) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at WHERE retained.payload IS DISTINCT FROM excluded.payload OR retained.expires_at IS DISTINCT FROM excluded.expires_at':''),[item.pk,item.sk,JSON.stringify(item),expiry]); }
     catch(error) { if(error.code==='23505')throw conflict('This record is already registered'); throw error; }
   }
   async function consume(key,limit,amount=1,ttl=172800) {
     if(!Number.isSafeInteger(limit)||!Number.isSafeInteger(amount)||amount<1||amount>limit||!Number.isFinite(ttl)||ttl<1)throw new RangeError('Invalid quota');
-    if((denied.get(key)||0)>Date.now())return false;
-    if(denied.size>=2048)for(const [entry,until] of denied)if(until<=Date.now())denied.delete(entry);
-    const r=await db.query(`INSERT INTO market_lab.quotas(key,used,expires_at) VALUES($1,$2,now()+$3*interval '1 second')
-      ON CONFLICT(key) DO UPDATE SET used=CASE WHEN market_lab.quotas.expires_at<=now() THEN excluded.used ELSE market_lab.quotas.used+excluded.used END,
-      expires_at=excluded.expires_at WHERE market_lab.quotas.expires_at<=now() OR market_lab.quotas.used<=$4 RETURNING used`,[key,amount,ttl,limit-amount]);
-    if(!r.rowCount&&denied.size<4096)denied.set(key,Date.now()+60000);
+    const r=await db.query(`INSERT INTO market_lab.quotas(key,used,expires_at) VALUES($1,$2,clock_timestamp()+$3*interval '1 second')
+      ON CONFLICT(key) DO UPDATE SET used=CASE WHEN market_lab.quotas.expires_at<=clock_timestamp() THEN excluded.used ELSE market_lab.quotas.used+excluded.used END,
+      expires_at=clock_timestamp()+$3*interval '1 second' WHERE market_lab.quotas.expires_at<=clock_timestamp() OR market_lab.quotas.used<=$4 RETURNING used`,[key,amount,ttl,limit-amount]);
     return Boolean(r.rowCount);
   }
   async function reserveAssistantBudget(fingerprint,{month,day,monthlyUnits,reservedUnits=25,dailyLimit=20}={}){
@@ -52,9 +48,9 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
       reserved_units:reservedUnits,billed_units:reservedUnits,created_at:new Date().toISOString()};
     await transaction(async client=>{
       for(const [key,limit,amount,ttl,label] of [[dailyKey,dailyLimit,1,172800,'Daily'],[monthlyKey,monthlyUnits,reservedUnits,45*86400,'Monthly']]){
-        const result=await client.query(`INSERT INTO market_lab.quotas(key,used,expires_at) VALUES($1,$2,now()+$3*interval '1 second')
-          ON CONFLICT(key) DO UPDATE SET used=CASE WHEN market_lab.quotas.expires_at<=now() THEN excluded.used ELSE market_lab.quotas.used+excluded.used END,
-          expires_at=excluded.expires_at WHERE market_lab.quotas.expires_at<=now() OR market_lab.quotas.used<=$4 RETURNING used`,[key,amount,ttl,limit-amount]);
+        const result=await client.query(`INSERT INTO market_lab.quotas(key,used,expires_at) VALUES($1,$2,clock_timestamp()+$3*interval '1 second')
+          ON CONFLICT(key) DO UPDATE SET used=CASE WHEN market_lab.quotas.expires_at<=clock_timestamp() THEN excluded.used ELSE market_lab.quotas.used+excluded.used END,
+          expires_at=clock_timestamp()+$3*interval '1 second' WHERE market_lab.quotas.expires_at<=clock_timestamp() OR market_lab.quotas.used<=$4 RETURNING used`,[key,amount,ttl,limit-amount]);
         if(!result.rowCount)throw Object.assign(new Error(label+' assistant allowance reached'),{status:429});
       }
       await client.query("INSERT INTO market_lab.records(pk,sk,payload,expires_at) VALUES($1,'value',$2,now()+interval '45 days')",[pk,payload]);
@@ -64,27 +60,44 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   async function settleAssistantBudget(id,billedMilliusd){
     if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)||!Number.isSafeInteger(billedMilliusd)||billedMilliusd<0||billedMilliusd>25)throw new RangeError('Invalid assistant cost settlement');
     return transaction(async client=>{
-      const result=await client.query("SELECT payload FROM market_lab.records WHERE pk=$1 AND sk='value' AND expires_at>now() FOR UPDATE",['assistant-reservation#'+id]);
+      const result=await client.query("SELECT payload FROM market_lab.records WHERE pk=$1 AND sk='value' AND expires_at>clock_timestamp() FOR UPDATE",['assistant-reservation#'+id]);
       const row=result.rows[0]?.payload;
       if(!row||row.kind!=='assistant_budget')throw Object.assign(new Error('Assistant reservation was not found'),{status:404});
       if(!Number.isSafeInteger(row.reserved_units)||row.reserved_units<1||row.reserved_units>25||billedMilliusd>row.reserved_units)throw new RangeError('Assistant settlement exceeds its reservation');
       if(row.state==='settled')return {reservation_id:id,billed_units:row.billed_units,refunded_units:row.reserved_units-row.billed_units,already_settled:true};
       if(row.state!=='reserved'||typeof row.monthly_key!=='string'||!/^assistant-reserved-milliusd#\d{4}-\d{2}$/.test(row.monthly_key))throw new Error('Assistant reservation state is invalid');
       const refund=row.reserved_units-billedMilliusd;
-      if(refund){const changed=await client.query('UPDATE market_lab.quotas SET used=used-$2 WHERE key=$1 AND used>=$2 AND expires_at>now() RETURNING used',[row.monthly_key,refund]);
+      if(refund){const changed=await client.query('UPDATE market_lab.quotas SET used=used-$2 WHERE key=$1 AND used>=$2 AND expires_at>clock_timestamp() RETURNING used',[row.monthly_key,refund]);
         if(!changed.rowCount)throw conflict('Assistant allowance changed before settlement');}
       await client.query("UPDATE market_lab.records SET payload=payload||$2::jsonb WHERE pk=$1 AND sk='value'",['assistant-reservation#'+id,
         JSON.stringify({state:'settled',billed_units:billedMilliusd,settled_at:new Date().toISOString(),cost_basis:'completed-model-usage estimate'})]);
-      denied.delete(row.monthly_key);
       return {reservation_id:id,billed_units:billedMilliusd,refunded_units:refund,already_settled:false};
     });
   }
-  async function lease(key,seconds=30) {
+  async function acquireLease(key,seconds) {
+    if(!Number.isFinite(seconds)||seconds<=0)throw new RangeError('Invalid lease duration');
     const owner=randomUUID();
-    const r=await db.query(`INSERT INTO market_lab.leases(key,owner,expires_at) VALUES($1,$2,now()+$3*interval '1 second')
-      ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires_at=excluded.expires_at WHERE market_lab.leases.expires_at<=now() RETURNING owner`,[key,owner,seconds]);
+    const r=await db.query(`INSERT INTO market_lab.leases(key,owner,expires_at) VALUES($1,$2,clock_timestamp()+$3*interval '1 second')
+      ON CONFLICT(key) DO UPDATE SET owner=excluded.owner,expires_at=clock_timestamp()+$3*interval '1 second' WHERE market_lab.leases.expires_at<=clock_timestamp() RETURNING owner`,[key,owner,seconds]);
     if(!r.rowCount)return null;
-    return async()=>{await db.query('DELETE FROM market_lab.leases WHERE key=$1 AND owner=$2',[key,owner]);};
+    return {key,owner,release:async()=>{await db.query('DELETE FROM market_lab.leases WHERE key=$1 AND owner=$2',[key,owner]);}};
+  }
+  async function lease(key,seconds=30) {
+    return (await acquireLease(key,seconds))?.release||null;
+  }
+  async function publishWhileLeased(lock,item){
+    const expiry=Number.isFinite(item.expires_epoch)?new Date(item.expires_epoch*1000):null;
+    const result=await db.query(`WITH locked AS MATERIALIZED(
+      SELECT owner,expires_at FROM market_lab.leases WHERE key=$5 FOR UPDATE
+    ),authorized AS MATERIALIZED(
+      SELECT 1 FROM locked WHERE owner=$6 AND expires_at>clock_timestamp()
+    ),written AS(
+      INSERT INTO market_lab.records AS retained(pk,sk,payload,expires_at)
+      SELECT $1,$2,$3::jsonb,$4::timestamptz FROM authorized
+      ON CONFLICT(pk,sk) DO UPDATE SET payload=excluded.payload,expires_at=excluded.expires_at
+      WHERE retained.payload IS DISTINCT FROM excluded.payload OR retained.expires_at IS DISTINCT FROM excluded.expires_at RETURNING pk
+    ) SELECT EXISTS(SELECT 1 FROM authorized) AS authorized`,[item.pk,item.sk,JSON.stringify(item),expiry,lock.key,lock.owner]);
+    if(!result.rows[0]?.authorized)throw Object.assign(new Error('This source refresh lost its lease; try again shortly'),{status:429,code:'CACHE_LEASE_LOST'});
   }
   async function archive(key,value) {
     const body=canonical(value),hash=sha(body),existing=await db.query('SELECT sha256 FROM market_lab.archives WHERE key=$1',[key]);
@@ -117,15 +130,20 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   }
   async function cached(key,seconds,producer) {
     const pk='cache#'+sha(key),existing=await get(pk); if(existing)return existing.value;
-    const release=await lease(pk,25);
-    if(!release) {
+    const lock=await acquireLease(pk,25);
+    if(!lock) {
       for(let i=0;i<10;i++) { await new Promise(r=>setTimeout(r,150)); const hit=await get(pk); if(hit)return hit.value; }
-      throw Object.assign(new Error('This source is refreshing; try again shortly'),{status:429});
+      throw Object.assign(new Error('This source is refreshing; try again shortly'),{status:429,code:'CACHE_LEASE_BUSY'});
     }
     try {
+      const refreshed=await get(pk);if(refreshed)return refreshed.value;
       if(!await consume('upstream#'+new Date().toISOString().slice(0,10),12000))throw Object.assign(new Error('Daily source-read allowance reached'),{status:429});
-      const value=await producer(); await save({pk,sk:'value',value,expires_epoch:Math.floor(Date.now()/1000)+seconds},true); return value;
-    } finally { await release(); }
+      const value=await producer({publishRecord:item=>publishWhileLeased(lock,item)});
+      await publishWhileLeased(lock,{pk,sk:'value',value,expires_epoch:Math.floor(Date.now()/1000)+seconds});return value;
+    }catch(error){
+      if(error.code==='CACHE_LEASE_LOST'){const fresh=await get(pk);if(fresh)return fresh.value;}
+      throw error;
+    }finally{await lock.release();}
   }
   async function appendAudit(id,entry) {
     const key=`forward/${id}/${entry.type}-${entry.hash}.json`; await archive(key,entry);
