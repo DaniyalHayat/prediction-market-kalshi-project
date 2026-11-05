@@ -12,6 +12,7 @@ import {workspaceExecutionResearch,executionToolPacket} from './execution-servic
 import {normalizeExecutionControls} from './execution-research.mjs';
 import {contractEvidence} from './evidence.mjs';
 import {paperActionError,paperTools} from './paper-actions.mjs';
+import {parsePositionReview,reviewPaperPosition} from './position-review.mjs';
 import {azureToolArguments,planResearchReadback} from './azure-research.mjs';
 
 export function publicResearch(value){
@@ -47,7 +48,7 @@ export function boundPacket(value,maximum=14000){
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
-export function createResearchServer({tickerScope,modelScope='baseline',executionScope,paperActions,dependencies={}}={}) {
+export function createResearchServer({tickerScope,modelScope='baseline',executionScope,paperActions,positionScope,dependencies={}}={}) {
   const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,searchRetainedEvidence,workspaceExecutionResearch,contractEvidence,...dependencies};
   const server=new McpServer({name:'predictir',version:'4.0.0'});
   if(tickerScope)validateTicker(tickerScope);
@@ -56,6 +57,16 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
   const ticker=z.string().min(1).max(140).regex(/^[A-Za-z0-9_.-]+$/);
   const check=value=>{validateTicker(value);if(tickerScope&&tickerScope!==value)throw new RangeError('This chat is scoped to the selected contract');};
   const output=value=>({content:[{type:'text',text:JSON.stringify(boundPacket(value))}]});
+  if(positionScope){
+    const position=parsePositionReview(positionScope);
+    if(position.ticker!==tickerScope)throw new RangeError('Review is scoped to the selected position.');
+    server.registerTool('review_paper_position',{description:'Compare a scoped paper position’s modeled hold value to net executable bids. Returns sourced risk context and does not place orders.',
+      inputSchema:{ticker},annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true}},async(input,{signal})=>{
+      check(input.ticker);
+      return output(await reviewPaperPosition(position,{signal,dependencies}));
+    });
+    return server;
+  }
   const register=(name,description,inputSchema,handler)=>server.registerTool(name,{description,inputSchema,
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true}},async input=>{
       try{if(input.ticker)check(input.ticker);return output(await handler(input));}
@@ -135,6 +146,22 @@ export async function localResearchReadback({ticker,model,executionControls,pane
     await client.close();
   }
 }
+export async function localPositionReview(position,{signal,dependencies}={}){
+  const input=parsePositionReview(position);
+  const server=createResearchServer({tickerScope:input.ticker,modelScope:input.model,positionScope:input,dependencies});
+  const client=new Client({name:'predictir-paper-review',version:'1.0.0'});
+  const [clientTransport,serverTransport]=InMemoryTransport.createLinkedPair();
+  try{
+    await server.connect(serverTransport);
+    await client.connect(clientTransport,{signal,timeout:1000});
+    const result=await client.callTool({name:'review_paper_position',arguments:{ticker:input.ticker}},undefined,{signal,timeout:7000});
+    if(result.isError)throw new Error('The position review could not complete.');
+    const packet=JSON.parse(result.content?.find(part=>part.type==='text')?.text||'{}');
+    if(packet.ticker!==input.ticker||!['HOLD','SELL','REVIEW','SETTLE'].includes(packet.action))throw new Error('The review result did not match this paper position.');
+    return packet;
+  }finally{await client.close();}
+}
+
 export async function handleMCP(req,res,body,options={}){
   if(req.method!=='POST'){res.writeHead(405,{'Content-Type':'application/json'});return res.end(JSON.stringify({jsonrpc:'2.0',error:{code:-32000,message:'Use Streamable HTTP POST'},id:null}));}
   const server=createResearchServer(options),transport=new StreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});

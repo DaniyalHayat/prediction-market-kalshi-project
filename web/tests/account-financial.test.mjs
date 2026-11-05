@@ -6,6 +6,13 @@ import {paperCapital} from '../ui/paper-capital.mjs';
 const engine=globalThis.KalshiPaper,ticker='KXTEST-YES',base=Date.UTC(2026,10,4,12),iso=seconds=>new Date(base+seconds*1000).toISOString();
 const book=(seconds,yes='.40',no='.55')=>({ticker,as_of:iso(seconds),source_url:'https://external-api.kalshi.com/trade-api/v2/markets/'+ticker,raw:{orderbook_fp:{yes_dollars:[[yes,'100']],no_dollars:[[no,'100']]}}});
 const check=ledger=>validatePortfolio({revision:0,watchlist:[],ledger}).ledger;
+test('the client and server can retain 48 open paper lots',()=>{
+  const quote=book(1),fill=engine.estimate(quote,ticker,'yes','buy',1,{now:base+1000});
+  let ledger={...engine.emptyLedger(),starting_balance:20000};
+  for(let i=0;i<48;i++)ledger=engine.applyOpen(ledger,fill,{id:'p'+i,time:iso(i+1)});
+  assert.equal(check(ledger).positions.length,48);
+  assert.throws(()=>engine.applyOpen(ledger,fill,{id:'overflow',time:iso(50)}),/maximum 48/);
+});
 function opened(){
   const start={...engine.emptyLedger(),starting_balance:100,cash_movements:[{id:'add',action:'add',amount:50,occurred_at:iso(0)}]},execution=engine.estimate(book(1),ticker,'yes','buy',10,{now:base+1000});
   return engine.applyOpen(start,execution,{id:'p',time:iso(1)});

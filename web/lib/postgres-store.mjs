@@ -12,7 +12,8 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   storageURL=process.env.SUPABASE_URL, storageKey=process.env.SUPABASE_SERVICE_ROLE_KEY,
   bucket=process.env.MARKET_STORAGE_BUCKET || 'market-lab-evidence'} = {}) {
   const remote=connectionString && !['localhost','127.0.0.1','[::1]'].includes(new URL(connectionString).hostname);
-  const db = pool || new pg.Pool({connectionString,max:4,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir',
+  const keepWarm = remote && process.env.PREDICTIR_MODE==='live' && process.env.PREDICTIR_KEEP_CATALOG_WARM==='1';
+  const db = pool || new pg.Pool({connectionString,max:4,min:keepWarm?1:0,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir',
     ...(remote ? {ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}} : {})});
   const storage = storageURL && storageKey ? createClient(storageURL,storageKey,{auth:{persistSession:false,autoRefreshToken:false}}).storage.from(bucket) : null;
   const listeners=new Set();let closePromise;

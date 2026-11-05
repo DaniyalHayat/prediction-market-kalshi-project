@@ -9,6 +9,7 @@ import {makeAccountHandler} from '../../../lib/workspace/account.mjs';
 import {cloudEnabled,store} from '../../../lib/cloud/store.mjs';
 import {parseExecutionRequest,workspaceExecutionResearch} from '../../../lib/workspace/execution-service.mjs';
 import {readProxyBody} from '../../../lib/workspace/proxy.mjs';
+import {localPositionReview} from '../../../lib/workspace/mcp.mjs';
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 800;
@@ -53,6 +54,12 @@ export async function POST(request,context) {
   if(!context.privateRuntime){const proxied=await proxyBackend(request,path);if(proxied)return proxied;}
   if(endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   try {
+    if(endpoint==='workspace/position-review'){
+      if(!(request.headers.get('content-type')||'').toLowerCase().startsWith('application/json'))return Response.json({error:'Use application/json'},{status:415,headers});
+      const value=await localPositionReview(JSON.parse(await readProxyBody(request,4000)),{signal:request.signal});
+      headers['Server-Timing']=Object.entries(value.timings_ms).filter(([,ms])=>Number.isFinite(ms)).map(([name,ms])=>name+';dur='+ms).join(', ');
+      return Response.json(value,{headers});
+    }
     if(endpoint==='workspace/execution-research'){
       if(!(request.headers.get('content-type')||'').toLowerCase().startsWith('application/json'))return Response.json({error:'Use application/json'},{status:415,headers});
       const input=parseExecutionRequest(JSON.parse(await readProxyBody(request,8000)));

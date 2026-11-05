@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {makePostgresStore} from '../lib/postgres-store.mjs';
 import {applyTestSchema} from './database-fixture.mjs';
+import {marketAttribution} from '../lib/workspace/warehouse.mjs';
 const url=process.env.MARKET_TEST_DATABASE_URL;
 test('closing the database store releases its actual LISTEN session without a reconnect callback',{skip:!url,timeout:15000},async()=>{
   if(!new URL(url).pathname.endsWith('_test')||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))throw new Error('Use a loopback disposable _test database');
@@ -26,6 +27,8 @@ test('database safety, nested full-text search and commit-time wakeups use actua
     const batch=(await client.query("INSERT INTO market_lab.source_batches(provider,source_url,sha256,archive_key,schema_version,row_count) VALUES($1,'https://example.com/public-source',$2,$3,1,2) RETURNING id",['runtime-fixture-'+tag,'a'.repeat(64),tag])).rows[0].id;
     await client.query("INSERT INTO market_lab.market_snapshots(ticker,observed_at,event_ticker,title,category,yes_bid,yes_ask,batch_id,quality_flags) VALUES($1,now()-interval '1 hour','FIXTURE-EVENT','Solar flare observation','science',.4,.45,$2,ARRAY['fixture_only']),($1,now()-interval '30 minutes','FIXTURE-EVENT','Solar flare observation','science',.41,.46,$2,ARRAY['fixture_only'])",['FIXTURE-'+tag,batch]);
     const view=makePostgresStore({pool:{query:(...args)=>client.query(...args),end:async()=>{}}});
+    const earlier=await client.query('SELECT * FROM market_lab.market_attribution ORDER BY abs(observed_price_change) DESC NULLS LAST,last_observed DESC,ticker LIMIT 30');
+    assert.deepEqual((await marketAttribution(view)).rows,earlier.rows);
     const search=await view.searchMarkets('solar flare');const own=search.rows.filter(row=>row.ticker==='FIXTURE-'+tag);
     assert.equal(own.length,1);assert.equal(own[0].yes_bid,.41);assert.equal(own[0].source.url,'https://example.com/public-source');assert.deepEqual(own[0].quality_flags,['fixture_only']);
     await assert.rejects(()=>view.searchMarkets('x'),RangeError);await assert.rejects(()=>view.searchMarkets('solar',{limit:1000}),RangeError);

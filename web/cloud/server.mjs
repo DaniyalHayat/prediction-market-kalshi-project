@@ -279,7 +279,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
+      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:url.pathname==='/api/workspace/position-review'?5:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={privateRuntime:true,params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
