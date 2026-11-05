@@ -1,0 +1,40 @@
+Synthetic PostgreSQL 17.11 A/B benchmark: 2026-11-05T02:39:41.281Z
+Synthetic local PostgreSQL query microbenchmark. Repeated warm/server-first-touch observations, not deployed latency or a production p95 guarantee.
+Measured trials: 41 per variant; warmups: 5. Variant order rotates and reverses. No cold-disk claim.
+
+Rows: 256; composite indexes bytes: 90112; with extra pk index: 131072
+Read exact_key: composite p50/p95 0.033/0.047 ms; extra index 0.031/0.043 ms
+Read pk_only: composite p50/p95 0.033/0.045 ms; extra index 0.033/0.054 ms
+Read journal_prefix: composite p50/p95 0.055/0.071 ms; extra index 0.056/0.073 ms
+Write small_compressible_256 unchanged: baseline p50/p95 0.051/0.068 ms, WAL mean 126.5 bytes; DISTINCT guard 0.048/0.092 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.047/0.063 ms, WAL mean 54.0 bytes
+Write small_compressible_256 changed_payload: baseline p50/p95 0.055/0.068 ms, WAL mean 307.5 bytes; DISTINCT guard 0.057/0.071 ms, WAL mean 305.2 bytes; preserve-TOAST CASE 0.07/0.096 ms, WAL mean 305.2 bytes
+Write small_compressible_256 expiry_only: baseline p50/p95 0.054/0.078 ms, WAL mean 313.1 bytes; DISTINCT guard 0.056/0.075 ms, WAL mean 314.2 bytes; preserve-TOAST CASE 0.067/0.13 ms, WAL mean 314.2 bytes
+Write toast_compressible_16384 unchanged: baseline p50/p95 0.119/0.165 ms, WAL mean 360.0 bytes; DISTINCT guard 0.055/0.11 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.065/0.112 ms, WAL mean 54.0 bytes
+Write toast_compressible_16384 changed_payload: baseline p50/p95 0.117/0.146 ms, WAL mean 364.8 bytes; DISTINCT guard 0.142/0.165 ms, WAL mean 361.0 bytes; preserve-TOAST CASE 0.13/0.161 ms, WAL mean 361.0 bytes
+Write toast_compressible_16384 expiry_only: baseline p50/p95 0.122/0.163 ms, WAL mean 368.4 bytes; DISTINCT guard 0.153/0.206 ms, WAL mean 367.9 bytes; preserve-TOAST CASE 0.101/0.168 ms, WAL mean 313.9 bytes
+Write toast_incompressible_16384 unchanged: baseline p50/p95 0.445/0.777 ms, WAL mean 18509.1 bytes; DISTINCT guard 0.066/0.114 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.074/0.108 ms, WAL mean 54.0 bytes
+Write toast_incompressible_16384 changed_payload: baseline p50/p95 0.449/0.645 ms, WAL mean 18573.6 bytes; DISTINCT guard 0.569/1.437 ms, WAL mean 18507.4 bytes; preserve-TOAST CASE 0.63/1.102 ms, WAL mean 18507.4 bytes
+Write toast_incompressible_16384 expiry_only: baseline p50/p95 0.447/0.695 ms, WAL mean 18573.6 bytes; DISTINCT guard 0.536/0.926 ms, WAL mean 18504.8 bytes; preserve-TOAST CASE 0.137/0.318 ms, WAL mean 359.9 bytes
+Write toast_incompressible_32768 unchanged: baseline p50/p95 0.906/1.578 ms, WAL mean 36453.8 bytes; DISTINCT guard 0.102/0.153 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.101/0.149 ms, WAL mean 54.0 bytes
+Write toast_incompressible_32768 changed_payload: baseline p50/p95 0.802/1.21 ms, WAL mean 36458.9 bytes; DISTINCT guard 0.924/1.436 ms, WAL mean 36445.8 bytes; preserve-TOAST CASE 1.052/1.614 ms, WAL mean 36450.4 bytes
+Write toast_incompressible_32768 expiry_only: baseline p50/p95 0.822/1.245 ms, WAL mean 36458.4 bytes; DISTINCT guard 0.9/1.273 ms, WAL mean 36450.3 bytes; preserve-TOAST CASE 0.472/0.91 ms, WAL mean 425.5 bytes
+
+Rows: 100000; composite indexes bytes: 12697600; with extra pk index: 20537344
+Read exact_key: composite p50/p95 0.035/0.045 ms; extra index 0.045/0.065 ms
+Read pk_only: composite p50/p95 0.032/0.058 ms; extra index 0.032/0.039 ms
+Read journal_prefix: composite p50/p95 0.052/0.077 ms; extra index 0.055/0.126 ms
+Write small_compressible_256 unchanged: baseline p50/p95 0.06/0.089 ms, WAL mean 126.5 bytes; DISTINCT guard 0.055/0.066 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.056/0.072 ms, WAL mean 54.0 bytes
+Write small_compressible_256 changed_payload: baseline p50/p95 0.081/0.096 ms, WAL mean 362.2 bytes; DISTINCT guard 0.069/0.1 ms, WAL mean 307.8 bytes; preserve-TOAST CASE 0.079/0.102 ms, WAL mean 307.8 bytes
+Write small_compressible_256 expiry_only: baseline p50/p95 0.061/0.104 ms, WAL mean 329.4 bytes; DISTINCT guard 0.064/0.102 ms, WAL mean 331.9 bytes; preserve-TOAST CASE 0.077/0.113 ms, WAL mean 331.9 bytes
+Write toast_compressible_16384 unchanged: baseline p50/p95 0.139/0.182 ms, WAL mean 357.4 bytes; DISTINCT guard 0.071/0.102 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.078/0.098 ms, WAL mean 54.0 bytes
+Write toast_compressible_16384 changed_payload: baseline p50/p95 0.147/0.203 ms, WAL mean 370.0 bytes; DISTINCT guard 0.163/0.228 ms, WAL mean 364.7 bytes; preserve-TOAST CASE 0.152/0.228 ms, WAL mean 364.7 bytes
+Write toast_compressible_16384 expiry_only: baseline p50/p95 0.134/0.158 ms, WAL mean 364.7 bytes; DISTINCT guard 0.16/0.197 ms, WAL mean 367.6 bytes; preserve-TOAST CASE 0.106/0.126 ms, WAL mean 313.6 bytes
+Write toast_incompressible_16384 unchanged: baseline p50/p95 0.375/0.465 ms, WAL mean 18556.4 bytes; DISTINCT guard 0.088/0.129 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.098/0.125 ms, WAL mean 54.0 bytes
+Write toast_incompressible_16384 changed_payload: baseline p50/p95 0.333/0.48 ms, WAL mean 18570.2 bytes; DISTINCT guard 0.37/0.446 ms, WAL mean 18510.0 bytes; preserve-TOAST CASE 0.382/0.485 ms, WAL mean 18510.0 bytes
+Write toast_incompressible_16384 expiry_only: baseline p50/p95 0.336/0.432 ms, WAL mean 18572.1 bytes; DISTINCT guard 0.376/0.468 ms, WAL mean 18509.2 bytes; preserve-TOAST CASE 0.145/0.178 ms, WAL mean 364.4 bytes
+Write toast_incompressible_32768 unchanged: baseline p50/p95 0.602/0.683 ms, WAL mean 36448.4 bytes; DISTINCT guard 0.119/0.145 ms, WAL mean 54.0 bytes; preserve-TOAST CASE 0.118/0.16 ms, WAL mean 54.0 bytes
+Write toast_incompressible_32768 changed_payload: baseline p50/p95 0.576/0.783 ms, WAL mean 36463.9 bytes; DISTINCT guard 0.619/0.802 ms, WAL mean 36492.7 bytes; preserve-TOAST CASE 0.683/0.925 ms, WAL mean 36497.3 bytes
+Write toast_incompressible_32768 expiry_only: baseline p50/p95 0.576/0.735 ms, WAL mean 36455.1 bytes; DISTINCT guard 0.641/0.907 ms, WAL mean 36446.2 bytes; preserve-TOAST CASE 0.233/0.365 ms, WAL mean 421.4 bytes
+
+Quota four_workers_same_key: 400 rejected requests; round-trip p50/p95 3.5810/5.0517 ms; admitted 0
+Quota four_workers_distinct_keys: 400 rejected requests; round-trip p50/p95 1.9708/2.8499 ms; admitted 0
