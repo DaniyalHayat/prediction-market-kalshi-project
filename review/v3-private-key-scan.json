@@ -1,8 +1,8 @@
 {
-  "as_of": "2026-11-05T03:23:12.681Z",
+  "as_of": "2026-11-05T04:51:18.196Z",
   "scope": "Working repository and production/development browser assets compared against configured private credential variants and supplied private-key material",
   "private_variants": 10,
-  "repository_files": 357,
-  "browser_bundle_files": 136,
+  "repository_files": 387,
+  "browser_bundle_files": 139,
   "matching_files": []
 }

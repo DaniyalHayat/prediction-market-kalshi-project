@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-11-05T04:14:14.020Z",
+  "since": "2026-11-05T04:08:00Z",
+  "railway": {
+    "log_query_exit": 0,
+    "warning_error_records": [],
+    "http_query_exit": 0,
+    "http_500_records": 0
+  },
+  "supabase": {
+    "http_status": 200,
+    "result": {
+      "result": []
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "project_ref": "vndjvfsufhlbweyirfea",
+  "window": {
+    "start_inclusive": "2026-11-05T03:29:06.407Z",
+    "end_exclusive": "2026-11-05T04:29:06.407Z",
+    "duration_seconds": 3600,
+    "timezone": "UTC"
+  },
+  "access": {
+    "method": "read-only Supabase Management API ClickHouse logs queries",
+    "endpoint": "/v1/projects/vndjvfsufhlbweyirfea/analytics/endpoints/logs",
+    "all_final_query_http_statuses": 200,
+    "provider_settings_changed": false,
+    "database_privileges_changed": false,
+    "application_code_changed_for_this_review": true,
+    "application_change_scope": "Follow-up source-failure diagnostics and queue propagation; no provider request deadline, retry limit, schema or privilege change."
+  },
+  "coverage": {
+    "retrieved_events": 1268,
+    "unique_event_ids": 1268,
+    "aggregate_event_count": 1268,
+    "counts_reconcile": true,
+    "raw_result_cap_observed": 1000,
+    "partition_seconds": 900,
+    "partition_event_counts": [260, 435, 335, 238],
+    "all_partitions_below_result_cap": true,
+    "sources_with_events": 10,
+    "explicitly_checked_empty_sources": ["function_edge_logs", "function_logs", "pg_upgrade_logs"],
+    "unavailable_source_queries": [],
+    "limitation": "Complete retrieval of the recorded rows returned for this fixed window at inspection time. Missing or disabled event recording and later ingestion are not ruled out. Gateway and service events can describe the same request."
+  },
+  "sources": [
+    {"source": "postgres_logs", "events": 456, "levels": {"LOG": 456}, "sqlstates": {"00000": 455, "08006": 1}},
+    {"source": "supavisor_logs", "events": 265, "levels": {"INFO": 265}},
+    {"source": "pgbouncer_logs", "events": 186, "levels": {"INFO": 186}},
+    {"source": "storage_logs", "events": 149, "levels": {"INFO": 149}, "http_statuses": {"200": 76}, "non_http_events": 73},
+    {"source": "edge_logs", "events": 111, "levels": {"INFO": 111}, "http_statuses": {"200": 110, "204": 1}},
+    {"source": "workflow_run_logs", "events": 44, "levels": {"INFO": 44}},
+    {"source": "postgrest_logs", "events": 32, "levels": {"INFO": 32}},
+    {"source": "auth_logs", "events": 17, "levels": {"INFO": 15, "WARNING": 2}, "http_statuses": {"200": 10, "204": 1}, "non_http_events": 6},
+    {"source": "auth_audit_logs", "events": 4, "levels": {"INFO": 4}},
+    {"source": "realtime_logs", "events": 4, "levels": {"INFO": 4}},
+    {"source": "function_edge_logs", "events": 0, "status": "no_recorded_events"},
+    {"source": "function_logs", "events": 0, "status": "no_recorded_events"},
+    {"source": "pg_upgrade_logs", "events": 0, "status": "no_recorded_events"}
+  ],
+  "attention": {
+    "error_fatal_critical_events": 0,
+    "warning_events": 2,
+    "http_4xx_events": 0,
+    "http_5xx_events": 0,
+    "runtime_role_non_success_sqlstates": 0,
+    "permission_42501_events": 0,
+    "permission_denied_extensions_messages": 0,
+    "message_scan_error_fatal_panic_failed_denied_timeout_matches": 0,
+    "findings": [
+      {
+        "id": "cf7d34b1-bfa6-4aae-9da9-0963cf5c2967",
+        "source": "auth_logs",
+        "timestamp": "2026-11-05T04:05:12.000000Z",
+        "severity": "WARNING",
+        "classification": "managed_auth_startup_deprecation",
+        "message": "GOTRUE_JWT_ADMIN_GROUP_NAME is unsupported and will be removed",
+        "application_fix_supported": false
+      },
+      {
+        "id": "a705d188-a2ad-42ee-b229-06a04bea6a48",
+        "source": "auth_logs",
+        "timestamp": "2026-11-05T04:05:12.000000Z",
+        "severity": "WARNING",
+        "classification": "managed_auth_startup_deprecation",
+        "message": "GOTRUE_JWT_DEFAULT_GROUP_NAME is unsupported and will be removed",
+        "application_fix_supported": false
+      },
+      {
+        "id": "31060ff6-3626-4876-bc86-d8cabc653607",
+        "source": "postgres_logs",
+        "timestamp": "2026-11-05T04:23:49.979000Z",
+        "severity": "LOG",
+        "sqlstate": "08006",
+        "role": "supabase_admin",
+        "classification": "isolated_admin_client_connection_reset",
+        "message": "could not receive data from client: Connection reset by peer",
+        "application_fix_supported": false,
+        "limitation": "The client side closed or reset the connection. These logs do not identify the reason or establish a failed application request."
+      }
+    ]
+  },
+  "connection_events": {
+    "postgres_normal_disconnections": {"supabase_admin": 336, "pgbouncer": 5, "postgres": 8, "market_lab_app": 6, "authenticator": 4, "supabase_auth_admin": 5},
+    "postgres_runtime_session_durations": ["0:05:01.329", "3:17:17.909", "0:29:27.575", "1:18:01.552", "0:45:06.269", "1:56:57.602"],
+    "supavisor_client_authentications": 98,
+    "supavisor_client_terminations": 97,
+    "supavisor_backend_authentications": 52,
+    "supavisor_idle_socket_closes": [
+      {"role": "market_lab_app", "application_name": "kalshi-market-lab", "state": "idle_proxy", "events": 7},
+      {"role": "market_lab_app", "application_name": "kalshi-market-lab", "state": "idle_session", "events": 3},
+      {"role": "postgres", "application_name": "predictir-release-verification", "state": "idle_session", "events": 1},
+      {"role": "postgres", "application_name": "kalshi-market-lab", "state": "idle_proxy", "events": 1}
+    ],
+    "supavisor_unused_pool_shutdowns": 2,
+    "supavisor_graceful_pool_shutdowns": 2,
+    "supavisor_pool_starts": 2,
+    "pgbouncer": {"login_attempts": 91, "client_requested_closes": 90, "server_lifetime_rotations": 1, "new_backend_connections": 2, "tls_established": 2},
+    "interpretation": "These event counts describe separate database/pooler layers, not distinct failed requests. Idle closes and normal disconnections are retained as operational evidence, not relabeled as application failures."
+  },
+  "auth_configuration_review": {
+    "http_status": 200,
+    "legacy_admin_group_field_exposed": false,
+    "legacy_default_group_field_exposed": false,
+    "settings_modified": false
+  },
+  "apple_pipeline_followup": {
+    "job_state_checked_at": "2026-11-05T04:37:08.904Z",
+    "observation_counts_checked_at": "2026-11-05T04:42:15.896Z",
+    "method": "Read-only transaction; job metadata, state transitions, source batch metadata and observation counts only. Job input payloads were not selected.",
+    "jobs": [
+      {"key": "apple#498291", "kind": "apple", "state": "complete", "attempts": 1, "retained_error_code": null, "created_at": "2026-11-05T03:00:25.613Z", "available_at": "2026-11-05T03:00:25.613Z", "finished_at": "2026-11-05T03:00:39.377Z", "source_batch_id": 57, "actual_observation_rows": 100},
+      {"key": "apple#498292", "kind": "apple", "state": "complete", "attempts": 3, "retained_error_code": "503", "created_at": "2026-11-05T04:00:42.729Z", "available_at": "2026-11-05T04:07:58.871Z", "finished_at": "2026-11-05T04:08:44.069Z", "source_batch_id": 76, "actual_observation_rows": 100}
+    ],
+    "retried_job_attempts": [
+      {"attempt": 1, "running_transition_id": 156, "running_at": "2026-11-05T04:00:54.493Z", "result_transition_id": 157, "result_state": "pending", "result_at": "2026-11-05T04:01:10.592Z", "duration_ms": 16099},
+      {"attempt": 2, "running_transition_id": 160, "running_at": "2026-11-05T04:03:42.708Z", "result_transition_id": 161, "result_state": "pending", "result_at": "2026-11-05T04:03:58.871Z", "duration_ms": 16163},
+      {"attempt": 3, "running_transition_id": 162, "running_at": "2026-11-05T04:08:42.703Z", "result_transition_id": 163, "result_state": "complete", "result_at": "2026-11-05T04:08:44.069Z", "duration_ms": 1366}
+    ],
+    "latest_batch": {"id": 76, "source_as_of": "2026-11-05T04:08:43.000Z", "ingested_at": "2026-11-05T04:08:43.966Z", "declared_row_count": 100, "actual_observation_rows": 100},
+    "current_provider_smoke_check": {"checked_at": "2026-11-05T04:38:32.272Z", "http_status": 200, "duration_ms": 801, "validated_tracks": 100},
+    "historical_cause": {"classification": "unresolved_legacy_503", "inference": "Two approximately 16-second failures are consistent with the existing 16-second source fetch deadline. This is a timing-based inference, not proof of a timeout; the historical 503 field did not preserve timeout versus upstream HTTP versus shared-cache cause.", "exact_cause_proven": false},
+    "outcome": "Both bounded Apple jobs completed and each has 100 durable observation rows. Completed state and finished_at are authoritative; retained error_code records the last retry failure rather than a current failed state.",
+    "followup_repair": {"codes": ["UPSTREAM_TIMEOUT", "UPSTREAM_BODY_TIMEOUT", "UPSTREAM_HTTP_503", "UPSTREAM_NETWORK_ERROR", "UPSTREAM_INVALID_JSON"], "untrusted_code_fallback": "SOURCE_UNAVAILABLE", "http_status_only_when_response_observed": true, "body_included_in_latency_and_error_telemetry": true, "durable_error_code_and_pipeline_log_propagation": true, "request_deadline_ms": 16000, "maximum_job_attempts": 4, "migration_required": false},
+    "validation": {"provider_evidence_targeting_tests_passed": 29, "real_postgres_pipeline_tests_passed": 6, "failed": 0, "skipped": 0, "pipeline_scenario": "Request timeout, then real upstream503, then successful third attempt; durable state, retained last cause, known HTTP status and bounded retry semantics verified."}
+  },
+  "related_repairs": [
+    {"commit": "e257329", "purpose": "Privilege preflight prevents an unauthorized optional statistics read; no runtime statistics grant added."},
+    {"commit": "abebb43", "purpose": "Drain runtime work and release database sessions on shutdown."}
+  ],
+  "references": [
+    "https://supabase.com/docs/guides/observability/advanced-log-filtering",
+    "https://supabase.com/docs/guides/observability/log-field-reference",
+    "https://supabase.com/docs/guides/observability/logs"
+  ],
+  "privacy": "Only aggregate counts, public service identifiers, system role names and three non-sensitive diagnostic messages are retained here. Raw events, client addresses, user identities, request bodies and credentials are excluded."
+}

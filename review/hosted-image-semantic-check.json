@@ -1,0 +1,62 @@
+{
+  "version": "hosted-image-semantic-check-v1",
+  "observed_date_utc": "2026-11-05",
+  "status": "passed",
+  "scope": "Actual local Linux Docker inference in the Railway-compatible backend image. This does not measure hosted Railway latency or capacity.",
+  "image": {
+    "reference": "predictir-railway-fix:local",
+    "image_id_prefix": "c5d34435a255",
+    "build_manifest_list_digest": "sha256:c5d34435a255b451c1cb7289f3f329dbda59253da2a034876b6bf9266bc61180",
+    "runtime_content_commit": "d230a88",
+    "dependency_install": "npm ci --omit=dev --ignore-scripts",
+    "base": "node:26.12.1-bookworm-slim"
+  },
+  "model": {
+    "id": "Xenova/all-MiniLM-L6-v2",
+    "revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+    "dimensions": 384,
+    "dtype": "q8",
+    "pooling": "mean",
+    "normalize": true,
+    "device": "cpu",
+    "status": "loaded"
+  },
+  "isolation": {
+    "uid": 1000,
+    "read_only_root": true,
+    "node_max_old_space_size_mib": 384,
+    "cache_path": "/tmp/market-lab-models",
+    "cache_mount": "tmpfs",
+    "cache_mount_limit_bytes": 134217728,
+    "cache_mount_options": "rw,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
+    "fresh_cache": true,
+    "application_credentials_supplied": false,
+    "database_used": false,
+    "container_removed_after_check": true
+  },
+  "inputs": [
+    "The basketball player is sidelined by an ankle injury.",
+    "The athlete cannot play because he hurt his ankle.",
+    "A film opened at the box office."
+  ],
+  "observations": {
+    "dimensions": [384, 384, 384],
+    "normalization_check_passed": [true, true, true],
+    "normalization_check": "embedPublicTexts validates each vector is finite and abs(sum(v_i squared) - 1) < 0.01 before returning it. Exact individual norms were not printed or retained.",
+    "related_cosine": 0.6468208315187112,
+    "unrelated_cosine": 0.007440043568998057,
+    "required_similarity_margin": 0.15,
+    "cold_download_and_inference_ms": 3968.836737,
+    "process_rss_bytes": 218578944,
+    "model_cache_files": 5,
+    "model_cache_bytes": 23685697
+  },
+  "reproduction": {
+    "working_directory": "web",
+    "image_build_from_repository_root": "docker build --tag predictir-railway-fix:local --file web/Dockerfile web",
+    "container_command": "docker run --rm --read-only --tmpfs /tmp/market-lab-models:rw,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700 --entrypoint node predictir-railway-fix:local --max-old-space-size=384 --input-type=module -e <probe>",
+    "probe": "import assert from 'node:assert/strict'; import {readdir,stat} from 'node:fs/promises'; import {join} from 'node:path'; import {embedPublicTexts,cosineSimilarity,embeddingStatus,EMBEDDING_MODEL} from './lib/workspace/semantic.mjs'; const started=performance.now(); const vectors=await embedPublicTexts(['The basketball player is sidelined by an ankle injury.','The athlete cannot play because he hurt his ankle.','A film opened at the box office.']); const related=cosineSimilarity(vectors[0],vectors[1]),unrelated=cosineSimilarity(vectors[0],vectors[2]); assert.equal(vectors.length,3); assert.ok(vectors.every(v=>v.length===384)); assert.ok(related>unrelated+.15); async function measure(path){let count=0,bytes=0;for(const row of await readdir(path,{withFileTypes:true})){const file=join(path,row.name);if(row.isDirectory()){const part=await measure(file);count+=part.count;bytes+=part.bytes;}else{count++;bytes+=(await stat(file)).size;}}return {count,bytes};} console.log(JSON.stringify({uid:process.getuid(),model:EMBEDDING_MODEL,status:embeddingStatus().status,dimensions:vectors.map(v=>v.length),related,unrelated,milliseconds:performance.now()-started,rss:process.memoryUsage().rss,cache:await measure(process.env.SEMANTIC_MODEL_CACHE_DIR)}));",
+    "documentation": "web/docs/SEMANTIC_EVIDENCE.md"
+  },
+  "interpretation": "The image can load native ONNX runtime and execute the pinned embedding model despite disabled npm install scripts. Timing includes a fresh public model download and three-text inference. RSS is total process memory, not incremental model memory. No runtime dependency fix was needed."
+}
