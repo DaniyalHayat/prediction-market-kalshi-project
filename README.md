@@ -10,6 +10,8 @@ The updated Figma source import succeeded, but its preview returned connection e
 
 The [previous AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) remains available for its existing journal records. It is a separate data store. Figma source/preview status is separate from the current hosted web application.
 
+The research upgrade adds selectable dark themes, ranked budget scenarios, live paper-position decisions and confirmed settlement accounting. The experimental NBA ensemble and score-clock model are selectable alongside validated research. [Full feature review](web/docs/FEATURE_REVIEW.md), [pregame model evidence](web/docs/NBA_RESEARCH.md), [in-play replay](web/docs/NBA_INPLAY.md) and [runtime benchmarks](web/docs/RUNTIME_RESEARCH.md) explain the methods, measured results and integration decisions.
+
 ## What I built
 
 - A market workspace for Sports, Economy, Travel, Weather, Crypto, Tech & science, Climate and Culture, with native exchange streaming, bounded REST fallback, source timestamps, spread diagnostics and selected-contract order-book depth.
