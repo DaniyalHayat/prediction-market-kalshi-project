@@ -118,7 +118,11 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   }
   async function serveStatic(req,res,path){
     if(req.method!=='GET'&&req.method!=='HEAD')return json(res,{error:'Method not allowed'},405);
-    if(production||path==='/'){res.writeHead(302,{Location:'https://predictir.dev/','Cache-Control':'no-store'});return res.end();}
+    if(production){res.writeHead(302,{Location:'https://predictir.dev/','Cache-Control':'no-store'});return res.end();}
+    if(['/','/dashboard','/dashboard/','/dashboard/index.html'].includes(path)){
+      res.writeHead(302,{Location:'/lab.html','Cache-Control':'no-store'});
+      return res.end();
+    }
     const file=resolve(publicRoot,'.'+path);
     if(!file.startsWith(publicRoot+'/')&&!file.startsWith(publicRoot+'\\'))return json(res,{error:'Unknown file'},404);
     try{const info=await stat(file);if(!info.isFile()||info.size>5e6)return json(res,{error:'Unknown file'},404);

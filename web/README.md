@@ -4,7 +4,7 @@ The current [Predictir](https://predictir.dev) uses the React workspace in `ui/`
 
 [Current deployment, security and reproduction](docs/DEPLOYMENT.md) · [Ranked integration choices](docs/INTEGRATIONS.md) · [Measured sports evaluation](docs/sports-validation.json). The sections below also describe the earlier standalone workbench and its optional research endpoints.
 
-[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [Legacy AWS runtime](docs/cloud-runtime.md) · [Figma frontend](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj)
+[Project overview](../README.md) · [Security and data handling](../docs/SECURITY.md) · [AWS workbench and static export](docs/cloud-runtime.md)
 
 The [public AWS app](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) serves this dashboard and its new native-streaming/private-journal workbench. Source import does not establish Figma preview or publication readiness.
 

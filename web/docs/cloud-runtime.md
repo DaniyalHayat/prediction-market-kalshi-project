@@ -1,6 +1,6 @@
 # Predictir on AWS
 
-The public demo is [Predictir](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/). The existing dashboard remains the main screen. **Live contract & private journal** opens the focused workbench. Paste an official event URL or exact ticker, select a contract, inspect its rules and depth, supply your probability range and compare paper sizes. No exchange order, account position or balance route exists.
+[Predictir](https://predictir.dev/) is the main dashboard. The [AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/lab.html) keeps the live contract and private journal tools on their existing origin. Paste an official event URL or exact ticker, select a contract, inspect its rules and depth, supply your probability range and compare paper sizes. No exchange order, account position or balance route exists.
 
 ## Live data and prospective records
 
@@ -33,7 +33,7 @@ node tools/build_cloud.mjs
 python tools/package_cloud.py
 ```
 
-The build writes `../.cloud-build/kalshi.zip` and a SHA-256 deployment key in `../.cloud-build/package.json`. It includes the original dashboard, the focused workbench and both server/worker bundles. `tools/prepare_dashboard.mjs` externalizes the supplied dashboard runtime into a same-origin script so the hosted content policy can load it. The public dependency lockfile reproduces server and sizing bundles; the prebuilt dashboard runtime is a checked, vendored artifact, not a claim that its original authoring toolchain is reproduced from source.
+The build writes `../.cloud-build/kalshi.zip` and a SHA-256 deployment key in `../.cloud-build/package.json`. It includes the focused workbench, historical evidence and both server and worker bundles. The lockfile reproduces the server and sizing bundles. The legacy dashboard export is a separate local archive. In new packages, requests for `/dashboard/` and `/dashboard/index.html` go to the same-origin workbench at `/lab.html`. Browser journal access continues on that origin.
 
 Deploy the template first with an empty `CodeKey` to create storage, upload the ZIP to the returned private bucket under its generated `code/<sha256>.zip` key, then update the stack with that key and the SSM parameter name. For streaming, create/select an exchange key yourself and store `{ "id": "key-id", "pem": "private-key" }` in the named Standard SecureString outside Git. The app uses market-only operations even if a selected exchange key permits broader access. Never paste a private key into Figma or browser code.
 
@@ -41,7 +41,7 @@ For local HTTP without cloud persistence, run `node tools/run_local.mjs`. Option
 
 ## Figma frontend
 
-`npm run figma:export` creates an independent static frontend in `../.figma-export`, keeping API and streaming calls on the documented AWS backend. It preserves the dashboard and paper tools; Figma is not running the backend or holding its credentials. The updated frontend was imported into a new file named **Predictir**, preserving the older file. Figma preview/publication status is recorded separately from the successful source import and hosted AWS checks.
+`npm run figma:export` creates a static workbench in `../.figma-export`. Its entry point opens `lab.html`, with requests directed to the documented AWS backend or an HTTPS origin supplied in `MARKET_PUBLIC_API`. Existing backend origin restrictions still apply. The export includes no credentials. For live use from a different preview origin, open the hosted workbench directly. The previous Figma import and preview checks refer to the earlier export.
 
 ## Execution evidence
 
