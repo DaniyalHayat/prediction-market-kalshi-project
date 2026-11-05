@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {EXECUTION_DEFAULTS,EXECUTION_FEATURES,executionControls,executionFingerprint,requestExecution} from '../ui/execution-state.mjs';
+import {EXECUTION_DEFAULTS,EXECUTION_FEATURES,executionControls,executionDepth,executionFingerprint,requestExecution} from '../ui/execution-state.mjs';
 import {CONTRACT_TABS,moveContractTab} from '../ui/contract-tabs.mjs';
 
 test('execution requests preserve every selected model toggle and numeric assumption without sending unrelated client data',async()=>{
@@ -27,6 +27,23 @@ test('every meaningful execution edit invalidates the prior scenario fingerprint
   for(const feature of EXECUTION_FEATURES)assert.notEqual(executionFingerprint({...EXECUTION_DEFAULTS,[feature.key]:false}),before);
   for(const [key,value] of Object.entries({enabled:false,side:'no',action:'sell',contracts:21,horizon_seconds:600,steps:10,risk_aversion:.01,temporary_impact:.001,volatility:.03,inventory:1}))assert.notEqual(executionFingerprint({...EXECUTION_DEFAULTS,[key]:value}),before);
   assert.equal(executionFingerprint({...EXECUTION_DEFAULTS,contracts:'20'}),before);
+});
+
+test('executable depth uses the matching side, price limit, time and reported fees',()=>{
+  const now=Date.parse('2026-11-05T03:00:00Z'),ticker='KX-DEPTH-FIXTURE';
+  const book={ticker,as_of:new Date(now-2000).toISOString(),transport:'exchange-websocket',raw:{orderbook_fp:{
+    yes_dollars:[['.40','4'],['.39','3'],['.37','10']],no_dollars:[['.55','2'],['.54','5'],['.50','100']]}}};
+  const input={book,ticker,side:'no',action:'buy',contracts:10,fees:{coefficient:.07},now};
+  const no=executionDepth(input);
+  assert.equal(no.status,'fresh');assert.equal(no.stream,true);assert.equal(no.age,2);
+  assert.equal(no.best,.6);assert.equal(no.available,7);assert.equal(no.quote.filled,7);assert.equal(no.quote.unfilled,3);assert.equal(no.quote.fee,.12);
+  const yes=executionDepth({...input,side:'yes',action:'sell'});
+  assert.equal(yes.best,.4);assert.equal(yes.available,7);assert.equal(yes.quote.cash,2.65);
+  assert.equal(executionDepth({...input,now:now+90000}).status,'stale');
+  assert.equal(executionDepth({...input,now:now-10000}).status,'stale');
+  assert.equal(executionDepth({...input,closed:true}).status,'closed');
+  assert.equal(executionDepth({...input,ticker:'OTHER'}).status,'missing');
+  assert.equal(executionDepth({...input,contracts:''}).quote,null);
 });
 
 test('all five contract tabs remain reachable by keyboard in both directions, including wraparound',()=>{

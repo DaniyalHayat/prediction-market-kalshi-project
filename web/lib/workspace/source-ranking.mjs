@@ -1,8 +1,27 @@
 const normalize=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/https?:\/\/\S+/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
-const words=value=>normalize(value).split(' ').filter(w=>w.length>2&&!new Set(['will','which','what','this','that','with','from','have','game','wins','team','their','they','than','over','under','more','most','number','first','song','artist']).has(w));
+const stopWords=new Set(['will','would','which','what','this','that','with','from','have','game','wins','team','their','they','than','over','under','more','most','number','first','song','artist','before','after','above','below','does','yes','no']);
+const words=value=>normalize(value).split(' ').filter(w=>w.length>2&&!stopWords.has(w)&&!/^\d+$/.test(w));
+const sportsTopics=new Set(['nfl','nba','epl']);
+const specificUpdate=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart|trade|starter|quarterback|practice|reps)\b/;
+const titleNoise=new Set(['best','there','end','hit','finish','reach','close','last','win','hold','today','tomorrow','week','month','year','date','time','next','total','price','points','contract','degrees','january','february','march','april','may','june','july','august','september','october','november','december','jan','feb','mar','apr','jun','jul','aug','sep','oct','nov','dec']);
+export function topicWords(value){return [...new Set(words(value).filter(word=>!titleNoise.has(word)))];}
+export function evidenceTopicGroups(market){
+  const ticker=market?.ticker||'',rules=[market?.rules_primary,market?.title].join(' ');
+  if(/^KXCPI/.test(ticker))return [['consumer price index','CPI'],['inflation']];
+  if(/^KXU3/.test(ticker))return [['unemployment','jobless rate'],['jobs report','BLS','U.S.']];
+  if(/^KXFED/.test(ticker))return [['Federal Reserve','FOMC'],['rate decision','interest rates']];
+  if(/^KX(?:LLM1|TOPMODEL)/.test(ticker))return [['AI leaderboard','Arena leaderboard','LMArena'],['model','LLM']];
+  if(/^KXHURRICANE/.test(ticker)){
+    const basin=rules.match(/\b(?:Eastern Pacific|Central Pacific|Atlantic)\b/i)?.[0];
+    if(basin)return [[basin],['hurricane','hurricanes']];
+  }
+  return [];
+}
 export const SOURCE_CATALOG=Object.freeze([
   {id:'nba-official',name:'NBA official reports',tier:'primary',domain:'official.nba.com',topics:['nba'],identity_url:'https://official.nba.com/nba-injury-report-2026-27-season',checked_at:'2026-11-05',role:'League participation reports; check the dated report and updates.'},
-  {id:'espn',name:'ESPN',tier:'reported',domain:'espn.com',topics:['nba','epl'],identity_url:'https://www.espn.com/',checked_at:'2026-11-05',role:'Sports schedules, boxscores and attributed reporting.'},
+  {id:'nfl',name:'NFL',handle:'NFL',tier:'primary',domain:'nfl.com',topics:['nfl'],identity_url:'https://www.nfl.com/',checked_at:'2026-11-05',role:'Official fixtures, league injury reports and game records.'},
+  {id:'nfl-network',name:'NFL Network',handle:'nflnetwork',tier:'reported',topics:['nfl'],identity_url:'https://www.nfl.com/network/',checked_at:'2026-11-05',role:'Attributed NFL Network reporting.'},
+  {id:'espn',name:'ESPN',tier:'reported',domain:'espn.com',topics:['nfl','nba','epl'],identity_url:'https://www.espn.com/',checked_at:'2026-11-05',role:'Sports schedules, boxscores and attributed reporting.'},
   {id:'shams',name:'Shams Charania',handle:'ShamsCharania',tier:'reported',topics:['nba'],identity_url:'https://us.espnpressroom.com/bios/shams-charania/',checked_at:'2026-11-05',role:'ESPN Senior NBA Insider. Reported availability needs confirmation with an official dated report.'},
   {id:'romano',name:'Fabrizio Romano',handle:'FabrizioRomano',tier:'reported',topics:['epl'],identity_url:'https://www.paramountpressexpress.com/cbs-sports/shows/soccer/talent/?view=fabrizio-romano-2',checked_at:'2026-11-05',role:'CBS Sports soccer insider. Transfer reports are not a match forecast.'},
   {id:'nba',name:'NBA',handle:'NBA',tier:'primary',topics:['nba'],identity_url:'https://www.nba.com/',checked_at:'2026-11-05',role:'League announcements and official game context.'},
@@ -14,14 +33,14 @@ export const SOURCE_CATALOG=Object.freeze([
 ].map(row=>Object.freeze({...row,accuracy_status:'not_outcome_validated',accuracy_note:'Identity and topic scope are documented. No dated, held-out accuracy record has been established.'})));
 export function evidenceTopic(market){
   const text=[market?.ticker,market?.title,market?.rules_primary].join(' ');
-  return /^KXNBAGAME-/i.test(text)||/\bNBA\b/i.test(text)?'nba':/^KXEPLGAME-/i.test(text)||/premier league/i.test(text)?'epl':/spotify|billboard|apple music|top song|top artist/i.test(text)?'music':/film|movie|rotten tomatoes|box office|oscar/i.test(text)?'film':'other';
+  return /^KXNFLGAME-/i.test(text)||/\bNFL\b/i.test(text)?'nfl':/^KXNBAGAME-/i.test(text)||/\bNBA\b/i.test(text)?'nba':/^KXEPLGAME-/i.test(text)||/premier league/i.test(text)?'epl':/spotify|billboard|apple music|top song|top artist/i.test(text)?'music':/film|movie|rotten tomatoes|box office|oscar/i.test(text)?'film':'other';
 }
 export function evidenceEntities(market,{sports}={}){
   const values=(sports?.teams||[]).map(t=>t.name).filter(Boolean);
   if(values.length)return [...new Set(values)];
   for(const key of ['Artist','Movie','Film','Song','Team'])if(typeof market?.custom_strike?.[key]==='string')values.push(market.custom_strike[key]);
-  if(typeof market?.yes_sub_title==='string'&&!/^(yes|no|tie|draw|over|under|other)$/i.test(market.yes_sub_title.trim()))values.push(market.yes_sub_title);
-  return [...new Set(values.map(v=>v.trim()).filter(v=>words(v).length))].slice(0,4);
+  if(typeof market?.yes_sub_title==='string'&&!/^(yes|no|tie|draw|over|under|other|both|neither|none of the above)$/i.test(market.yes_sub_title.trim()))values.push(market.yes_sub_title);
+  return [...new Set(values.map(v=>v.trim()).filter(v=>v.length<=90&&topicWords(v).length))].slice(0,4);
 }
 export function evidenceSearchTerms(market,{sports}={}){
   const entities=evidenceEntities(market,{sports}),teams=sports?.teams||[],names=[...entities];
@@ -31,7 +50,8 @@ export function evidenceSearchTerms(market,{sports}={}){
 }
 export function safePublicURL(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
 function interpretation(text,topic){
-  if(/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes)\b/.test(text)&&['nba','epl'].includes(topic))return {claim_type:'availability_report',impact:'A confirmed absence or minutes restriction can change rotations and opponent matchups. Match the player, game date and official participation report; these words alone do not quantify an effect on YES.'};
+  if(topic==='nfl'&&/\b(qb|quarterback)\b/.test(text)&&specificUpdate.test(text))return {claim_type:'availability_report',impact:'A change at quarterback can alter pass depth, sack exposure and play calling. Check who takes first-team reps and who is confirmed at kickoff. A team-strength model cannot isolate this change from the headline.'};
+  if(/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes)\b/.test(text)&&sportsTopics.has(topic))return {claim_type:'availability_report',impact:'Check the player, expected role and official game status. A confirmed absence can change the lineup and matchup.'};
   if(/\b(postponed|cancelled|canceled|rescheduled)\b/.test(text))return {claim_type:'schedule_report',impact:'A schedule change can affect cancellation or rescheduling rules. Verify the official event notice and the exact contract settlement treatment before interpreting any price.'};
   if(topic==='film'&&/\b(review|reviews|critics|tomatometer)\b/.test(text))return {claim_type:'critic_context',impact:'Review coverage can inform critical reception. Verify the review count, embargo date and score definition; positive-review share does not directly measure ticket sales or the probability of a box-office threshold.'};
   if(topic==='film'&&/\b(presales|tickets|opening|gross|screens)\b/.test(text))return {claim_type:'demand_context',impact:'Reported presales, screens or gross can inform demand only when the release territory, currency and weekend match the contract. Separate forecasts from realized box-office receipts.'};
@@ -46,22 +66,29 @@ export function explicitlyHistorical(title,url,now){
 export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={}){
   const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
   const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),seen=new Set(),ranked=[];
+  const titleTerms=topicWords(market?.title).slice(0,6),topicGroups=evidenceTopicGroups(market);
   for(const item of (items||[]).slice(0,200)){
     const title=String(item.title||item.excerpt||'').slice(0,500),excerpt=String(item.excerpt||item.description||'').slice(0,900),text=normalize(title+' '+excerpt),url=safePublicURL(item.url),asof=item.as_of||item.published_at||item.created_at,date=Date.parse(asof);
-    if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||explicitlyHistorical(title,url,now)||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway)\b/.test(text))continue;
-    const matched=entities.filter(entity=>{const parts=words(entity),tokens=text.split(' '),nickname=parts.at(-1),teamName=(sports?.teams||[]).some(t=>t.name===entity),distinctNickname=teamName&&nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname);return parts.length>0&&(parts.every(w=>tokens.includes(w))||distinctNickname&&tokens.includes(nickname));});
-    if(!matched.length)continue;
+    if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||explicitlyHistorical(title,url,now)||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway|promo code|bonus bets|free bets|survivor pool|fantasy football|betting odds)\b/.test(text))continue;
+    const tokens=new Set(text.split(' '));
+    const matched=entities.filter(entity=>{const parts=words(entity),nickname=parts.at(-1),teamName=(sports?.teams||[]).some(t=>t.name===entity),distinctNickname=teamName&&nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname);return parts.length>0&&(parts.every(w=>tokens.has(w))||distinctNickname&&tokens.has(nickname));});
+    const groupTerms=topicGroups.map(group=>group.find(term=>(' '+text+' ').includes(' '+normalize(term)+' '))).filter(Boolean);
+    const relatedTerms=!matched.length&&!sportsTopics.has(topic)&&!['reddit','x'].includes(item.platform)?
+      topicGroups.length?(groupTerms.length===topicGroups.length?groupTerms:[]):titleTerms.filter(term=>tokens.has(term)):[];
+    if(!matched.length&&relatedTerms.length<2)continue;
     const fixturePage=/\b(game details|game summary|match report|box ?score|live score|game preview|game recap|highlights)\b/.test(normalize(title));
-    if(['nba','epl'].includes(topic)&&fixturePage&&(sports?.teams||[]).length===2&&sports.teams.some(team=>!matched.includes(team.name)))continue;
+    if(sportsTopics.has(topic)&&fixturePage&&(sports?.teams||[]).length===2&&sports.teams.some(team=>!matched.includes(team.name)))continue;
     const identityURL=new URL(safePublicURL(item.publisher_url)||url),postURL=new URL(url),source=SOURCE_CATALOG.find(s=>s.handle&&item.platform==='x'&&postURL.hostname==='x.com'&&postURL.pathname.split('/')[1]?.toLowerCase()===s.handle.toLowerCase()&&s.handle.toLowerCase()===String(item.author||'').toLowerCase()||s.domain&&(identityURL.hostname===s.domain||identityURL.hostname.endsWith('.'+s.domain)));
     const tier=item.platform==='reddit'?'community_context':source?.tier||'unverified_context';
-    const specificity=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart)\b/.test(text);
+    const specificity=specificUpdate.test(text);
     const reputation={primary:1,reported:.8,specialist_context:.55,community_context:.2,unverified_context:.35}[tier]??.35;
-    const relevance=Math.min(1,matched.length/Math.min(2,entities.length)),freshness=Math.exp(-(now-date)/(36*3600000)),score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity)));
+    const relevance=matched.length?Math.min(1,matched.length/Math.min(2,entities.length)):Math.min(.5,relatedTerms.length/Math.max(1,topicGroups.length||titleTerms.length)),freshness=Math.exp(-(now-date)/(36*3600000)),score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity)));
     const key=normalize(title).replace(/\b(espn|reuters|associated press|variety|the hollywood reporter)\b/g,'').trim();if(seen.has(key))continue;seen.add(key);
-    ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,...interpretation(text,topic),
+    const teamMatches=(sports?.teams||[]).filter(team=>matched.includes(team.name)).length;
+    const match_scope=!matched.length||topicGroups.length&&groupTerms.length<topicGroups.length||sportsTopics.has(topic)&&sports?.teams?.length===2&&teamMatches!==2?'related':'matched';
+    ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,match_scope,...interpretation(text,topic),
       confidence:tier==='primary'?'primary_source':tier==='reported'?'attributed_report':'unverified_context',metrics:item.metrics||{},
-      why_relevant:'Names '+matched.join(' and ')+'. '+(specificity?'Contains a possible availability, schedule, review, demand or chart update.':'Provides topic context for the selected outcome.'),
+      why_relevant:relatedTerms.length?'Shares the terms '+relatedTerms.join(', ')+'. Verify the subject, date and measurement before using it.':'Names '+matched.join(' and ')+'. '+(match_scope==='related'?(sportsTopics.has(topic)?'This is a team or player update. Check the exact game before applying it.':'This is an entity mention. Check whether it covers the specific contract measurement.'):specificity?'Includes a specific update to review.':'Provides context for the selected outcome.'),
       limitations:[...(item.limitations||[]),...(item.platform==='reddit'?['Community votes and heuristics do not prove authenticity or factual accuracy.']:[]),'Editorial relevance rank; not a probability, accuracy score or estimate of price impact.'],topic,matched_entities:matched});
   }
   ranked.sort((a,b)=>b.score-a.score||b.as_of.localeCompare(a.as_of));

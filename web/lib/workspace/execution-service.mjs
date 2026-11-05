@@ -16,7 +16,8 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
   const parsed=parseExecutionRequest({ticker,controls,model}),deps={book,workspaceResearch,marketFees,feed:marketFeed,now:Date.now,...dependencies};
   const [research,restDepth,fees]=await Promise.all([deps.workspaceResearch(ticker,{fast:true,model:parsed.model}),deps.book(ticker,1),deps.marketFees(ticker).catch(()=>null)]);
   if(research.ticker!==ticker||research.market?.ticker!==ticker||restDepth.ticker!==ticker)throw new RangeError('The execution inputs do not match the selected contract');
-  const now=deps.now(),source=research.forecast||{},forecast={...usableForecast(research,now,ticker),source_as_of:source.source_as_of,validation:source.validation};
+  const now=deps.now(),source=research.forecast||{},forecast={...usableForecast(research,now,ticker),source_as_of:source.source_as_of,validation:source.validation,
+    outcomes:source.outcomes,expected_settlement_value:source.expected_settlement_value,settlement_value_interval:source.settlement_value_interval};
   const captured=deps.feed.researchSnapshot?.(ticker),rows=captured?.rows||deps.feed.observations?.(ticker)||[],lastRow=rows.at(-1),last=Date.parse(lastRow?.received_at||''),recent=Number.isFinite(last)&&last<=now+5000&&now-last<=90000;
   function matches(depth){
     try{const checked=globalThis.KalshiPaper.checkedBook(depth,ticker,{now}),bid=checked.yes[0],no=checked.no[0];
@@ -27,14 +28,15 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
   const depth=native?captured.book:restDepth,aligned=recent&&(captured?native:matches(depth)),history=aligned?rows:[],feeVerified=Number.isFinite(fees?.coefficient)&&fees.coefficient>=0&&fees.coefficient<=1,coefficient=feeVerified?fees.coefficient:.07;
   const result=executionResearch({market:research.market,book:depth,forecast,book_history:history,observation_end_seconds:native?captured.observed_until_seconds:undefined,controls:parsed.controls,fee_coefficient:coefficient,now});
   return {...result,ticker,title:research.market.yes_sub_title||research.title||research.market.title,as_of:new Date(now).toISOString(),book_as_of:depth.as_of,
-    forecast:{...result.forecast,eligible:forecast.eligible,experimental:forecast.experimental,release_reason:forecast.reason},
+    forecast:{...result.forecast,eligible:forecast.eligible,experimental:forecast.experimental,release_reason:forecast.reason,
+      ...(forecast.valid&&forecast.fresh&&source.outcomes?{outcomes:source.outcomes,expected_settlement_value:source.expected_settlement_value,settlement_value_interval:source.settlement_value_interval}:{})},
     data_quality:{...result.data_quality,gaps:[...(result.data_quality?.gaps||[]),...(!aligned?[recent?'The current book and event window are unaligned; live flow adjustments are withheld.':'A recent continuous stream window is unavailable; live flow adjustments are withheld.']:[])]},
     fee_schedule:{status:feeVerified?'series_coefficient_available':'assumed_default',coefficient,
       note:feeVerified?'Uses the reported series coefficient with the modeled taker formula; individual market exceptions are not verified.':'The current fee coefficient could not be verified. A 0.07 general taker assumption is used for this scenario.'},
     assumptions:{...result.assumptions,fees:feeVerified?'Reported series coefficient; observed-depth quotes use per-level cent rounding. Market-specific exceptions remain unverified.':'Assumed general 0.07 coefficient because current fee metadata is unavailable or unsupported. This is not a verified fee quote.'},
     settlement:feeVerified?result.settlement:{...result.settlement,decision:'REVIEW',fee_verified:false,reason:'Current fee metadata is unverified. The hold-versus-exit result is an assumption-based scenario; a released decision is withheld.'},
     immediate_execution:{...result.immediate_execution,side:parsed.controls.side,action:parsed.controls.action,fee_coefficient:coefficient,slippage_cents:2,
-      unit:'USD and contract quantities',scope:'Current visible depth and per-level modeled taker fees; a snapshot estimate, not a guaranteed fill.'},
+      unit:'USD and contract quantities',scope:'Simulation against the latest observed depth with taker fees rounded by price level.'},
     live_history:{status:aligned&&history.length>1?'observed':recent&&!aligned?'unaligned':'collecting',observations:history.length,capacity:1024,analysis_limit:512,book_source:native?'aligned_native_stream':'REST',
       sampling:'Every validated order-book message before browser throttling, while this backend has an active subscription. The subscription explicitly requests non-conflated updates. A replacement snapshot, one-sided book or connection gap starts a new generation.',
       clock:'Local monotonic receipt time; arrival clustering describes quote updates, not trade or news arrival intensity.',

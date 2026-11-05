@@ -3,6 +3,8 @@ import { marketDetails, request, book, validateTicker } from '../live.mjs';
 import { CATEGORIES } from './catalog.mjs';
 import { researchReport, modelEvidence } from './index.mjs';
 import { executionEstimate } from './math.mjs';
+import { evidenceEntities,evidenceTopicGroups,topicWords } from '../workspace/source-ranking.mjs';
+import { nflContractIdentity } from '../workspace/nfl-source.mjs';
 
 const NEWS_ENDPOINT = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const RSS_ENDPOINT = 'https://news.google.com/rss/search';
@@ -31,6 +33,12 @@ const newsText=value=>clean(value,1000).toLowerCase().normalize('NFKD').replace(
 const hasPhrase=(text,phrase)=>(' '+text+' ').includes(' '+newsText(phrase)+' ');
 export function sportsNewsContext(market,category) {
   const ticker=market.ticker||'';
+  if(ticker.startsWith('KXNFLGAME-')){
+    const identity=nflContractIdentity(market);
+    if(!identity.available)return {unsupported:true};
+    const teams=identity.team_names,aliases=[...teams,...teams.map(name=>name.split(' ').at(-1))];
+    return {league:'NFL',teams,aliases,query:'"NFL" ('+aliases.map(name=>'"'+name+'"').join(' OR ')+') sourcelang:english'};
+  }
   if(ticker.startsWith('KXNBAGAME-')){
     const team=NBA_NEWS_TEAMS[ticker.split('-').at(-1)];
     if(!team)return {unsupported:true};
@@ -56,6 +64,7 @@ export function filterSportsHeadlines(news,context) {
       const canonical=context.teams.some(team=>hasPhrase(text,team)&&!['Miami Heat','Utah Jazz','Orlando Magic'].includes(team));
       return identity&&(/\b(?:nba|basketball)\b/.test(text)||canonical||/\b(?:76ers|sixers|timberwolves|lakers|celtics|cavaliers|mavericks|clippers|grizzlies|pelicans|raptors|trail blazers|knicks)\b/.test(text));
     }
+    if(context.league==='NFL')return identity&&(/\b(?:nfl|football|quarterback|qb|injury|practice|head coach)\b/.test(text)||context.teams.some(team=>hasPhrase(text,team)));
     return identity&&/\b(?:premier league|epl|soccer|football|line ?ups?|starting xi|match preview|match report)\b/.test(text);
   });
   return {...news,articles,status:news?.status==='live'&&!articles.length?'empty':news?.status||'unavailable',
@@ -64,13 +73,15 @@ export function filterSportsHeadlines(news,context) {
 
 export function newsQuery(market, category) {
   const sports=sportsNewsContext(market,category);if(sports)return sports.query||null;
+  const groups=evidenceTopicGroups(market);
+  if(groups.length)return groups.map(group=>group.length===1?'"'+group[0]+'"':'('+group.map(term=>'"'+term+'"').join(' OR ')+')').join(' ')+' sourcelang:english';
   const fixed = { travel: '"TSA" "passenger"', weather: '"weather" "temperature"',
     inflation: '"US" "inflation"', labor: '"US" "unemployment"',
     crypto: /ETH/.test(market.ticker || '') ? '"Ethereum"' : '"Bitcoin"' };
   if (fixed[category?.id]) return fixed[category.id] + ' sourcelang:english';
-  const stop = new Set('will would could should the a an to in on by of for is are be at win wins yes no over under than before after'.split(' '));
-  const terms = clean(market.title, 300).match(/[\p{L}\p{N}]+/gu) || [];
-  const selected = [...new Set(terms.filter(term => term.length >= 3 && !/^\d+$/.test(term) && !stop.has(term.toLowerCase())))].slice(0, 7);
+  const phrase=evidenceEntities(market).map(value=>topicWords(value).slice(0,5).join(' ')).find(value=>value.includes(' '));
+  if(phrase)return '"'+phrase+'" sourcelang:english';
+  const selected=topicWords(clean(market.title,300)).slice(0,3);
   return selected.length ? selected.map(term => `"${term}"`).join(' ') + ' sourcelang:english' : null;
 }
 
@@ -139,7 +150,7 @@ async function boundedNewsBytes(response) {
   return Buffer.concat(chunks);
 }
 
-async function fetchRssHeadlines(query, { fetcher, now, state, reason }) {
+async function fetchRssHeadlines(query, { fetcher, now, state, reason, timeoutMs=12000 }) {
   state.rssCache ||= new Map(); state.rssInflight ||= new Map();
   const url = new URL(RSS_ENDPOINT);
   const rssQuery = query.replace(/\bsourcelang:[A-Za-z-]+\b/gi, '').trim().slice(0, 350);
@@ -153,7 +164,7 @@ async function fetchRssHeadlines(query, { fetcher, now, state, reason }) {
     let value;
     try {
       const response = await fetcher(key, { method: 'GET', headers: { Accept: 'application/rss+xml, application/xml, text/xml',
-        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(12000), redirect: 'error', cache: 'no-store' });
+        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
       if (response.status === 429) { state.rssRetryAt = now() + 600000; throw new Error('Google News returned HTTP 429; retries paused'); }
       if (!response.ok) throw new Error('Google News returned HTTP ' + response.status);
       const bytes = await boundedNewsBytes(response), articles = parseGoogleNewsRss(bytes.toString('utf8'), now());
@@ -172,6 +183,13 @@ async function fetchRssHeadlines(query, { fetcher, now, state, reason }) {
   })();
   state.rssInflight.set(key, task);
   try { return await task; } finally { state.rssInflight.delete(key); }
+}
+
+export async function fetchPreviewHeadlines(market,{fetcher=fetch,now=Date.now,state=newsState}={}){
+  const series=market?.ticker?.split('-')[0],category=CATEGORIES.find(item=>item.series.includes(series));
+  const query=newsQuery(market,category);
+  if(!query)return {status:'not_applicable',articles:[]};
+  return fetchRssHeadlines(query,{fetcher,now,state,timeoutMs:3000});
 }
 
 export async function fetchHeadlines(query, { fetcher = fetch, now = Date.now, state = newsState } = {}) {
