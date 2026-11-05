@@ -37,6 +37,14 @@ test('matched player availability can qualify team news while city-only headline
     {title:'Los Angeles budget update',url:'https://example.org/city',as_of:new Date(NOW-60000).toISOString()}],market,{sports:{...sports,availability:[{name:'LeBron James'}]},now:NOW});
   assert.equal(value.length,2);assert.ok(value.every(row=>row.claim_type==='availability_report'));assert.ok(value.some(row=>row.matched_entities.includes('LeBron James')));
 });
+test('a newly indexed historical or different-opponent game page is excluded from current selected-trade news',()=>{
+  const selected={ticker:'KXNBAGAME-26NOV04ATLWAS-WAS',title:'Washington wins',yes_sub_title:'Washington Wizards'},context={teams:[{name:'Atlanta Hawks'},{name:'Washington Wizards'}]},base={publisher:'NBA.com',as_of:new Date(NOW-60000).toISOString(),time_basis:'provider_first_seen'};
+  const result=rankEvidence([{...base,title:'Washington Wizards vs Charlotte Hornets Mar 9, 2015 Game Details - NBA.com',url:'https://www.nba.com/game/was-vs-cha-0021400938'},
+    {...base,title:'Washington Wizards vs Charlotte Hornets Nov 4, 2026 Game Details - NBA.com',url:'https://www.nba.com/game/was-vs-cha-fixture'},
+    {...base,title:'Atlanta Hawks vs Washington Wizards Nov 4, 2026 Game Preview',url:'https://www.nba.com/game/atl-vs-was-fixture'},
+    {...base,title:'Washington Wizards reported player availability update',url:'https://www.espn.com/nba/story/availability'}],selected,{sports:context,now:NOW});
+  assert.equal(result.length,2);assert.ok(result.every(row=>!row.url.includes('cha')));assert.ok(result.some(row=>row.title.includes('availability')));
+});
 test('public Reddit collection stops at robots without requesting the post listing and shares the result',async()=>{
   const durable=memoryStore();let pages=0;
   const deps={env:{},store:durable,now:()=>NOW,publicPage:async()=>{pages++;return {status:'robots_blocked',reason:'Disallow: /',as_of:new Date(NOW).toISOString()};}};

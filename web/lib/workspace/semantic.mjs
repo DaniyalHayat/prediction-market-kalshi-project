@@ -3,7 +3,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {validateTicker} from '../live.mjs';
-import {safePublicURL} from './source-ranking.mjs';
+import {safePublicURL,explicitlyHistorical} from './source-ranking.mjs';
 export const EMBEDDING_MODEL=Object.freeze({id:'Xenova/all-MiniLM-L6-v2',revision:'751bff37182d3f1213fa05d7196b954e230abad9',dimensions:384,dtype:'q8',pooling:'mean',normalize:true,device:'cpu'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 const clean=(value,maximum)=>String(value||'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,' ').trim().slice(0,maximum);
@@ -41,11 +41,11 @@ export function publicEvidenceChunks(market,evidence,{now=Date.now()}={}){
   const ticker=validateTicker(market?.ticker);if(evidence?.ticker!==ticker)throw new RangeError('Evidence identity must match the selected contract');
   const rows=[],add=(title,text,url,publisher,kind,published,retrieved,retention=7*86400000)=>{
     url=publicURL(url);const date=Date.parse(retrieved||evidence.as_of),publication=Date.parse(published),expiry=Math.min(date+retention,Number.isFinite(publication)?publication+7*86400000:Infinity);
-    if(!url||!Number.isFinite(date)||date>now+300000||expiry<=now)return;
+    if(!url||!Number.isFinite(date)||date>now+300000||expiry<=now||explicitlyHistorical(title,url,now))return;
     for(const content of chunks(text)){rows.push({ticker,id:hash(ticker+'\n'+url+'\n'+content),source_url:url,title:clean(title,400),content,publisher:clean(publisher||'Public source',160),source_kind:kind,published_at:Number.isFinite(publication)?new Date(publication).toISOString():null,retrieved_at:new Date(date).toISOString(),expires_at:new Date(expiry).toISOString()});if(rows.length>=32)break;}
   };
   add(market.title,[market.title,market.yes_sub_title,'Primary settlement rules: '+(market.rules_primary||''),'Secondary settlement rules: '+(market.rules_secondary||'')].join('\n'),'https://external-api.kalshi.com/trade-api/v2/markets/'+encodeURIComponent(ticker),'Kalshi','public_contract_rules',null,evidence.as_of);
-  for(const item of evidence.items||[]){if(rows.length>=32)break;add(item.title,[item.title,item.excerpt].filter(Boolean).join('\n'),item.url,item.publisher,item.platform==='reddit'?'community_context':item.source_tier||'public_metadata',item.as_of,item.retrieved_at||evidence.as_of,item.platform==='reddit'?900000:7*86400000);}
+  for(const item of evidence.items||[]){if(rows.length>=32)break;add(item.title,[item.title,item.excerpt].filter(Boolean).join('\n'),item.url,item.publisher,item.platform==='reddit'?'community_context':item.source_tier||'public_metadata',item.time_basis==='provider_first_seen'?null:item.published_at||item.as_of,item.retrieved_at||evidence.as_of,item.platform==='reddit'?900000:7*86400000);}
   const music=evidence.music_alternatives;if(rows.length<32&&music?.status==='available')for(const row of (music.matched_tracks||[]).slice(0,3))add('Secondary music chart context',`${row.artist}: ${row.name}. US daily song rank ${row.rank}; reported daily song streams ${row.streams}; measurement date ${row.measurement_date}. ${music.settlement_note}`,music.source_url,'Kworb','secondary_measurement',row.measurement_date,music.as_of);
   return [...new Map(rows.slice(0,32).map(row=>[row.id,row])).values()];
 }
@@ -58,6 +58,10 @@ async function vectorSchema(db){
   const cached=capabilities.get(db);if(cached&&cached.until>Date.now())return cached.schema;
   const result=await db.query("SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace WHERE e.extname='vector' AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('market_lab.public_evidence_chunks') AND attname='embedding_vector' AND NOT attisdropped)");
   const schema=result.rows[0]?.schema,value=typeof schema==='string'&&/^[a-z_][a-z0-9_]*$/i.test(schema)?schema:null;capabilities.set(db,{schema:value,until:Date.now()+60000});return value;
+}
+async function evidenceTransaction(storage,db,run){
+  if(typeof storage?.transaction==='function')return storage.transaction(run);
+  const client=await db.connect();try{await client.query('BEGIN');const result=await run(client);await client.query('COMMIT');return result;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
 export function reciprocalRankFusion(lexical,semantic,{limit=6,constant=60}={}){
   const fused=new Map();for(const [kind,list] of [['lexical',lexical],['semantic',semantic]])list.forEach((row,index)=>{const current=fused.get(row.id)||{...row,rrf_score:0,lexical_rank:null,semantic_rank:null};current.rrf_score+=1/(constant+index+1);current[kind+'_rank']=index+1;if(row.cosine_similarity!==undefined)current.cosine_similarity=row.cosine_similarity;fused.set(row.id,current);});
@@ -80,13 +84,16 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
     const embedded=new Map(pending.map((row,i)=>[row.id,vectors[i]])),normalized=rows.map(row=>({...row,embedding:embedded.get(row.id)||null,model_id:vectors.length?EMBEDDING_MODEL.id:null,model_revision:vectors.length?EMBEDDING_MODEL.revision:null}));
     if(db){
       const schema=await vectorSchema(db);const values=normalized.map(row=>({...row,vector_literal:row.embedding?'['+row.embedding.join(',')+']':null}));
-      await db.query(`INSERT INTO market_lab.public_evidence_chunks(ticker,id,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision${schema?',embedding_vector':''})
+      await evidenceTransaction(storage,db,async client=>{
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['public-evidence#'+market.ticker]);
+      await client.query(`INSERT INTO market_lab.public_evidence_chunks(ticker,id,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision${schema?',embedding_vector':''})
         SELECT ticker,id,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision${schema?`,vector_literal::"${schema}".vector`:''} FROM jsonb_to_recordset($1::jsonb) AS x(ticker text,id text,source_url text,title text,content text,publisher text,source_kind text,published_at timestamptz,retrieved_at timestamptz,expires_at timestamptz,embedding double precision[],model_id text,model_revision text,vector_literal text)
         ON CONFLICT(ticker,id) DO UPDATE SET retrieved_at=excluded.retrieved_at,expires_at=excluded.expires_at,embedding=coalesce(excluded.embedding,public_evidence_chunks.embedding),model_id=coalesce(excluded.model_id,public_evidence_chunks.model_id),model_revision=coalesce(excluded.model_revision,public_evidence_chunks.model_revision)${schema?',embedding_vector=coalesce(excluded.embedding_vector,public_evidence_chunks.embedding_vector)':''}`,[JSON.stringify(values)]);
-      await db.query('DELETE FROM market_lab.public_evidence_chunks WHERE expires_at<=now() OR (ticker=$1 AND id IN(SELECT id FROM market_lab.public_evidence_chunks WHERE ticker=$1 ORDER BY retrieved_at DESC,id OFFSET 256))',[market.ticker]);
+      await client.query('DELETE FROM market_lab.public_evidence_chunks WHERE expires_at<=now() OR (ticker=$1 AND id::text<>ALL($2::text[]))',[market.ticker,rows.map(row=>row.id)]);
+      });
       return {status:'retained',chunks:rows.length,embedded_chunks:vectors.length,semantic_status:semanticStatus,storage:schema?'postgres_pgvector':'postgres_array',model:EMBEDDING_MODEL};
     }
-    const merged=[...new Map([...(memory.get(market.ticker)||[]).filter(r=>Date.parse(r.expires_at)>now()),...normalized.map(r=>{const old=(memory.get(market.ticker)||[]).find(row=>row.id===r.id);return {...r,embedding:r.embedding||old?.embedding||null,model_id:r.model_id||old?.model_id||null,model_revision:r.model_revision||old?.model_revision||null};})].map(r=>[r.id,r])).values()].slice(-256);memory.delete(market.ticker);memory.set(market.ticker,merged);
+    const merged=normalized.map(r=>{const old=(memory.get(market.ticker)||[]).find(row=>row.id===r.id);return {...r,embedding:r.embedding||old?.embedding||null,model_id:r.model_id||old?.model_id||null,model_revision:r.model_revision||old?.model_revision||null};});memory.delete(market.ticker);memory.set(market.ticker,merged);
     while([...memory.values()].reduce((s,r)=>s+r.length,0)>2000)memory.delete(memory.keys().next().value);
     return {status:'retained_ephemeral',chunks:rows.length,embedded_chunks:vectors.length,semantic_status:semanticStatus,storage:'process_memory',model:EMBEDDING_MODEL,reason:'No relational evidence store is configured. Retention is local to this process and disappears on restart.'};
   }
@@ -105,7 +112,8 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
       if(vector&&schema){semantic=(await db.query(`WITH scoped AS MATERIALIZED(SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding_vector FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding_vector IS NOT NULL ORDER BY retrieved_at DESC LIMIT 256) SELECT *,1-(embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector) AS cosine_similarity FROM scoped ORDER BY embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector LIMIT 30`,[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision,'['+vector.join(',')+']'])).rows.filter(row=>row.cosine_similarity>=.15);}
       else if(vector)semantic=rows.filter(row=>validVector(row.embedding)&&row.model_revision===EMBEDDING_MODEL.revision&&row.model_id===EMBEDDING_MODEL.id).map(row=>({...row,cosine_similarity:cosineSimilarity(vector,row.embedding)})).filter(row=>row.cosine_similarity>=.15).sort((a,b)=>b.cosine_similarity-a.cosine_similarity).slice(0,30);
     }catch{semantic=[];semanticStatus='unavailable';}
-    const citations=reciprocalRankFusion(lexical,semantic,{limit}).map((row,index)=>({citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,cosine_similarity:row.cosine_similarity??null}));
+    const current=rows=>rows.filter(row=>!explicitlyHistorical(row.title,row.source_url,now()));
+    const citations=reciprocalRankFusion(current(lexical),current(semantic),{limit}).map((row,index)=>({citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,cosine_similarity:row.cosine_similarity??null}));
     return {ticker,query,status:citations.length?'available':'no_matches',citations,sources:citations.map(c=>({label:c.citation_id+' · '+c.publisher,url:c.url,retrieved_at:c.retrieved_at})),retrieval:{mode:semanticStatus==='available'?'hybrid_rrf':'lexical_only',semantic_status:semanticStatus,storage:db?(schema?'postgres_pgvector':'postgres_array'):'process_memory',fusion_constant:60,candidate_limit:256,model:EMBEDDING_MODEL},as_of:new Date(now()).toISOString(),scope:'Only retained public evidence for this exact ticker. Search makes no feed, news, X, Reddit or market requests. Cosine/RRF are retrieval ranks, not factual confidence or trading probabilities.'};
   }
   return {index,search};
