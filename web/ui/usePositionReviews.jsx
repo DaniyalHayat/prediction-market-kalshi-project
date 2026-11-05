@@ -81,7 +81,7 @@ export default function usePositionReviews(positions,model){
     return row?.signature===JSON.stringify(positionReviewInput(position,positions,model))?row:null;
   };
   const alerts=positions.filter(row=>row.remaining_quantity>1e-8&&settings[row.id]?.unread).slice(0,8).map(row=>({
-    id:row.id,title:row.title||row.ticker,reason:resultFor(row)?.value?.reason||'Open My Trades for the current bids and a fresh check.'
+    id:row.id,title:row.title||row.ticker,reason:resultFor(row)?.value?.action==='SELL'?resultFor(row).value.reason:'Earlier SELL signal. Run a fresh scan before closing.'
   }));
   return {run,resultFor,settings,alerts,dismiss:id=>updateSetting(id,{unread:false}),
     toggle:(id,enabled)=>updateSetting(id,{paused:!enabled}),

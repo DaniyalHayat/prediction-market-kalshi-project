@@ -1,4 +1,5 @@
 import {executionCurve} from './execution-curve.mjs';
+import {nflContractIdentity} from './nfl-source.mjs';
 
 export function usableForecast(research,now=Date.now(),expectedTicker) {
   const f=research?.forecast,p=f?.probability,range=f?.interval;
@@ -10,6 +11,27 @@ export function usableForecast(research,now=Date.now(),expectedTicker) {
   const fresh=Number.isFinite(age)&&age>=-5000&&age<=maxAge&&!research?.error&&!expiredDomain;
   const eligible=valid&&f?.eligible!==false&&validated&&f?.evidence?.tier>=2&&fresh;
   return {valid,eligible,fresh,experimental:Boolean(f?.experimental),probability:valid?p:null,interval:valid?range:null,model:f?.model_name||null,reason:!identity?'The research packet does not match this exact contract.':!valid?'No matched independent probability is available.':research?.error?'The research refresh failed. Cached estimates cannot drive a current position action.':expiredDomain?'This pregame estimate expired when the event started. Fresh in-play research is required.':!eligible?'The latest model has not met its release, coverage or freshness requirements.':null};
+}
+
+function nflPositionPayout(research,market,side,now,forecast){
+  const estimate=research.forecast,sport=research.extensions?.sports,identity=nflContractIdentity(market);
+  if(estimate.settlement_kind!=='win_loss_half_on_tie'||!identity.available||!identity.tie_payout_verified)
+    return {reason:'The current contract rules did not verify the modeled $0.50 tie payout.'};
+  const {win,loss,tie}=estimate.outcomes,expected=estimate.expected_settlement_value,bounds=estimate.settlement_value_interval;
+  const bounded=value=>Number.isFinite(value)&&value>=0&&value<=1;
+  if(![win,loss,tie,expected].every(bounded)||Math.abs(win+loss+tie-1)>1e-8||
+    Math.abs(win-estimate.probability)>1e-8||Math.abs(win+tie/2-expected)>1e-8||
+    !Array.isArray(bounds)||bounds.length!==2||!bounds.every(bounded)||bounds[0]>expected||expected>bounds[1])
+    return {reason:'The NFL outcome probabilities and payout range did not reconcile.'};
+  const isYes=side==='yes',game=sport?.event,v=estimate.validation;
+  const eligible=forecast.fresh&&!forecast.experimental&&estimate.model_release_passed===true&&v?.passed===true&&
+    Number.isFinite(v.payout_mse)&&v.payout_mse>=0&&Number.isFinite(v.baseline_payout_mse)&&v.payout_mse<v.baseline_payout_mse&&
+    sport?.league==='nfl'&&sport.coverage?.partial===false&&sport.selection?.code===identity.yes_code&&
+    game?.state==='pre'&&game.status_name==='STATUS_SCHEDULED'&&game.completed===false&&Date.parse(game.played_at)>now&&
+    ['active','open'].includes(market.status)&&Date.parse(market.close_time)>now;
+  return {value:isYes?expected:1-expected,range:isYes?bounds:[1-bounds[1],1-bounds[0]],
+    win_probability:isYes?win:loss,tie_probability:tie,tie_payout:.5,eligible,
+    reason:forecast.fresh?'The tie-adjusted pregame model has not cleared fixture, coverage and payout-validation checks.':forecast.reason};
 }
 
 export function evaluatePaperPosition(position,book,research,{now=Date.now(),feeCoefficient,slippage=2,actionBufferCents=1,maxPositionLoss,market,experimental=false}={}) {
@@ -32,14 +54,19 @@ export function evaluatePaperPosition(position,book,research,{now=Date.now(),fee
   result.forecast_fresh=forecast.fresh;
   if(Number.isFinite(maxPositionLoss)&&maxPositionLoss>=0&&basis>maxPositionLoss)return {...result,action:'TRIM',suggested_reduce_fraction:Math.max(0,Math.min(1,1-maxPositionLoss/basis)),reason:'The remaining cost basis exceeds your explicit position-loss limit. Reducing exposure restores that limit independently of a forecast.'};
   if(!forecast.valid)return {...result,reason:forecast.reason};
-  if(research.forecast.outcomes)return {...result,reason:'Open Execution lab to compare a win, loss and $0.50 tie payout against the current exit price.'};
-  const probability=position.side==='yes'?forecast.probability:1-forecast.probability;
-  const interval=position.side==='yes'?forecast.interval:[1-forecast.interval[1],1-forecast.interval[0]];
-  Object.assign(result,{probability,interval,model:forecast.model,fair_value_range:interval.map(p=>p*q),expected_hold_profit_range:interval.map(p=>p*q-basis),
-    hold_vs_exit_range:interval.map(p=>p*q-exit.cash),expected_hold_profit:probability*q-basis,expected_hold_vs_exit:probability*q-exit.cash,
+  const payout=research.forecast.outcomes?nflPositionPayout(research,detail,position.side,now,forecast):null;
+  if(payout&&!payout.range)return {...result,reason:payout.reason};
+  const isYes=position.side==='yes';
+  const value=payout?.value??(isYes?forecast.probability:1-forecast.probability);
+  const range=payout?.range??(isYes?forecast.interval:[1-forecast.interval[1],1-forecast.interval[0]]);
+  Object.assign(result,{probability:payout?null:value,interval:payout?null:range,model:forecast.model,
+    ...(payout?{nfl_settlement:{win_probability:payout.win_probability,tie_probability:payout.tie_probability,tie_payout:payout.tie_payout,
+      expected_per_contract:value,range_per_contract:range}}:{}),
+    fair_value_range:range.map(p=>p*q),expected_hold_profit_range:range.map(p=>p*q-basis),
+    hold_vs_exit_range:range.map(p=>p*q-exit.cash),expected_hold_profit:value*q-basis,expected_hold_vs_exit:value*q-exit.cash,
     entry_probability:position.entry_probability??null,price_direction:'Bid P/L is descriptive; the action compares future payoff with executable exit proceeds.'});
-  const experimentalAction=experimental&&forecast.experimental&&forecast.fresh;
-  if(!forecast.eligible&&!experimentalAction)return {...result,reason:forecast.reason};
+  const experimentalAction=!payout&&experimental&&forecast.experimental&&forecast.fresh;
+  if(!(payout?.eligible??forecast.eligible)&&!experimentalAction)return {...result,reason:payout?.reason??forecast.reason};
   const prefix=experimentalAction?'Experimental paper scenario: ':'';
   result.experimental=experimentalAction;
   if(!Number.isFinite(actionBufferCents)||actionBufferCents<0||actionBufferCents>25)return {...result,reason:'Invalid action buffer; review the position assumptions.'};

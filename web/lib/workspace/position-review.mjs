@@ -110,6 +110,10 @@ function decisionSections(input,{evaluation,action,book,history,flow,news,reason
       action==='SELL'?'Even the higher estimate is below today’s net sale value, after a 1¢ per-contract cushion.':reason;
     sections.push({heading:'The hold-or-sell call',text:'The model’s estimated value for holding the remaining lot to settlement ranges from '+usd(range[0])+' to '+usd(range[1])+'. '+status+
       (action==='REVIEW'?' Look at the next fresh quote or independent source before drawing a conclusion.':' A forecast range is an estimate. The contract can still settle against you.')});
+    if(p.nfl_settlement){
+      const payout=p.nfl_settlement;
+      sections.push({heading:'What a tie changes',text:'This NFL contract pays $1 per winning contract, '+usd(payout.tie_payout)+' on either side after a tie, and $0 on a loss. The pregame model estimates a '+percent(payout.win_probability)+' chance for this side to win and '+percent(payout.tie_probability)+' for a tie. Weighting those payouts puts the average modeled hold value at '+usd(payout.expected_per_contract)+' per contract. The range reflects sensitivity to team strength and the historical tie rate. It excludes roster effects and can miss the actual result.'});
+    }
   }else if(action!=='SETTLE')sections.push({heading:'The hold-or-sell call',text:reason+' Check the missing source, liquidity or model coverage shown here before relying on a new call.'});
   const signal=history?.ticker===input.ticker?history.market_signal:null;
   const changes=signal?.status==='available'&&Number.isFinite(signal.last_midpoint)&&Number.isFinite(signal.prediction)&&Date.parse(signal.observed_at)>=now-180000;
