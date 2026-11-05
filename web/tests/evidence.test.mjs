@@ -31,6 +31,12 @@ test('Reddit quality screen excludes likely automation, downvoted posts, opinion
   const result=filterRedditPosts({data:{children:rows.map(data=>({data}))}},{now:NOW});
   assert.equal(result.posts.length,1);assert.equal(result.rejected.automation_heuristic,1);assert.equal(result.rejected.low_vote_support,1);assert.equal(result.rejected.opinion_or_low_evidence,2);assert.equal(result.rejected.duplicate,1);assert.match(result.posts[0].limitations[0],/not certified human/);
 });
+test('matched player availability can qualify team news while city-only headlines remain excluded',()=>{
+  const value=rankEvidence([{title:'LeBron James ruled out with injury',url:'https://www.espn.com/nba/story/lebron',as_of:new Date(NOW-60000).toISOString()},
+    {title:'Lakers confirm starting lineup',url:'https://www.espn.com/nba/story/lakers',as_of:new Date(NOW-60000).toISOString()},
+    {title:'Los Angeles budget update',url:'https://example.org/city',as_of:new Date(NOW-60000).toISOString()}],market,{sports:{...sports,availability:[{name:'LeBron James'}]},now:NOW});
+  assert.equal(value.length,2);assert.ok(value.every(row=>row.claim_type==='availability_report'));assert.ok(value.some(row=>row.matched_entities.includes('LeBron James')));
+});
 test('public Reddit collection stops at robots without requesting the post listing and shares the result',async()=>{
   const durable=memoryStore();let pages=0;
   const deps={env:{},store:durable,now:()=>NOW,publicPage:async()=>{pages++;return {status:'robots_blocked',reason:'Disallow: /',as_of:new Date(NOW).toISOString()};}};

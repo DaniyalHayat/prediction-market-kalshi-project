@@ -129,7 +129,7 @@ async function availability(league,game,data) {
     name:i.athlete?.displayName||'Unnamed player',player_id:String(i.athlete?.id||''),team_id:String(t.team.id),status:i.status||'Not specified',
     detail:[i.details?.type,i.details?.detail].filter(Boolean).join(' · '),reported_return:i.details?.returnDate||null})));
   const cutoff=Math.min(Date.now(),Date.parse(game.played_at));
-  const selected=reported.slice(0,4),history=data.games.filter(g=>Date.parse(g.played_at)<cutoff&&([game.home_id,game.away_id].includes(g.home_id)||[game.home_id,game.away_id].includes(g.away_id))).slice(selected.length?-24:-10);
+  const selected=reported.slice(0,4),history=[...new Map([game.home_id,game.away_id].flatMap(id=>data.games.filter(g=>Date.parse(g.played_at)<cutoff&&(g.home_id===id||g.away_id===id)).slice(selected.length?-12:-5)).map(g=>[g.id,g])).values()].sort((a,b)=>a.played_at.localeCompare(b.played_at));
   const boxes=league==='nba'?await boundedMap(history,3,async g=>{
     try{const response=await sourceJSON('ESPN boxscores',base+config.path+'/summary?event='+g.id,{ttl:604800});return {rows:parsePlayerStats(response.data),source:{kind:'player_boxscore',label:'ESPN completed-game player boxscore',url:response.source_url,retrieved_at:response.as_of,sha256:response.sha256}};}catch{return {rows:[]};}
   }):[];
