@@ -23,6 +23,12 @@ export function evidenceEntities(market,{sports}={}){
   if(typeof market?.yes_sub_title==='string'&&!/^(yes|no|tie|draw|over|under|other)$/i.test(market.yes_sub_title.trim()))values.push(market.yes_sub_title);
   return [...new Set(values.map(v=>v.trim()).filter(v=>words(v).length))].slice(0,4);
 }
+export function evidenceSearchTerms(market,{sports}={}){
+  const entities=evidenceEntities(market,{sports}),teams=sports?.teams||[],names=[...entities];
+  for(const team of teams){const parts=words(team.name),nickname=parts.at(-1);if(nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname))names.push(nickname);}
+  names.push(...(sports?.availability||[]).map(row=>row.name).filter(Boolean).slice(0,2));
+  return [...new Set(names)].slice(0,8);
+}
 export function safePublicURL(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
 function interpretation(text,topic){
   if(/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes)\b/.test(text)&&['nba','epl'].includes(topic))return {claim_type:'availability_report',impact:'A confirmed absence or minutes restriction can change rotations and opponent matchups. Match the player, game date and official participation report; these words alone do not quantify an effect on YES.'};
