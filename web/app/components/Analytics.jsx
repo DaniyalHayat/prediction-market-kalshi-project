@@ -6,12 +6,13 @@ import './analytics.css';
 
 const provider=analyticsProvider({gtm:process.env.NEXT_PUBLIC_GTM_CONTAINER_ID||'',ga:process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||''});
 const measurementID=provider?.kind==='ga'?provider.id:null;
+const knownMeasurementID=/^G-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||'')?process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID:null;
 export default function Analytics() {
   const [consent,setConsent]=useState('unknown'),[open,setOpen]=useState(false),[privacySignal,setPrivacySignal]=useState(false),[storageError,setStorageError]=useState(false);
   const enabled=useRef(false),configured=useRef(false),pageSent=useRef(false),scriptReady=useRef(false);
   function prepare(){
     if(!provider)return;
-    enabled.current=true;if(measurementID)window['ga-disable-'+measurementID]=false;
+    enabled.current=true;if(knownMeasurementID)window['ga-disable-'+knownMeasurementID]=false;
     window.dataLayer=window.dataLayer||[];
     window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
     if(!configured.current){
@@ -36,7 +37,7 @@ export default function Analytics() {
   }
   function stop(){
     enabled.current=false;if(!provider)return;
-    window.gtag?.('consent','update',deniedConsent);if(measurementID)window['ga-disable-'+measurementID]=true;
+    window.gtag?.('consent','update',deniedConsent);if(knownMeasurementID)window['ga-disable-'+knownMeasurementID]=true;
     for(const entry of document.cookie.split(';')){
       const name=entry.split('=')[0].trim();if(!/^_ga(?:_|$)/.test(name))continue;
       for(const domain of ['',window.location.hostname,'.'+window.location.hostname])document.cookie=`${name}=; Max-Age=0; Path=/; SameSite=Lax; Secure${domain?'; Domain='+domain:''}`;
