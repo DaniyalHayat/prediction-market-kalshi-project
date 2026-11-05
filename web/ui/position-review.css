@@ -1,0 +1,13 @@
+.trade-scan{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.trade-scan-controls,.trade-scan-progress,.trade-scan-result header,.position-alert{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.trade-scan-progress,.trade-scan-result small{color:var(--muted);font-size:12px}
+.trade-scan-progress span{font-variant-numeric:tabular-nums}
+.trade-scan-result{margin-top:12px;padding:15px;border:1px solid var(--line);border-radius:6px}
+.trade-scan-result h4{font-size:13px;margin:12px 0 4px}
+.trade-scan-result p,.trade-scan-result details{font-size:13px;line-height:1.65}
+.trade-scan-result details{margin:10px 0}
+.trade-scan-result dl>div,.trade-alternative{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.trade-alternative{padding:5px 0}
+.trade-scan-result dd{margin:0;color:var(--muted);font-variant-numeric:tabular-nums}
+.position-alert{margin:8px 14px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--warning-soft);font-size:13px}
+.position-alert>span{flex:1}

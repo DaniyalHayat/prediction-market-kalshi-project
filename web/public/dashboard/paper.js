@@ -83,7 +83,7 @@
  function applyOpen(ledger,execution,{id,time=new Date().toISOString(),title='',vertical=''}={}){
   if(!id||ledger.positions.some(p=>p.id===id))throw new Error('A unique paper-trade identifier is required.');
   if(execution?.action!=='buy'||!validTicker(execution.ticker)||!['yes','no'].includes(execution.side)||!Number.isFinite(execution.filled)||execution.filled<=0||!['cash','notional','fee'].every(k=>Number.isFinite(execution[k])&&execution[k]>=0))throw new Error('No valid ask depth was filled. No paper position was opened.');
-  if(ledger.positions.filter(p=>p.remaining_quantity>1e-8).length>=20)throw new Error('Close an open paper position before adding another; maximum 20 open positions.');
+  if(ledger.positions.filter(p=>p.remaining_quantity>1e-8).length>=48)throw new Error('Close an open paper position before adding another; maximum 48 open positions.');
   const position={id,ticker:execution.ticker,title,vertical,side:execution.side,opened_at:time,original_quantity:execution.filled,remaining_quantity:execution.filled,entry_cost:execution.notional,entry_fee:execution.fee,remaining_basis:execution.cash,realized_pnl:0,quote_as_of:execution.quote_as_of,quote_source:execution.quote_source,entry_assumptions:execution.assumptions};
   const trade={...execution,id:`${id}:buy`,position_id:id,occurred_at:time};
   return {...ledger,version:1,positions:[...ledger.positions,position].slice(-1000),trades:[...ledger.trades,trade].slice(-5000)};

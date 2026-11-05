@@ -66,9 +66,22 @@ export async function warehouseStatus() {
     (SELECT max(ingested_at) FROM market_lab.source_batches) AS latest_ingestion`);
   return {configured:true,storage:'Supabase Postgres and private evidence storage',...r.rows[0]};
 }
-export async function marketAttribution(){
-  const s=active();if(!s)return {rows:[],scope:'Relational history is not configured'};
-  const result=await s.db.query('SELECT * FROM market_lab.market_attribution ORDER BY abs(observed_price_change) DESC NULLS LAST,last_observed DESC LIMIT 30');
+export async function marketAttribution(s=active()){
+  if(!s)return {rows:[],scope:'Relational history is not configured'};
+  const result=await s.db.query(`WITH observations AS (
+    SELECT ticker, max(category) OVER history AS category, max(title) OVER history AS title,
+      count(*) OVER history AS observations, first_value(observed_at) OVER history AS first_observed,
+      last_value(observed_at) OVER history AS last_observed,
+      first_value((yes_bid+yes_ask)/2) OVER history AS first_midpoint,
+      last_value((yes_bid+yes_ask)/2) OVER history AS last_midpoint,
+      last_value(yes_ask-yes_bid) OVER history AS latest_spread, row_number() OVER history AS first_n
+    FROM market_lab.market_snapshots WHERE observed_at>now()-interval '7 days'
+    WINDOW history AS (PARTITION BY ticker ORDER BY observed_at ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+  )
+  SELECT ticker,category,title,observations,first_observed,last_observed,first_midpoint,last_midpoint,latest_spread,
+    last_midpoint-first_midpoint AS observed_price_change
+  FROM observations WHERE first_n=1
+  ORDER BY abs(last_midpoint-first_midpoint) DESC NULLS LAST,last_observed DESC,ticker LIMIT 30`);
   return {rows:result.rows,as_of:new Date().toISOString(),scope:'Seven-day observed exchange price changes and spreads. Requires at least two observations for a change. These are not causal explanations, strategy returns or realized P&L.'};
 }
 

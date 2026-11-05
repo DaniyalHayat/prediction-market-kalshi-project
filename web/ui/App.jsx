@@ -15,7 +15,10 @@ import {researchScreenOpinion,screenFreshness} from './screen-freshness.mjs';
 import ContractNews,{ReadMode,ReadText} from './ContractNews.jsx';
 import useAccount,{toggleSavedMarket} from './useAccount.jsx';
 import {CONTRACT_TABS,moveContractTab} from './contract-tabs.mjs';
+import usePaperLedger from './usePaperLedger.jsx';
+import usePositionReviews from './usePositionReviews.jsx';
 import './execution-lab.css';
+import './position-review.css';
 const Portfolio=dynamic(()=>import('./Portfolio.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading portfolio…</div>});
 const Recommendations=dynamic(()=>import('./Recommendations.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading research screen…</div>});
 const ExecutionLab=dynamic(()=>import('./ExecutionLab.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading execution lab…</div>});
@@ -24,6 +27,7 @@ const Journal=dynamic(()=>import('./Journal.jsx'));
 const Assistant=dynamic(()=>import('./Assistant.jsx'),{loading:()=> <aside className="assistant-panel" role="status">Opening the research assistant…</aside>});
 const Account=dynamic(()=>import('./Account.jsx'));
 const marketPageSize=48;
+const noPositions=[];
 
 const categories=[['sports','Sports',Trophy],['macro','Economy',Landmark],['crypto','Crypto',Bitcoin],['travel','Travel',Plane],
   ['weather','Weather',CloudSun],['science','Tech & science',FlaskConical],['climate','Climate',Leaf],['culture','Culture',Music2]];
@@ -133,6 +137,7 @@ function MarketAttribution({value}) {
 
 export default function App() {
   const account=useAccount();
+  const paperLedger=usePaperLedger();
   const [category,setCategory]=useState('sports'),[markets,setMarkets]=useState([]),[query,setQuery]=useState(''),[listLabel,setListLabel]=useState('Sports'),
     [listLoading,setListLoading]=useState(true),[listError,setListError]=useState(''),[coverage,setCoverage]=useState(null),[rowLimit,setRowLimit]=useState(marketPageSize),
     [selection,dispatch]=useReducer(selectionReducer,initialSelection),[history,setHistory]=useState(null),[tab,setTab]=useState('overview'),
@@ -143,6 +148,7 @@ export default function App() {
     [preferenceError,setPreferenceError]=useState(false),[paperPreset,setPaperPreset]=useState(null),[navigationError,setNavigationError]=useState(''),
     [archiveOpen,setArchiveOpen]=useState(false),[archiveResult,setArchiveResult]=useState(null),[archiveError,setArchiveError]=useState(''),[archiveQuery,setArchiveQuery]=useState(''),[accountOpen,setAccountOpen]=useState(false),[executionContext,setExecutionContext]=useState(null);
   const search=useRef(null),listIntent=useRef(0),listRoot=useRef(null),lookupRequest=useRef(null),archiveRequest=useRef(null),assistantSequence=useRef(0);
+  const reviews=usePositionReviews(paperLedger.ledger?.positions||noPositions,preferences.model);
   const activeView=useRef(view);activeView.current=view;
   const closed=Boolean(selection.market&&(['closed','settled','finalized'].includes(selection.market.status)||Date.parse(selection.market.close_time)<=clock));
   const select=useCallback((market,{openDetail=true}={})=>{listIntent.current++;dispatch({type:'select',market});setAssistant(false);setHistory(null);setTab('overview');setPaused(false);setMobileDetail(openDetail);},[]);
@@ -271,10 +277,13 @@ export default function App() {
       <nav className="workspace-view-tabs" aria-label="Workspace views">{[['markets','Markets',LayoutDashboard],['ranked','Recommended trades',ChartNoAxesCombined],['portfolio','Portfolio',Wallet]].map(([id,label,Icon])=><button key={id} aria-current={view===id?'page':undefined} className={view===id?'active':''} onClick={()=>{setView(id);setAssistant(false);setNavigationError('');}}><Icon size={15}/>{label}</button>)}</nav>
       {navigationError&&<p className="notice error navigation-error" role="alert">{navigationError}</p>}
       {view==='portfolio'&&<div className="session-banner"><span>{account.session?.kind==='owner'?account.sync:'Guest paper account · records last up to 6 hours'}</span><button className="text-button" onClick={()=>setAccountOpen(true)}>{account.session?.kind==='owner'?(account.conflict?'Review saved versions':'Your account'):'Sign in to keep your saved trades'}<ArrowUpRight size={13}/></button></div>}
-      {view==='ranked'?<Recommendations category={category} categoryName={categories.find(row=>row[0]===category)?.[1]} model={preferences.model} onOpen={openRecommendation}/>:view==='portfolio'?<Portfolio onOpen={openFromWorkspace} onMarkets={()=>setView('markets')} clock={clock} model={preferences.model} theme={preferences.theme}/>:<div className="workspace-columns"><section className="market-list" aria-label="Market list"><div className="market-list-heading"><div><h1>{listLabel}</h1><span>{listLoading?'Loading contracts…':`${filtered.length} ${filtered.length===1?'contract':'contracts'}`}</span></div><button className="icon-button" aria-label="Refresh market list" onClick={()=>setListRevision(v=>v+1)} disabled={listLoading}><RefreshCw size={17} className={listLoading?'spin':''}/></button></div>
+      {reviews.alerts.length>0&&<div aria-label="Paper position alerts" role="status">{reviews.alerts.map(alert=><div className="position-alert" key={alert.id}>
+        <strong>Paper SELL signal</strong><span>{alert.title} · {alert.reason}</span><button className="text-button" onClick={()=>setView('portfolio')}>My Trades</button>
+        <button className="text-button" onClick={()=>reviews.dismiss(alert.id)}>Dismiss</button></div>)}</div>}
+      {view==='ranked'?<Recommendations category={category} categoryName={categories.find(row=>row[0]===category)?.[1]} model={preferences.model} onOpen={openRecommendation}/>:view==='portfolio'?<Portfolio paperLedger={paperLedger} reviews={reviews} onOpen={openFromWorkspace} onMarkets={()=>setView('markets')} clock={clock} model={preferences.model} theme={preferences.theme}/>:<div className="workspace-columns"><section className="market-list" aria-label="Market list"><div className="market-list-heading"><div><h1>{listLabel}</h1><span>{listLoading?'Loading contracts…':`${filtered.length} ${filtered.length===1?'contract':'contracts'}`}</span></div><button className="icon-button" aria-label="Refresh market list" onClick={()=>setListRevision(v=>v+1)} disabled={listLoading}><RefreshCw size={17} className={listLoading?'spin':''}/></button></div>
         <form className="market-search" onSubmit={lookup}><Search size={17}/><label className="sr-only" htmlFor="market-search">Search contracts or paste a Kalshi URL</label><input id="market-search" ref={search} value={query} onChange={e=>{setQuery(e.target.value);setRowLimit(marketPageSize);}} placeholder="Search or paste a Kalshi URL"/><kbd>/</kbd></form>
         <div className="list-columns"><span>Contract</span><span>YES / NO</span></div>
-        <div className="market-rows" ref={listRoot} aria-busy={listLoading&&!displayed.length&&!displayed.length}>{listError&&<div className="notice error" role="alert">{listError}<button className="text-button" onClick={()=>setListRevision(v=>v+1)}>Try again</button></div>}{listLoading&&<div className="list-loading" role="status"><Loader2 size={18} className="spin"/><span>Loading exchange contracts</span></div>}{displayed.map(row=><MarketRow key={row.ticker} row={row} selected={row.ticker===selection.ticker} livePrices={row.ticker===selection.ticker?{yes:ask,no:bid===null?null:1-bid}:null} opinion={row.ticker===selection.ticker?selectedOpinion||opinions[row.ticker]:opinions[row.ticker]} onSelect={openMarket} onResearch={selectResearch}/>)}{displayed.length<filtered.length&&<button className="text-button" onClick={()=>setRowLimit(limit=>limit+marketPageSize)}>Show more contracts</button>}{!listLoading&&!filtered.length&&!listError&&<div className="empty">No matching contracts in this sample. Try another category or paste an exact Kalshi URL.{query.trim().length>=2&&<button className="text-button" onClick={searchArchive}>Search observed history <ArrowUpRight size={13}/></button>}</div>}</div>
+        <div className="market-rows" ref={listRoot} aria-busy={listLoading&&!displayed.length}>{listError&&<div className="notice error" role="alert">{listError}<button className="text-button" onClick={()=>setListRevision(v=>v+1)}>Try again</button></div>}{listLoading&&!displayed.length&&<div className="list-loading" role="status"><Loader2 size={18} className="spin"/><span>Loading exchange contracts</span></div>}{displayed.map(row=><MarketRow key={row.ticker} row={row} selected={row.ticker===selection.ticker} livePrices={row.ticker===selection.ticker?{yes:ask,no:bid===null?null:1-bid}:null} opinion={row.ticker===selection.ticker?selectedOpinion||opinions[row.ticker]:opinions[row.ticker]} onSelect={openMarket} onResearch={selectResearch}/>)}{displayed.length<filtered.length&&<button className="text-button" onClick={()=>setRowLimit(limit=>limit+marketPageSize)}>Show more contracts</button>}{!listLoading&&!filtered.length&&!listError&&<div className="empty">No matching contracts in this sample. Try another category or paste an exact Kalshi URL.{query.trim().length>=2&&<button className="text-button" onClick={searchArchive}>Search observed history <ArrowUpRight size={13}/></button>}</div>}</div>
         <div className="list-footer" title={'Catalog checked '+dateLabel(coverage?.as_of)+'; refreshes once a minute while visible.'}><span className="status-dot"/>{coverage?.stale?'Showing last snapshot':'Catalog snapshot'}{coverage?.partial&&<span>Partial coverage</span>}<button className="text-button" onClick={openSources}>Coverage</button></div>
       </section>
       <section className="contract-panel" id="contract-content" aria-label="Selected contract">{market?<>
