@@ -3,7 +3,7 @@ import {useEffect,useSyncExternalStore} from 'react';
 import {fetchJSON} from '../lib/transport.mjs';
 import {PAPER_STORAGE,PAPER_EVENT,initializePaperAccount} from './paper-state.mjs';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
-import {ACTIVE_ACCOUNT,GUEST_STORAGE,guestExpired,switchPaperAccount,accountCacheKey} from './guest-session.mjs';
+import {ACTIVE_ACCOUNT,GUEST_STORAGE,GUEST_DATA_LIFETIME,GUEST_INACTIVITY,guestExpired,purgeExpiredGuestData,switchPaperAccount,accountCacheKey} from './guest-session.mjs';
 const listeners=new Set(),initial={session:null,status:'loading',error:'',sync:'',conflict:null,watchlist:[]};
 let state=initial,loading=null,loadIntent=0,saveTimer=null,revision=0,synced=null,pendingSave=null,saving=false;
 export const accountSnapshot=()=>state;
@@ -25,7 +25,7 @@ export async function loadAccountSession(force=false){
       if(intent!==loadIntent)return loading;
       if(session.kind==='owner'){
         const email=session.owner?.email;if(typeof email!=='string')throw new Error('Your account could not be identified. Sign in again.');
-        switchPaperAccount(localStorage,'owner:'+email.toLowerCase());
+        switchPaperAccount(localStorage,'owner:'+email.toLowerCase(),{guest:session.guest});
         const saved=await accountAPI('/api/account/portfolio',{signal:AbortSignal.timeout(15000)}),local=parse(localStorage.getItem(PAPER_STORAGE)),meta=parse(localStorage.getItem(ownerMetaKey(email)));
         if(intent!==loadIntent)return loading;
         revision=saved.revision||0;synced=meta?.synced??null;
@@ -117,10 +117,20 @@ export default function useAccount(){
     return()=>{window.removeEventListener('online',retry);window.removeEventListener('storage',changed);};
   },[]);
   useEffect(()=>{
-    if(value.session?.kind!=='guest'||value.status!=='ready')return;
-    const timer=setTimeout(()=>loadAccountSession(true),Math.max(0,Date.parse(value.session.guest.expires_at)-Date.now())+50);
-    const visible=()=>{if(!document.hidden&&guestExpired(value.session.guest))loadAccountSession(true);};
-    document.addEventListener('visibilitychange',visible);return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',visible);};
+    let timer;
+    const check=()=>{
+      clearTimeout(timer);
+      try{
+        const result=purgeExpiredGuestData(localStorage);
+        if(result.activeReset){notifyPaper();if(state.status==='ready')loadAccountSession(true);return;}
+        const guest=parse(localStorage.getItem(GUEST_STORAGE));if(!guest)return;
+        const deadline=Math.min(Date.parse(guest.expires_at),Date.parse(guest.created_at)+GUEST_DATA_LIFETIME,Date.parse(guest.last_active_at)+GUEST_INACTIVITY);
+        timer=setTimeout(check,Math.max(1,deadline-Date.now()+50));
+      }catch{}
+    };
+    const visible=()=>{if(!document.hidden)check();},changed=event=>{if(event.key===GUEST_STORAGE)check();};
+    check();document.addEventListener('visibilitychange',visible);window.addEventListener('storage',changed);
+    return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',visible);window.removeEventListener('storage',changed);};
   },[value.session,value.status]);
   return value;
 }
