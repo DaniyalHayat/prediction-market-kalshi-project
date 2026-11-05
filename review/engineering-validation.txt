@@ -1,17 +1,20 @@
-Verified 2026-11-05 01:59:25 UTC on feature/black-evidence-lab-v3.
-Source revision: aadf8948897305c503965ef3bf7552041be32eeb, plus pending root analytics changes present during the checks.
+Verified 2026-11-05 02:14:44 UTC on feature/black-evidence-lab-v3.
+Account fix revision: 82b04ad. Later root-owned frontend updates require their own final integration check.
 
 RESULT: PASS. No production deployment, cloud resource change or real account creation.
 
-npm test: 272 passed, 0 failed, 2 intentional default skips.
-  Node: 266 total; 264 passed, 0 failed, 2 skipped.
-  TypeScript: 8 total; 8 passed, 0 failed, 0 skipped.
+npm test after the material account fixes: 284 passed, 0 failed, 2 intentional default skips.
+  Node: 276 total; 274 passed, 0 failed, 2 skipped.
+  TypeScript: 10 total; 10 passed, 0 failed, 0 skipped.
+  Full output: review/npm-test-after-account-fixes.txt.
+  Core financial replay/outage fixes and cross-tab client guards were included. The final null-SDK hardening was subsequently covered by 19 focused account tests (19 passed, no skips) and typecheck.
   PostgreSQL integration used a disposable local PG17 *_test database.
   Cloud/account/provider credentials were removed from the test-process environment.
   Opt-in actual MiniLM and separate semantic database checks were independently passed by the evidence agent, including native vector and plain-array fallback. See web/docs/semantic-verification.json.
 
 npm run typecheck: PASS (exit 0).
 npm run build: PASS (exit 0), Next.js 16.4.3.
+  This build preceded the later account hardening and root-owned frontend updates. The backend fix was subsequently import-tested and typechecked; this lane did not repeat the production build.
   Local Next development was stopped before the production build.
   Static routes: / and /_not-found.
   Dynamic routes: /api/[...path], /api/assistant and /api/paper/size.
@@ -21,6 +24,8 @@ npm run build: PASS (exit 0), Next.js 16.4.3.
 Terraform 1.17.1 / AWS provider 6.72.0: fmt PASS, validate PASS, 5 mocked safety plans PASS. No AWS API calls or apply.
 
 Account migration 004 applied only to disposable local PG17 and mirrored identically into supabase/migrations. Tests cover initial/update CAS races, stale writes, owner isolation, encrypted cookie tampering/purpose separation, expiry, refresh, revocation, CSRF and private proxy cookie forwarding.
+
+Material regression fixes: the concrete fabricated-capital payload and independently tampered financial values are rejected before persistence. Complete trade/cash replay reconciles quantities, notional, modeled fees, net cash, proportional basis and realized P/L while retaining valid UI partial closes, fractional/multi-level fills, high-fee exits and winning/losing settlements. Truncated first-upload history is explicitly rejected; browser records remain retained. Auth 429/5xx/network/incomplete responses return 503 with Retry-After and no cookie mutation, preserving owner identity for recovery.
 
 Runtime checks cover service-only request/provider p95/p99 and Prometheus diagnostics, public denial of internal paths, bounded diagnostic logging, signed drain filtering, separate local operator inspection, worker-thread SPSC transfer and actual unary protobuf/gRPC over loopback HTTP/2.
 
