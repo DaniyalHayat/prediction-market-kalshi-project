@@ -16,7 +16,8 @@ const source='https://external-api.kalshi.com/trade-api/v2/markets/'+ticker;
 const dependencies={marketDetails:async()=>({market:{ticker,title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',rules_primary:'The exact selected outcome.'},source_url:source,as_of:'2026-11-04T12:00:00Z'}),
   book:async()=>({metrics:{book_bid:.4,book_ask:.42},raw:{orderbook_fp:{yes_dollars:[['.4','10']],no_dollars:[['.58','10']]}},source_url:source+'/orderbook',as_of:'2026-11-04T12:00:00Z'}),
   workspaceResearch:async()=>({ticker,summary:'PASS: independent holdout not established',opinion:{side:'PASS'},sources:[{url:source}],extensions:{music:{spotify:{references:[{name:'PRIVATE_CATALOG_SENTINEL'}]}}}}),
-  contractHistory:async()=>({ticker,rows:[{time:'2026-11-04T12:00:00Z',value:.4}]}),warehouseStatus:async()=>({configured:true,source_batches:3}),providerStatus:()=>[]};
+  contractHistory:async()=>({ticker,rows:[{time:'2026-11-04T12:00:00Z',value:.4}]}),warehouseStatus:async()=>({configured:true,source_batches:3}),providerStatus:()=>[],
+  searchRetainedEvidence:async(t,query)=>({ticker:t,status:'available',citations:[{citation_id:'E1',text:'Synthetic retained source fixture.',url:source}],sources:[{url:source}],query})};
 async function listen(t,options={}){
   const server=createMarketServer({production:true,edgeSecret,serviceSecret:secret,storageEnabled:()=>false,...options});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -37,7 +38,7 @@ function memoryQuota(){const used=new Map();return {used,consume:async(key,limit
 test('actual MCP handshake lists only read-only tools and scopes all market reads',async t=>{
   const server=createResearchServer({tickerScope:ticker,dependencies}),client=new Client({name:'test-client',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
   await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
-  const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_contract','get_price_history','get_research','get_source_status']);
+  const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_contract','get_price_history','get_research','get_source_status','search_retained_evidence']);
   assert.ok(tools.tools.every(tool=>tool.annotations.readOnlyHint&&tool.annotations.destructiveHint===false));
   const contract=await client.callTool({name:'get_contract',arguments:{ticker}});assert.equal(packet(contract).market.ticker,ticker);assert.equal(packet(contract).book.no_bid_levels[0].bid_price_usd_per_contract,.58);
   assert.equal(packet(contract).book.no_bid_levels[0].quantity_contracts,10);assert.equal(packet(contract).book.metrics,undefined);assert.equal(packet(contract).account_balances_available,false);
@@ -46,13 +47,15 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   const rejected=await client.callTool({name:'get_contract',arguments:{ticker:'KXCPI-26NOV-T0.2'}});assert.equal(rejected.isError,true);assert.match(packet(rejected).reason,/selected contract/);
   const traversal=await client.callTool({name:'get_contract',arguments:{ticker:'../portfolio/balance'}});assert.equal(traversal.isError,true);
   const research=await client.callTool({name:'get_research',arguments:{ticker}});assert.equal(packet(research).opinion.side,'PASS');assert.ok(!JSON.stringify(research).includes('PRIVATE_CATALOG_SENTINEL'));
+  const retained=await client.callTool({name:'search_retained_evidence',arguments:{ticker,query:'reported availability'}});assert.equal(packet(retained).citations[0].citation_id,'E1');assert.equal(packet(retained).sources[0].url,source);
+  const other=await client.callTool({name:'search_retained_evidence',arguments:{ticker:'KXCPI-26NOV-T0.2',query:'private journals'}});assert.equal(other.isError,true);
 });
 test('HTTP MCP initialization and tool calls require backend authorization',async t=>{
   const url=await listen(t,{mcp:(req,res,body,options)=>handleMCP(req,res,body,{...options,dependencies})});
   const denied=await fetch(url+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(denied.status,401);
   const client=new Client({name:'real-http-test',version:'1'});
   await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',url),{requestInit:{headers:{Authorization:'Bearer '+secret,'X-Market-Ticker':ticker}}}));
-  t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,4);
+  t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,5);
   assert.equal(packet(await client.callTool({name:'get_contract',arguments:{ticker}})).ticker,ticker);
 });
 test('edge gate denies direct access, disallowed origins and blocked/unknown countries',async t=>{

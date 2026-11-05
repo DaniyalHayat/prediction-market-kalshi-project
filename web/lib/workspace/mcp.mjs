@@ -5,6 +5,7 @@ import {marketDetails,book,validateTicker} from '../live.mjs';
 import {workspaceResearch,contractHistory} from './router.mjs';
 import {providerStatus} from './providers.mjs';
 import {warehouseStatus} from './warehouse.mjs';
+import {searchRetainedEvidence} from './semantic.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
@@ -26,13 +27,18 @@ export function publicResearch(value){
 }
 export function boundPacket(value,maximum=14000){
   if(Buffer.byteLength(JSON.stringify(value))<=maximum)return value;
+  if(Array.isArray(value.citations)){
+    const citations=value.citations.filter(c=>typeof c.url==='string'&&c.url.length<=1200).slice(0,3).map(c=>({...c,title:String(c.title||'').slice(0,180),text:String(c.text||'').slice(0,650)}));
+    const packet={ticker:value.ticker,status:citations.length?value.status:'empty',reason:citations.length?undefined:'The retained citation packet exceeded the display limit; use a narrower query.',retrieval:value.retrieval,citations,sources:citations.map(c=>({label:c.citation_id,url:c.url,retrieved_at:c.retrieved_at})),scope:'Retained public citations only; additional source chunks omitted to fit the context bound.'};
+    if(Buffer.byteLength(JSON.stringify(packet))<=maximum)return packet;
+  }
   const lean={ticker:value.ticker,title:value.title,as_of:value.as_of,summary:value.summary,opinion:value.opinion,
     account_balances_available:value.account_balances_available,units:value.units,forecast:value.forecast,decision:value.decision,sources:value.sources,scope:'Additional details omitted to keep the research packet bounded.'};
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
 export function createResearchServer({tickerScope,modelScope='baseline',dependencies={}}={}) {
-  const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,...dependencies};
+  const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,searchRetainedEvidence,...dependencies};
   const server=new McpServer({name:'predictir',version:'4.0.0'});
   if(tickerScope)validateTicker(tickerScope);
   if(!['baseline','validated','challenger'].includes(modelScope))throw new RangeError('Unknown research model');
@@ -65,6 +71,7 @@ export function createResearchServer({tickerScope,modelScope='baseline',dependen
     const value=await deps.contractHistory(ticker,Number(hours));return {...value,units:{price:'USD per contract',volume:'Contracts'},rows:value.rows.slice(-120).map(({value:price,volume,...row})=>({...row,price_usd_per_contract:price,volume_contracts:volume}))};
   });
   register('get_source_status','Read public provider availability and warehouse coverage counts. No credentials or private records.',{},async()=>({as_of:new Date().toISOString(),providers:deps.providerStatus(),warehouse:await deps.warehouseStatus()}));
+  register('search_retained_evidence','Search only already retained public evidence for the selected ticker using lexical and real local semantic retrieval. Returns bounded source citations. Does not load news/social feeds, index private data, change probabilities or access journals. If empty, the user must explicitly Load contract news.',{ticker,query:z.string().min(3).max(300),limit:z.number().int().min(1).max(8).default(6)},async({ticker,query,limit})=>deps.searchRetainedEvidence(ticker,query,{limit}));
   return server;
 }
 export async function handleMCP(req,res,body,options={}){

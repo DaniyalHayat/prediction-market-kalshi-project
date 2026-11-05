@@ -1,0 +1,41 @@
+# Retained public evidence and semantic retrieval
+
+Implemented locally for review on November 4, 2026 ET. No deployment, production migration or provider payment is included.
+
+## Actual model and verified behavior
+
+The backend uses `@huggingface/transformers` **4.3.2** and the real [Xenova/all-MiniLM-L6-v2 ONNX model](https://huggingface.co/Xenova/all-MiniLM-L6-v2). The public Hugging Face model API returned revision **751bff37182d3f1213fa05d7196b954e230abad9**, which is pinned in code. Inference uses CPU, q8 weights, mean pooling, L2 normalization and 384 dimensions. The library's [feature extraction documentation](https://huggingface.co/docs/transformers.js/api/pipelines#module_pipelines.FeatureExtractionPipeline) describes pooled, normalized embeddings. No hash, random or fabricated embeddings are used in the application.
+
+Actual local inference produced unit-length 384-dimensional vectors. A controlled paraphrase check yielded cosine **0.7307945** for two ankle-injury descriptions versus **-0.0231702** for an unrelated film-ticket description. This verifies basic semantic discrimination on a tiny synthetic diagnostic; it is not a held-out retrieval-quality benchmark, trading signal or factual-accuracy measure.
+
+The actual PostgreSQL integration test passed on a disposable PostgreSQL 17 + pgvector container, including native cosine search, English full-text search, reciprocal-rank fusion, ticker isolation, parameterized malicious-query handling, idempotent migration and RLS denial for a separately granted reader. The same test passed on a separate plain PostgreSQL 17 container using stored numeric arrays and exact application cosine. Neither test connected to production.
+
+## Explicit ingestion and retained search
+
+- `GET /api/workspace/evidence?ticker=...&reddit=0|1` is called by the explicit **Load contract news** action. It reuses matched sports/music context, retrieves selected public evidence, then indexes at most 32 public chunks. X can be disabled with `x=0`; Reddit remains a separate default-off opt-in.
+- Ordinary research no longer automatically calls chart-post feeds. Headline retrieval and secondary chart work require the explicit evidence action. The assistant cannot start social ingestion.
+- Only allowlisted public contract-rule fields, source headlines/descriptions/public posts and secondary chart observations enter the index. Account objects, emails, chats, portfolio balances and private journals are ignored. Spotify Web API catalog content is excluded. Credential-bearing URLs and private account/journal routes are rejected.
+- `GET /api/workspace/evidence/search?ticker=...&q=...` searches only retained chunks for the exact selected ticker. It does not fetch market data, news, X or Reddit. Query text is embedded locally; it is not sent to a remote embedding inference API. First use may download the pinned public model files when they are absent from the local model cache.
+- The read-only MCP tool `search_retained_evidence` exposes bounded citations to the assistant. The assistant is instructed to treat source content as untrusted evidence, preserve deterministic probability/PASS results, and ask the user to Load contract news when no retained evidence exists. Citation packets keep source URLs and observation dates.
+
+## Storage and ranking
+
+Migration `006_public_evidence.sql` creates a dedicated RLS-protected public-evidence table and English full-text index. Its mirrored Supabase migration has identical content. If pgvector is available and installation is permitted, it adds a native 384-dimensional vector column. Search computes exact native cosine over at most 256 retained chunks for the selected ticker. It does not claim an HNSW acceleration benefit that has not been measured. [pgvector documentation](https://github.com/pgvector/pgvector) defines native vector storage and cosine distance.
+
+When the extension is absent, the same real embeddings remain stored as numeric arrays and are compared with exact cosine in the application. If the model is disabled or unavailable, results are explicitly labeled `lexical_only`. With no relational backend, the app truthfully labels retention `process_memory`: up to 2,000 total chunks, lost on restart and not shared across instances. Missing migration/database access returns an availability limitation rather than claiming durable indexing.
+
+Full-text and semantic candidate lists each contain at most 30 entries and are fused with reciprocal-rank fusion constant 60. A cosine floor of 0.15 is an experimental retrieval filter, not a calibrated confidence threshold. RRF/cosine scores cannot establish truth, news impact or an outcome probability. Syndicated or false reporting can still retrieve well; source quality and settlement matching remain separate checks.
+
+## Runtime, retention and cost limits
+
+On the observed Windows Node process, initial model load with existing cached model files plus three texts took **415.95 ms**; a new warm query took **4.57 ms**. Total process RSS was **177.13 MiB**, including imported application/runtime libraries. This is neither incremental model memory nor a production p95/p99 measurement. An earlier first observed model-cache load plus three texts took **4.284 s**. Network cold starts and lower-resource hosts can be slower.
+
+The model is loaded on demand, with one CPU inference at a time, at most four queued embedding requests, batches of four and a 256-token truncation limit. Text chunks are at most 900 characters with bounded overlap; no more than 32 are embedded per load. A 1,024-entry vector cache avoids repeated local inference. Defaults reserve at most **6,000 embedding texts/day** and **12,000 new retained chunks/day**, shared through the durable quota store when configured. Existing repeated content does not consume new storage reservations. These limits control application work; they are not vendor invoice guarantees.
+
+Public article/X/rules chunks expire within seven days, with at most 256 per ticker. Reddit chunks expire 15 minutes after their source retrieval. Expired rows are excluded immediately and physically pruned on subsequent evidence ingestion. Model files are cached outside the repository at `SEMANTIC_MODEL_CACHE_DIR`, defaulting to an operating-system temporary directory. The five observed model/tokenizer/config cache files total **23,685,697 bytes**. The Docker image declares `/tmp/market-lab-models`, creates it with node-user ownership and marks it as a volume; a read-only-root deployment must supply a writable, non-root-owned scratch/cache mount. `SEMANTIC_MODEL_ENABLED=0` disables model inference and preserves truthful lexical fallback. No paid model API is used, but CPU, resident memory, model-file transfer and database storage still consume the host's resources.
+
+Actual Linux Docker verification passed after `npm ci --omit=dev --ignore-scripts`: UID 1000, read-only root filesystem, 128 MiB bounded tmpfs at the cache path, real pinned q8 model download and CPU inference. Two texts returned 384-dimensional embeddings in **3,933.51 ms**, including the fresh cache download, with **228.77 MiB total process RSS**. The cache directory was mode 0700. Native inference therefore does not require granting root or enabling dependency install scripts in this reviewed image. The optional Fargate bind mount uses the task's shared ephemeral storage; it is not itself a 128 MiB quota. Production resource sizing and latency remain unmeasured.
+
+## Reproduce
+
+Run `node --test tests/semantic.test.mjs` for deterministic boundary, scoping, fusion and route tests. To execute the actual model, set `SEMANTIC_LIVE_TEST=1`. For the real PostgreSQL test, also set `MARKET_SEMANTIC_TEST_DATABASE_URL` to a **disposable database whose name ends in `_test`**; the test refuses other database names. Do not point this test at production. The integration test applies migration 006 only inside that disposable database.
