@@ -71,7 +71,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     return update('global',1200)&&update(identity,120);
   }
   const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000,'research-reads':3000,'market-screens':3000,'stream-opens':3000};
-  const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history']);
+  const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history','/api/workspace/sources']);
+  const researchReadWeights=new Map([['/api/workspace/research',5],['/api/workspace/evidence',5],['/api/workspace/evidence/search',4],['/api/workspace/search',2],['/api/workspace/attribution',3]]);
   async function quota(weight=1,kind='work'){
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
     const current=now(),day=new Date(current).toISOString().slice(0,10);
@@ -211,8 +212,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(url.pathname==='/api/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);return await sse(req,res,[url.searchParams.get('ticker')],identity);}
       if(url.pathname==='/api/portfolio/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);
         const raw=url.searchParams.get('tickers')||'';if(raw.length>1750)throw new RangeError('Portfolio watchlist is too long');return await sse(req,res,raw.split(','),identity,true);}
-      if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await resolveContracts(url.searchParams.get('q')));}
-      if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await marketFees(url.searchParams.get('ticker')));}
+      if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2,'paper-reads');return json(res,await resolveContracts(url.searchParams.get('q')));}
+      if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2,'paper-reads');return json(res,await marketFees(url.searchParams.get('ticker')));}
       if(req.method==='POST'&&!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
       const raw=req.method==='POST'?await readBody(req):'';
       if(url.pathname==='/api/journal'){
@@ -227,14 +228,15 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       }
       if(url.pathname==='/api/workspace/position-review')await quota(5,'paper-scans');
       else if(req.method==='GET'&&paperReadRoutes.has(url.pathname))await quota(1,'paper-reads');
-      else if(req.method==='GET'&&['/api/workspace/research','/api/workspace/evidence'].includes(url.pathname))await quota(5,'research-reads');
+      else if(req.method==='GET'&&researchReadWeights.has(url.pathname))await quota(researchReadWeights.get(url.pathname),'research-reads');
+      else if(req.method==='POST'&&url.pathname==='/api/workspace/execution-research')await quota(5,'research-reads');
       else if(req.method==='GET'&&url.pathname==='/api/workspace/opinions'){
         const count=(url.searchParams.get('tickers')||'').split(',',8).length;
         await quota(Math.max(5,count),'market-screens');
       }
       else if(req.method==='GET'&&url.pathname==='/api/workspace/recommendations')await quota(12,'market-screens');
       else await quota(url.pathname.includes('forward/start')?30:
-        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')?5:url.pathname.includes('/search')?2:1);
+        url.pathname.includes('intelligence')?5:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');
