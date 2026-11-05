@@ -1,6 +1,6 @@
 # PostgreSQL query A/B benchmark
 
-The measurements support suppressing exact duplicate record updates and preserving an existing TOAST value when only expiry changes. They do not justify adding a separate `records(pk)` index to the current application without query-specific production evidence. They also quantify the database cost of removing an incorrect local quota-denial shortcut.
+The current implementation decision is to add only the plain DISTINCT guard for exact duplicate record updates in the review code. The CASE expression that preserves an existing TOAST value remains an experimental candidate and is not adopted. No TTL normalization or production change is included. The measurements do not justify a separate `records(pk)` index without query-specific production evidence, and they quantify the database cost of removing an incorrect local quota-denial shortcut.
 
 This is a synthetic local PostgreSQL 17.11 experiment, not a production latency or savings forecast. No production credentials, queries, DDL or payloads were used. The run created an isolated schema in a separate `query_optimization_test` database and removed that schema afterward. The active `engineering_test` application fixture was not modified.
 
@@ -53,7 +53,7 @@ For exact duplicates, the baseline produced 46 updates and 46 additional dead-tu
 
 At 256 rows, the same 32-KiB duplicate case measured baseline p95 1.578 ms and 36,454 mean WAL bytes versus CASE p95 0.149 ms and 54 bytes. Expiry-only measured 1.245 ms / 36,458 bytes versus CASE 0.910 ms / 426 bytes. Changed-payload CASE comparisons consumed extra CPU and did not reduce WAL. For small inline payloads the CASE can also add CPU without a storage benefit. This is a workload-dependent tradeoff, not a universal speed improvement.
 
-Recommendation: use the no-op guard and preserve equal payloads on expiry-only writes where caller semantics permit. Preserve actual payload changes and TTL changes. The expiry-only fixture deliberately changes only the SQL timestamp; ordinary `save` calls may also embed `expires_epoch` in JSON, making that a payload change as well. Those calls must still persist their new JSON. The measured query uses a payload-first OR predicate; an expiry-first predicate may avoid a redundant equality comparison but was not separately timed.
+Recommendation: adopt only the plain DISTINCT guard now, preserving every actual payload or TTL change. The expiry-only CASE fixture deliberately changes only the SQL timestamp. Actual `save` calls embed `expires_epoch` inside JSON, and cached values often contain a new `as_of`; refreshing those fields changes the JSON, so the CASE's old-value branch cannot apply. Its synthetic expiry-only benefit is not evidence of an improvement for those application writes. CASE remains deferred unless actual callers demonstrate column-only expiry changes with equal JSON, and its extra CPU cost on changed payloads must remain part of that decision. No TTL fields are removed or normalized. The measured query uses a payload-first OR predicate; an expiry-first predicate may avoid a redundant equality comparison but was not separately timed.
 
 ## Exhausted quota cost
 
