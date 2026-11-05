@@ -1,8 +1,8 @@
 {
-  "verified_at_utc": "2026-11-05T01:59:25Z",
-  "source_revision": "aadf8948897305c503965ef3bf7552041be32eeb",
+  "verified_at_utc": "2026-11-05T02:14:44Z",
+  "source_revision": "82b04ad",
   "branch": "feature/black-evidence-lab-v3",
-  "scope": "Local review branch, including pending root analytics changes present during validation",
+  "scope": "Local review branch; material account fixes verified with focused PG17 tests and the combined suite. Later root-owned frontend edits require their own final integration check.",
   "production_deployed": false,
   "cloud_resources_changed": false,
   "real_accounts_created": false,
@@ -11,20 +11,31 @@
     "npm_test": {
       "status": "passed",
       "command": "npm test",
-      "node_tests": {"total": 266, "passed": 264, "failed": 0, "skipped": 2},
-      "typescript_tests": {"total": 8, "passed": 8, "failed": 0, "skipped": 0},
-      "combined": {"total": 274, "passed": 272, "failed": 0, "skipped": 2},
+      "node_tests": {"total": 276, "passed": 274, "failed": 0, "skipped": 2},
+      "typescript_tests": {"total": 10, "passed": 10, "failed": 0, "skipped": 0},
+      "combined": {"total": 286, "passed": 284, "failed": 0, "skipped": 2},
+      "full_output": "review/npm-test-after-account-fixes.txt",
+      "verification_scope": "Combined suite included core financial replay/outage fixes and cross-tab client guards; final null-SDK hardening was subsequently covered by the 19-test focused account run and typecheck.",
       "database": "Disposable local PostgreSQL 17 *_test database; no production database",
       "credential_isolation": "Cloud, account, provider and remote-backend credentials removed from the test process environment",
       "intentional_skips": ["Opt-in actual MiniLM inference", "Opt-in separate semantic database"],
       "skip_followup": "Both opt-in paths were independently executed successfully by the evidence agent, including native pgvector and plain-array PostgreSQL fallback; see web/docs/semantic-verification.json"
     },
     "typecheck": {"status": "passed", "command": "npm run typecheck", "exit_code": 0},
+    "focused_account_regressions": {
+      "status": "passed",
+      "total": 19,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "checks": ["Concrete fabricated-capital payload rejected before persistence", "Canonical quantity, cost, fee, cash, basis and realized P/L replay", "Actual UI-generated partial closes and binary settlements", "Fractional and rounded multi-level fills", "Valid negative-net high-fee sells", "Explicit rejection of truncated first-upload history", "Transient getUser/refresh 429, 5xx, network and incomplete results preserve all cookies", "Actual invalid refresh credentials clear owner session", "Authenticated concurrent PG17 CAS and owner isolation"]
+    },
     "next_production_build": {
       "status": "passed",
       "command": "npm run build",
       "exit_code": 0,
       "next_version": "16.4.3",
+      "verification_scope": "Production build passed before the later account hardening and root-owned frontend updates; backend hardening was subsequently import-tested and typechecked, without another production build in this lane",
       "static_routes": ["/", "/_not-found"],
       "dynamic_routes": ["/api/[...path]", "/api/assistant", "/api/paper/size"],
       "local_development_server": "Stopped before production build to avoid shared .next interference",
@@ -47,7 +58,7 @@
       "applied_to": "Disposable local PostgreSQL 17 only",
       "supabase_mirror": "202611040004_owner_portfolios.sql",
       "mirror_content": "Identical after line-ending normalization",
-      "checks": ["Concurrent first-write CAS", "Concurrent update CAS", "Stale revision conflict", "Owner-scoped SQL", "Cookie tampering and purpose separation", "Session refresh and revocation", "CSRF origin and Fetch Metadata", "No real Auth provider calls"]
+      "checks": ["Concurrent first-write CAS", "Authenticated concurrent update CAS", "Stale revision conflict", "Invalid financial writes cannot overwrite retained data", "Owner-scoped SQL", "Cookie tampering and purpose separation", "Session refresh, transient outage preservation and revocation", "CSRF origin and Fetch Metadata", "No real Auth provider calls"]
     },
     "runtime": {
       "status": "passed",
