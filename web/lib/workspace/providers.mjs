@@ -39,7 +39,9 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
       cache.set(key,{until:Date.now()+ttl*1000,value});
       status.set(id,{id,name:id,status:'available',as_of:value.as_of,url:value.source_url,detail:'Retrieval time; the observation date is shown in each dataset.'});
       return value;
-    }catch(error){status.set(id,{id,name:id,status:'unavailable',detail:String(error.message).slice(0,180)});throw error;}
+    }catch(error){const code=Number(error.status),upstreamStatus=Number.isInteger(code)&&code>=400&&code<=599?code:null;
+      const detail=upstreamStatus?id+' could not be retrieved (HTTP '+upstreamStatus+').':id+' could not be retrieved. Its source or shared cache is temporarily unavailable.';
+      status.set(id,{id,name:id,status:'unavailable',detail});throw Object.assign(new Error(detail,{cause:error}),{status:upstreamStatus||503});}
   })();
   inflight.set(key,task);try{return await task;}finally{inflight.delete(key);}
 }
