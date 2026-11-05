@@ -15,12 +15,14 @@ export class BookReplica {
   constructor(){this.books=new Map();this.sequences=new Map();}
   reset(){this.books.clear();this.sequences.clear();}
   apply(event,now=Date.now(),materialize=true) {
+    if(Number.isInteger(event.sid)&&Number.isInteger(event.seq)){
+      const prior=this.sequences.get(event.sid);
+      if(prior!==undefined && event.seq!==prior+1)throw new Error('Sequence gap; a new snapshot is required');
+      this.sequences.set(event.sid,event.seq);
+    }
     if(!['orderbook_snapshot','orderbook_delta'].includes(event.type))return null;
     const data=event.msg||{},ticker=data.market_ticker;
     if(typeof ticker!=='string'||!Number.isInteger(event.sid)||!Number.isInteger(event.seq))throw new Error('Missing stream identity');
-    const prior=this.sequences.get(event.sid);
-    if(prior!==undefined && event.seq!==prior+1)throw new Error('Sequence gap; a new snapshot is required');
-    this.sequences.set(event.sid,event.seq);
     if(event.type==='orderbook_snapshot') {
       const parse=rows=>{
         if(!Array.isArray(rows)||rows.length>5000)throw new Error('Invalid book snapshot');
@@ -49,38 +51,54 @@ export class BookReplica {
   }
   snapshot(ticker) {
     const book=this.books.get(ticker);if(!book)return null;
-    const levels=side=>book[side].top().map(([p,q])=>[String(p),String(q)]);
-    return {...book.metadata,raw:{orderbook_fp:{yes_dollars:levels('yes'),no_dollars:levels('no')}}};
+    const levels=side=>book[side].top(100).map(([p,q])=>[String(p),String(q)]);
+    return {...book.metadata,depth_limit:100,depth_truncated:book.yes.size>100||book.no.size>100,
+      raw:{orderbook_fp:{yes_dollars:levels('yes'),no_dollars:levels('no')}}};
   }
 }
 export class MarketFeed {
-  constructor({credentials=streamCredentials,socket=(url,options)=>new WebSocket(url,options),now=Date.now}={}) {
+  constructor({credentials=streamCredentials,socket=(url,options)=>new WebSocket(url,options),now=Date.now,maximumTickers=Number(process.env.MARKET_STREAM_TICKERS||64)}={}) {
+    if(!Number.isInteger(maximumTickers)||maximumTickers<1||maximumTickers>256)throw new RangeError('Streaming watchlist capacity must be 1–256');
+    this.maximumTickers=maximumTickers;
     this.credentials=credentials;this.socketFactory=socket;this.now=now;this.clients=new Map();this.replica=new BookReplica();this.nextId=1;this.status='disconnected';
-    this.samples=[];this.lastSample=new Map();this.archiveChunks=0;this.dirty=new Set();
+    this.samples=[];this.lastSample=new Map();this.archiveChunks=0;this.dirty=new Set();this.pendingRemovals=new Set();this.subscriptionId=null;
   }
   async add(ticker,listener) {
     if(!/^[A-Za-z0-9_.-]{1,140}$/.test(ticker)||ticker.includes('..'))throw new RangeError('Invalid market ticker');
-    if(!this.clients.has(ticker)&&this.clients.size>=12)throw new RangeError('The streaming watchlist is full');
+    if(!this.clients.has(ticker)&&this.clients.size>=this.maximumTickers)throw new RangeError('The streaming watchlist is full');
     const added=!this.clients.has(ticker);
     if(added)this.clients.set(ticker,new Set());
     this.clients.get(ticker).add(listener);
     try{
       if(this.socket?.readyState===WebSocket.OPEN){if(added)this.subscribe([ticker]);}
       else await this.connect();
+      const snapshot=this.replica.snapshot(ticker);if(snapshot)listener({kind:'quote',...snapshot});
     }catch(error){
       const listeners=this.clients.get(ticker);listeners?.delete(listener);if(!listeners?.size)this.clients.delete(ticker);
       throw error;
     }
-    return ()=>{
+    let removed=false;return ()=>{
+      if(removed)return;removed=true;
       const listeners=this.clients.get(ticker);listeners?.delete(listener);if(!listeners?.size)this.clients.delete(ticker);
-      if(!listeners?.size){clearTimeout(this.reconnect);this.socket?.close();this.replica.reset();this.flush().catch(()=>{});}
+      if(!listeners?.size){
+        this.replica.books.delete(ticker);this.dirty.delete(ticker);this.lastSample.delete(ticker);
+        if(this.clients.size){this.pendingRemovals.add(ticker);this.removeUnusedMarkets();}
+        else {clearTimeout(this.reconnect);this.socket?.close();this.replica.reset();this.pendingRemovals.clear();this.flush().catch(()=>{});}
+      }
     };
   }
-  send(ticker,payload){for(const fn of this.clients.get(ticker)||[])fn(payload);}
+  send(ticker,payload){for(const fn of this.clients.get(ticker)||[])try{fn(payload);}catch{}}
   broadcast(payload){for(const ticker of this.clients.keys())this.send(ticker,payload);}
   subscribe(tickers) {
+    for(const ticker of tickers)this.pendingRemovals.delete(ticker);
     this.socket.send(JSON.stringify({id:this.nextId++,cmd:'subscribe',params:{channels:['orderbook_delta'],market_tickers:tickers}}));
   }
+  removeUnusedMarkets(){
+    if(!Number.isInteger(this.subscriptionId)||this.socket?.readyState!==WebSocket.OPEN)return;
+    const tickers=[...this.pendingRemovals].filter(ticker=>!this.clients.has(ticker));this.pendingRemovals.clear();
+    if(tickers.length)this.socket.send(JSON.stringify({id:this.nextId++,cmd:'update_subscription',params:{sids:[this.subscriptionId],market_tickers:tickers,action:'delete_markets'}}));
+  }
+  metrics(){return {status:this.status,tickers:this.clients.size,subscribers:[...this.clients.values()].reduce((n,rows)=>n+rows.size,0),pending_snapshots:this.samples.length};}
   sample(quote) {
     if(!cloudEnabled()||this.now()-(this.lastSample.get(quote.ticker)||0)<1000)return;
     if(this.samples.length>=500)throw new Error('Archive backpressure; reconnect after pending snapshots are persisted');
@@ -101,6 +119,11 @@ export class MarketFeed {
     finally{this.flushing=false;}
   }
   async connect() {
+    if(this.connectionAttempt)return this.connectionAttempt;
+    const pending=this.openConnection();this.connectionAttempt=pending;
+    try{return await pending;}finally{if(this.connectionAttempt===pending)this.connectionAttempt=null;}
+  }
+  async openConnection() {
     if(this.connecting || this.socket?.readyState===WebSocket.OPEN || this.socket?.readyState===WebSocket.CONNECTING)return;
     this.connecting=true;
     try {
@@ -108,19 +131,25 @@ export class MarketFeed {
       if(!credentials)throw new Error('An exchange streaming key is not configured');
       const socket=this.socketFactory(WS_URL,{headers:websocketHeaders(credentials,this.now()),handshakeTimeout:12000,maxPayload:2e6});
       this.socket=socket;this.status='connecting';
-      socket.on('open',()=>{this.status='connected';this.replica.reset();this.subscribe([...this.clients.keys()]);
+      socket.on('open',()=>{if(socket!==this.socket)return;this.status='connected';this.replica.reset();this.subscriptionId=null;this.pendingRemovals.clear();this.subscribe([...this.clients.keys()]);
         clearInterval(this.emitTimer);this.emitTimer=setInterval(()=>this.emitDirty(),100);this.emitTimer.unref?.();
         this.broadcast({kind:'connection',status:this.status,transport:'exchange-websocket'});});
       socket.on('message',raw=>{
+        if(socket!==this.socket)return;
         try {
           const event=JSON.parse(raw.toString());
           if(event.type==='error')throw new Error('Exchange subscription was rejected');
-          const update=this.replica.apply(event,this.now(),false);if(update)this.dirty.add(update.ticker);
+          if(event.type==='subscribed'&&event.msg?.channel==='orderbook_delta')this.subscriptionId=event.msg.sid;
+          if(Number.isInteger(event.sid)&&['orderbook_snapshot','orderbook_delta'].includes(event.type))this.subscriptionId=event.sid;
+          const tracked=!event.msg?.market_ticker||this.clients.has(event.msg.market_ticker);
+          const update=this.replica.apply(tracked?event:{...event,type:'ignored'},this.now(),false);if(update)this.dirty.add(update.ticker);
+          this.removeUnusedMarkets();
         } catch(error) {this.status='resynchronizing';this.broadcast({kind:'connection',status:this.status,reason:error.message});socket.close();}
       });
-      socket.on('error',()=>{this.status='unavailable';this.broadcast({kind:'connection',status:this.status,reason:'Exchange stream unavailable; reconnecting with backoff'});});
+      socket.on('error',()=>{if(socket!==this.socket)return;this.status='unavailable';this.broadcast({kind:'connection',status:this.status,reason:'Exchange stream unavailable; reconnecting with backoff'});});
       socket.on('close',()=>{
-        clearInterval(this.emitTimer);this.dirty.clear();this.status='disconnected';this.replica.reset();
+        if(socket!==this.socket)return;
+        clearInterval(this.emitTimer);this.dirty.clear();this.status='disconnected';this.replica.reset();this.subscriptionId=null;this.pendingRemovals.clear();
         if(this.clients.size)this.reconnect=setTimeout(()=>this.connect().catch(()=>{}),15000);
       });
     } finally {this.connecting=false;}

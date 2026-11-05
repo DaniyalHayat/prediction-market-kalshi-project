@@ -50,6 +50,14 @@ jobs:
         run: npm ci
       - name: Verify checked-in dashboard artifact hashes
         run: npm run verify:artifacts
+      - name: Install pgTAP in the disposable database
+        run: |
+          docker exec -u 0 ${{ job.services.postgres.id }} sh -c 'apt-get update -qq && apt-get install -y --no-install-recommends postgresql-17-pgtap >/dev/null'
+          docker exec -u postgres ${{ job.services.postgres.id }} psql -d marketlab_test -c 'CREATE EXTENSION IF NOT EXISTS pgtap'
+      - name: Check database safety assertions
+        run: node tools/test_database.mjs
+        env:
+          MARKET_TEST_DATABASE_URL: postgresql://marketlab:ci_fixture_only@127.0.0.1:5432/marketlab_test
       - name: Test research and paper execution
         run: npm test
         env:

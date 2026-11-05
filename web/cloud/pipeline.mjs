@@ -3,6 +3,7 @@ import {store} from '../lib/cloud/store.mjs';
 import {settleDue} from '../lib/cloud/journal.mjs';
 import {workspaceGET} from '../lib/workspace/router.mjs';
 import {appleChart} from '../lib/workspace/music.mjs';
+import {structuredLog} from '../lib/runtime-observability.mjs';
 export async function enqueuePipeline(s=store(),now=Date.now()){
   const hour=Math.floor(now/3600000),quarter=Math.floor(now/900000);
   const jobs=[...['sports','macro','crypto','travel','weather','science','climate','culture'].map(category=>({key:`catalog#${category}#${hour}`,kind:'catalog',input:{category}})),
@@ -30,7 +31,22 @@ export async function runPipelineJob(s=store(),handlers={}){
 }
 export function startPipeline(){
   if(!process.env.DATABASE_URL||process.env.MARKET_PIPELINE_ENABLED!=='1')return ()=>{};
-  let running=false;
-  const tick=async()=>{if(running)return;running=true;try{const s=store();await enqueuePipeline(s);const result=await runPipelineJob(s);if(result)console.log(JSON.stringify({event:'pipeline',...result}));}catch{console.log(JSON.stringify({event:'pipeline',status:'storage_unavailable'}));}finally{running=false;}};
-  const timer=setInterval(tick,60000);timer.unref();tick();return ()=>clearInterval(timer);
+  let running=false,stopped=false,processed=0,closeListener,reconnect;
+  const tick=async()=>{
+    if(running||stopped)return;running=true;processed=0;
+    try{
+      const s=store();await enqueuePipeline(s);
+      for(;processed<4;processed++){const result=await runPipelineJob(s);if(!result)break;structuredLog('pipeline.job',{kind:result.kind,result:result.status});}
+    }catch{structuredLog('pipeline.error',{error_code:'STORAGE_UNAVAILABLE'});}
+    finally{running=false;if(processed===4&&!stopped)setImmediate(tick);}
+  };
+  const attach=async()=>{
+    if(stopped)return;
+    try{
+      const close=await store().listenJobs(tick,()=>{if(!stopped){reconnect=setTimeout(attach,5000);reconnect.unref();}});
+      if(stopped)await close();else closeListener=close;
+    }catch{if(!stopped){reconnect=setTimeout(attach,5000);reconnect.unref();}}
+  };
+  const timer=setInterval(tick,60000);timer.unref();tick();attach();
+  return ()=>{stopped=true;clearInterval(timer);clearTimeout(reconnect);closeListener?.();};
 }

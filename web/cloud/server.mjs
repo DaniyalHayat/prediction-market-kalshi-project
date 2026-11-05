@@ -4,6 +4,7 @@ import {createReadStream} from 'node:fs';
 import {resolve,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isIP} from 'node:net';
+import {monitorEventLoopDelay} from 'node:perf_hooks';
 import {GET,POST} from '../app/api/[...path]/route.js';
 import {sizePaperPosition} from '../lib/paper/risk.ts';
 import {marketFeed} from '../lib/cloud/feed.mjs';
@@ -14,6 +15,7 @@ import {validateTicker} from '../lib/live.mjs';
 import {handleMCP} from '../lib/workspace/mcp.mjs';
 import {serviceAuthorized,reserveAssistant} from '../lib/workspace/assistant.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
+import {traceContext,structuredLog} from '../lib/runtime-observability.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
@@ -32,8 +34,10 @@ export async function readBody(req,maximum=16000){
 export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
   getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
-  streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||6000),monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3)}={}){
+  streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
+  monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger=production?structuredLog:()=>{}}={}){
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
+  const eventLoop=monitorEventLoopDelay({resolution:20});
   const allowedOrigins=new Set(['https://predictir.dev','https://www.predictir.dev']);
   function validOrigin(origin){
     if(!origin)return true;if(allowedOrigins.has(origin))return true;
@@ -62,37 +66,47 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
     if(storageEnabled()&&!await storage().consume('work#'+new Date(now()).toISOString().slice(0,10),6000,weight))throw Object.assign(new Error('Daily work allowance reached'),{status:429});
   }
-  async function sse(req,res,ticker,identity){
-    validateTicker(ticker);
+  async function sse(req,res,tickers,identity,multiplex=false){
+    tickers=[...new Set(tickers.map(validateTicker))];
+    if(!tickers.length||tickers.length>(multiplex?12:1))throw new RangeError('Choose one to twelve unique portfolio tickers');
     if(connections>=16||(streamByIP.get(identity)||0)>=3)throw Object.assign(new Error('Streaming capacity is currently full'),{status:429});
-    if(!Number.isSafeInteger(streamMonthlyMinutes)||streamMonthlyMinutes<1||streamMonthlyMinutes>12000)throw new RangeError('Invalid streaming allowance');
+    if(!Number.isSafeInteger(streamMonthlyMinutes)||streamMonthlyMinutes<1||streamMonthlyMinutes>60000)throw new RangeError('Invalid streaming allowance');
+    if(!Number.isSafeInteger(streamMonthlyBytes)||streamMonthlyBytes<65536||streamMonthlyBytes>100000000000)throw new RangeError('Invalid streaming byte allowance');
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
     const releaseCount=()=>{if(countReleased)return;countReleased=true;connections--;
       const count=(streamByIP.get(identity)||1)-1;if(count)streamByIP.set(identity,count);else streamByIP.delete(identity);};
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
-    try{await quota(3);if(!await consumeMinute())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
+    const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
+    try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
     catch(error){releaseCount();throw error;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
-    let remove,latest,ticks=0,closed=false,blockedSince=0,checking=false;
-    const send=message=>{
+    const removers=[],latest=new Map();let ticks=0,closed=false,blockedSince=0,checking=false,refilling=false,bytesRemaining=65536;
+    const refill=async()=>{if(refilling||closed)return;refilling=true;try{if(await consumeBytes())bytesRemaining+=65536;else res.end();}catch{res.end();}finally{refilling=false;}};
+    const send=(message,event)=>{
       if(closed||res.destroyed||blockedSince)return false;
-      const value='data: '+JSON.stringify(message)+'\n\n';
-      if(Buffer.byteLength(value)>500000){res.end();return false;}
+      const value=(event?'event: '+event+'\n':'')+'data: '+JSON.stringify(message)+'\n\n',bytes=Buffer.byteLength(value);
+      if(bytes>65536){res.end();return false;}
+      if(bytes>bytesRemaining){refill();return false;}bytesRemaining-=bytes;if(bytesRemaining<32768)refill();
       if(!res.write(value))blockedSince=now();return true;
     };
     res.on('drain',()=>{blockedSince=0;});
-    const cleanup=()=>{if(closed)return;closed=true;clearInterval(timer);clearTimeout(timeout);remove?.();releaseCount();};
+    const cleanup=()=>{if(closed)return;closed=true;clearInterval(timer);clearTimeout(timeout);for(const remove of removers)remove();latest.clear();releaseCount();};
     const timer=setInterval(async()=>{
       if(blockedSince&&now()-blockedSince>20000){res.destroy();return;}
-      if(latest&&!blockedSince){const value=latest;latest=null;send(value);}
+      if(!blockedSince)for(const [ticker,value] of latest)if(send(value,multiplex?'book':null))latest.delete(ticker);else break;
       ticks++;
-      if(ticks%40===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:'exchange-websocket'});
-      if(ticks%240===0&&!checking){checking=true;try{if(!await consumeMinute())res.end();}catch{res.end();}finally{checking=false;}}
+      if(ticks%100===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:'exchange-websocket'},multiplex?'heartbeat':null);
+      if(ticks%600===0&&!checking){checking=true;try{if(!await consumeMinute())res.end();}catch{res.end();}finally{checking=false;}}
       if(disabled)res.end();
-    },250);
+    },100);
     const timeout=setTimeout(()=>res.end(),840000);res.on('close',cleanup);
-    try{remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest=message;else send(message);});if(closed)remove();}
-    catch{send({kind:'connection',status:'unavailable',reason:'The native stream is unavailable. REST snapshots remain available.'});res.end();}
+    try{
+      for(const ticker of tickers){
+        const remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest.set(ticker,{...message,ticker});
+          else send(multiplex?{ticker,status:message.status,reason:message.reason}:message,multiplex?'status':null);});
+        if(closed)remove();else removers.push(remove);
+      }
+    }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',reason:'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
   }
   async function serveStatic(req,res,path){
     if(req.method!=='GET'&&req.method!=='HEAD')return json(res,{error:'Method not allowed'},405);
@@ -106,22 +120,54 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   }
   const server=createServer({maxHeaderSize:16384,headersTimeout:10000,requestTimeout:25000,keepAliveTimeout:5000},async(req,res)=>{
     headers(req,res);
+    const started=performance.now();let trace,route='unknown',reported=false;
+    const report=()=>{if(reported)return;reported=true;logger('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:Math.round((performance.now()-started)*100)/100,
+      trace_id:trace?.traceId,span_id:trace?.spanId,parent_id:trace?.parentId,baggage_dropped:trace?.baggageDropped,open_streams:connections});};
+    res.once('finish',report);res.once('close',report);
     try{
       if(req.url.length>2000)return json(res,{error:'URL too long'},414);
       const url=new URL(req.url,'http://localhost'),edgeVerified=serviceAuthorized(req.headers['x-market-edge-secret'],edgeSecret);
+      trace=traceContext(req.headers,{trusted:edgeVerified||serviceAuthorized(req.headers.authorization,serviceSecret)});
+      res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
+      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/assistant\/reserve)$/.test(url.pathname)?url.pathname:'unknown';
       const identity=requestIdentity(req,edgeVerified);
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
-      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:'Railway Node backend',market_data_only:true});
+      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:'Railway Node backend',market_data_only:true,
+        streaming:{connections,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
       const internal=url.pathname==='/mcp'||url.pathname.startsWith('/internal/');
       if(internal){
         if(!serviceAuthorized(req.headers.authorization,serviceSecret))return json(res,{error:'Service authorization required'},401);
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         if(!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
         const raw=await readBody(req,20000),input=JSON.parse(raw||'{}');
+        if(url.pathname==='/internal/diagnostics'){
+          if(!storageEnabled()||storage().kind!=='postgres')return json(res,{error:'The relational store is not configured'},503);
+          if(input.operation==='usage_allowances'){
+            const month=new Date(now()).toISOString().slice(0,7),day=new Date(now()).toISOString().slice(0,10);
+            const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
+              ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
+              ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
+              ['daily_work','work#'+day,6000],['daily_cpu_ms','cpu-ms#'+day,1800000]];
+            const rows=(await storage().db.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',[resources.map(row=>row[1])])).rows;
+            const used=new Map(rows.map(row=>[row.key,row.used]));
+            return json(res,{as_of:new Date(now()).toISOString(),allowances:resources.map(([resource,key,limit])=>({resource,limit,used:used.get(key)||0,
+              remaining:Math.max(0,limit-(used.get(key)||0)),warning:(used.get(key)||0)>=limit*.8})),scope:'Reserved application allowances; provider invoices and included plan usage are separate.'});
+          }
+          if(input.operation!=='database_latency'||!Number.isInteger(input.samples)||input.samples<1||input.samples>9)throw new RangeError('Choose usage_allowances or database_latency with one through nine samples');
+          await quota(3);const milliseconds=[];
+          for(let i=0;i<input.samples;i++){const start=performance.now();await storage().db.query('SELECT 1');milliseconds.push(Math.round((performance.now()-start)*100)/100);}
+          return json(res,{operation:'database_latency',samples_ms:milliseconds,mean_ms:milliseconds.reduce((a,b)=>a+b,0)/milliseconds.length,
+            runtime_region:process.env.RAILWAY_REGION||'unknown',pool:{total:storage().db.totalCount,idle:storage().db.idleCount,waiting:storage().db.waitingCount}});
+        }
         if(url.pathname==='/internal/assistant/reserve')return json(res,await reserveAssistant(input.fingerprint,{storage:storageEnabled()?storage():null,monthlyDollars:monthlyAssistantDollars,now:now()}));
+        if(url.pathname==='/internal/assistant/settle'){
+          if(!storageEnabled()||typeof storage().settleAssistantBudget!=='function')return json(res,{error:'Usage settlement is unavailable'},503);
+          return json(res,await storage().settleAssistantBudget(input.reservation_id,input.billed_milliusd));
+        }
         if(url.pathname==='/mcp'){
-          const ticker=validateTicker(req.headers['x-market-ticker']);await quota(2);return await mcp(req,res,input,{tickerScope:ticker});
+          const ticker=validateTicker(req.headers['x-market-ticker']),modelScope=req.headers['x-market-model']==='challenger'?'challenger':'baseline';
+          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope});
         }
         return json(res,{error:'Unknown service path'},404);
       }
@@ -130,7 +176,9 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(edgeVerified&&!isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'This service is unavailable in your region'},403);
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
       if(!['GET','POST'].includes(req.method))return json(res,{error:'Method not allowed'},405);
-      if(url.pathname==='/api/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);return await sse(req,res,url.searchParams.get('ticker'),identity);}
+      if(url.pathname==='/api/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);return await sse(req,res,[url.searchParams.get('ticker')],identity);}
+      if(url.pathname==='/api/portfolio/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);
+        const raw=url.searchParams.get('tickers')||'';if(raw.length>1750)throw new RangeError('Portfolio watchlist is too long');return await sse(req,res,raw.split(','),identity,true);}
       if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await resolveContracts(url.searchParams.get('q')));}
       if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await marketFees(url.searchParams.get('ticker')));}
       if(req.method==='POST'&&!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
@@ -145,7 +193,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/opinions')?5:1);
+      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
+        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');
@@ -161,10 +210,11 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   const monitor=setInterval(async()=>{
     if(!server.listening)return;
     const current=process.cpuUsage(),used=Math.ceil((current.user-previousCpu.user+current.system-previousCpu.system)/1000);previousCpu=current;
-    if(!storageEnabled())return;
+      const memory=process.memoryUsage();logger('runtime.health',{event_loop_p99_ms:Math.round(eventLoop.percentile(99)/1e4)/100,heap_mb:Math.round(memory.heapUsed/1048576),rss_mb:Math.round(memory.rss/1048576),open_streams:connections});eventLoop.reset();
+      if(!storageEnabled())return;
     try{const stop=await storage().get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await storage().consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
     catch{disabled=true;}
-  },30000);monitor.unref();server.on('close',()=>clearInterval(monitor));
+  },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();});
   return server;
 }
 export const server=createMarketServer();
