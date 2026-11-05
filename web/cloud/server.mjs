@@ -70,7 +70,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     };
     return update('global',1200)&&update(identity,120);
   }
-  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000,'research-reads':3000,'stream-opens':3000};
+  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000,'research-reads':3000,'market-screens':3000,'stream-opens':3000};
   const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history']);
   async function quota(weight=1,kind='work'){
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
@@ -228,8 +228,13 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(url.pathname==='/api/workspace/position-review')await quota(5,'paper-scans');
       else if(req.method==='GET'&&paperReadRoutes.has(url.pathname))await quota(1,'paper-reads');
       else if(req.method==='GET'&&['/api/workspace/research','/api/workspace/evidence'].includes(url.pathname))await quota(5,'research-reads');
-      else await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
-        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
+      else if(req.method==='GET'&&url.pathname==='/api/workspace/opinions'){
+        const count=(url.searchParams.get('tickers')||'').split(',',8).length;
+        await quota(Math.max(5,count),'market-screens');
+      }
+      else if(req.method==='GET'&&url.pathname==='/api/workspace/recommendations')await quota(12,'market-screens');
+      else await quota(url.pathname.includes('forward/start')?30:
+        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');
