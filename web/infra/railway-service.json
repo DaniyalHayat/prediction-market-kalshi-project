@@ -1,0 +1,9 @@
+{
+  "projectId": "4fb93867-600b-435c-a44d-787776861aed",
+  "environmentId": "2cbecd18-8e20-41ac-a4ee-02c0c878d044",
+  "serviceId": "7881b80a-495c-4827-bad3-73e1614b88a9",
+  "repository": "DaniyalHayat/predictir",
+  "rootDirectory": "/web",
+  "watchPatterns": ["/web/**"],
+  "restartPolicyMaxRetries": 3
+}
