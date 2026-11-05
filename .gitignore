@@ -34,6 +34,7 @@ coverage/
 .DS_Store
 Thumbs.db
 web/tests/rendered-content-syntax.js
+/web/AGENTS.md
 .cloud-build/
 .figma-export/
 .railway-npm/
