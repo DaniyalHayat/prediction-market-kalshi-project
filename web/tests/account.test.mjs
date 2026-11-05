@@ -37,6 +37,14 @@ test('guest response and owner login keep tokens private and use host-only HttpO
   assert.ok(!JSON.stringify([...f.records.values()]).includes('fixture-access'));
 });
 
+test('guest cookies stay stable when Supabase is configured but the owner account is not activated',async()=>{
+  const f=fixture({ownerEmail:'',configured:true,authFactory:()=>{throw new Error('Guest access must not initialize owner authentication');}});
+  const first=await f.request('session'),initial=await first.json();assert.equal(first.status,200);assert.equal(initial.kind,'guest');assert.equal(initial.login_configured,false);
+  const retained=first.headers.getSetCookie().find(value=>value.startsWith('__Host-market_guest=')).split(';')[0];
+  f.setTime(start+1000);const next=await f.request('session',{cookie:retained}),value=await next.json();assert.equal(next.status,200);assert.equal(value.kind,'guest');assert.equal(value.guest.id,initial.guest.id);assert.equal(value.guest.expires_at,initial.guest.expires_at);
+  assert.equal((await f.request('account/profile')).status,503);
+});
+
 test('owner allowlist, cross-site and missing-origin writes fail before provider authentication',async()=>{
   const f=fixture();
   assert.equal((await f.request('account/login',{method:'POST',body:{email:'other@example.test',password:'valid-fixture-password'}})).status,401);
