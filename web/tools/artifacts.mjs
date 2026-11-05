@@ -4,6 +4,10 @@ const root=new URL('../public/dashboard/',import.meta.url);
 const manifestURL=new URL('data-app-build.json',root);
 const manifest=JSON.parse(await readFile(manifestURL,'utf8'));
 const check=process.argv.includes('--check');
+for(const [name,signature] of [['favicon.ico','00000100'],['favicon.png','89504e470d0a1a0a']]){
+  const bytes=await readFile(new URL('../public/'+name,import.meta.url));
+  if(bytes.subarray(0,signature.length/2).toString('hex')!==signature)throw new Error('Browser asset is not an image: '+name);
+}
 let mismatch=false;
 for(const kind of ['html','snapshot',...(manifest.runtime?['runtime']:[])]) {
   const entry=manifest[kind],url=new URL(entry.path,root);
