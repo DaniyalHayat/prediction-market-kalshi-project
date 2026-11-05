@@ -1,0 +1,80 @@
+# Execution research and the next-quote challenger
+
+Predictir's Execution lab adds a separate, selectable research layer for the cost and risk of a hypothetical paper order. It combines observed best-queue updates, a next-quote challenger, quote-arrival clustering, inventory-aware quote scenarios and a discrete execution schedule. Every feature has a real calculation and an off state. It never replaces an independent event-outcome probability with market price, order-flow pressure, an assumed diffusion or news popularity.
+
+The fifth contract-detail tab exposes this layer. Existing MCP tools remain intact; the new execution research tool is the sixth registered MCP tool. The backend, assistant and MCP use the same normalized controls and calculation. The application changes remain pending deployment; this document does not establish that the public production website runs this branch.
+
+## Inputs and provenance
+
+`web/lib/workspace/execution-research.mjs` exports `normalizeExecutionControls`, `almgrenChrissSchedule` and `executionResearch`. `web/lib/workspace/microstructure-model.mjs` contains the separate next-quote model and quote-arrival model. Numeric controls reject strings, booleans, non-finite values, unknown keys and oversized requests. The control limits bound fitting and schedule work: 10,000 contracts, 60 intervals, a horizon of 30–86,400 seconds, and at most 2,048 input quote events. The retained contiguous history is capped at 1,024 events.
+
+The backend supplies the exact contract's current, fresh, two-sided fixed-point book, its existing independent forecast packet, the verified series fee coefficient, and a bounded window from the existing exchange stream. It does not open another streaming connection for this feature. YES asks are derived from complementary NO bids and vice versa. Immediate paper-entry and exit estimates use the existing `executionCurve`, including a two-cent slippage limit, depth limits and per-level upward cent rounding. A partial bid fill withholds a full-position exit value. These executable snapshot estimates are separate from future schedule-cost scenarios.
+
+Quote history contains monotonic local receive times, ticker-local sequence numbers, a snapshot-generation identifier and observed best prices/queues. It resets across missing, reordered, malformed or new-generation events. Equal receive timestamps preserve ordered OFI but withhold Hawkes fitting rather than inventing microseconds. Sequence continuity and a non-conflated stream request do not prove that the exchange exposed every underlying order action. The system cannot recover hidden orders, an individual order's queue position, or cancellation intent from net queue updates. Stale observed history is excluded by the backend wrapper.
+
+Volatility, temporary impact and risk aversion are editable, unit-labeled assumptions. A single live snapshot does not calibrate them. The inventory quote scenario is bounded to [0,1] and rounded outward to cents. Its observed-spread anchor is not a fitted arrival-versus-distance function, so the result is not advertised as the full Avellaneda–Stoikov or GLFT optimum.
+
+## Separate next-quote model
+
+For observed best prices `B,A` and sizes `qB,qA`, an OFI transition is
+
+`e = 1[Bnew >= Bold] qBnew - 1[Bnew <= Bold] qBold - 1[Anew <= Aold] qAnew + 1[Anew >= Aold] qAold`.
+
+The original empirical OFI paper uses Level I best queues; full Level II/III data are not necessary for this definition. Multi-level OFI is a different extension. The paper demonstrates a short-interval relationship in its equity sample, not universal predictive alpha or a Kalshi settlement probability. [Cont, Kukanov and Stoikov, §§2.1–2.2](https://arxiv.org/pdf/1011.6402).
+
+The challenger predicts the **next observed quote midpoint change**, using current OFI divided by mean best depth and current queue imbalance. The target is strictly later than the feature observation. It uses two-feature ridge regression with a fixed penalty and training-only normalization. At least 152 contiguous events are required. A chronological 60/20/20 split fits coefficients, calibrates residual quantiles and evaluates an untouched holdout. It compares against zero midpoint change, not a hindsight-selected alternative.
+
+The local application gate requires a strictly positive lower endpoint of a seeded, paired, moving-block bootstrap interval for squared-error improvement and at least 70% held-out coverage for the calibrated nominal 80% residual interval. The bootstrap uses 300 replicates, five-event circular blocks and a fixed seed. It does not refit on the holdout. A failed gate applies zero shift. Even a passed gate changes only the short-horizon quote reference; the independent settlement probability is copied unchanged. A rolling short sample, overlapping windows and repeated testing do not establish prospective significance, realized profits or stable alpha. The interval does not include all model uncertainty.
+
+## Arrival clustering
+
+The second model fits an exponential Hawkes intensity `lambda(t)=mu + alpha sum exp(-beta(t-ti))` to **observed quote-update arrivals**. The amplitude `alpha` and decay `beta` are both measured per second; the branching ratio is `alpha/beta`. It is constrained below one, with fitting capped at 0.95. This convention differs from sources that parameterize the kernel as `branching_ratio * beta * exp(-beta*t)`.
+
+The likelihood uses an O(n) decaying-memory recursion and an analytic compensator, including the history before a held-out window. Fitting uses a bounded beta grid and constrained EM updates with multiple starts; it is not a claim of a global maximum. A chronological 70/30 comparison requires both a training AIC advantage over Poisson and positive held-out log-likelihood gain. The same past conditions both held-out likelihoods. Fewer than 120 events, tied receive timestamps or failed gates leave the execution-risk multiplier at one. [Bacry, Mastromatteo and Muzy, exponential-kernel example and Appendix C.1](https://arxiv.org/pdf/1502.04592).
+
+When enabled and locally accepted, the bounded multiplier is `sqrt(clamp(current_intensity / training_Poisson_rate, 0.5, 3))`. Applying this to assumed volatility is an explicit **scenario assumption**, not an empirically fitted volatility relationship. A fitted cluster process is not a direction, toxicity or event-outcome model. Nonstationary bursts and non-exponential kernels can violate this simple model.
+
+## Execution and finite settlement decisions
+
+For a requested quantity `Q`, horizon `T` in minutes, `N` intervals, temporary impact `eta`, volatility `sigma` and risk preference `lambda`, the schedule minimizes
+
+`J = fixed_cost + eta/dt * sum(nk^2) + lambda * sigma^2 * dt * sum(xk^2)`
+
+subject to `x0=Q`, `xN=0`, and `nk=x(k-1)-xk`. The tridiagonal system has diagonal `2 + lambda*sigma^2*dt^2/eta` and off-diagonal `-1`; a Thomas solve takes O(N) time and memory. It avoids overflow in hyperbolic functions for extreme allowed parameters. Zero risk or disabling optimal scheduling yields equal-quantity TWAP exactly. Trades occur at the **start** of each displayed interval; `remaining` is inventory exposed during that interval. This convention matches the reported conditional variance. The last child is at `T-dt`, with inventory zero during the last interval.
+
+The objective includes a fixed current-spread and unrounded reference-fee estimate. Current depth-based entry/exit quotes use actual per-level rounding separately. Fractional schedule quantities are target allocations, not orders or fill promises. Constant impact, zero drift, no permanent impact, known variance and an unchanged future liquidity regime are assumptions. The discrete model's optimum can have higher expected execution cost than TWAP while reducing its risk penalty enough to lower `J`. A lower objective is not profit. The continuous `sqrt(lambda*sigma^2/eta)` decay formula is a limit; finite time steps have a discrete correction. [Almgren and Chriss, §§1.5–2.2](https://www.smallake.kr/wp-content/uploads/2016/03/optliq.pdf).
+
+For a hypothetical existing binary position of quantity `q`, the hold-versus-sell calculation compares current full executable net bid proceeds against the CARA certainty equivalent
+
+`CE(p,q,risk) = -log((1-p) + p*exp(-risk*q))/risk`,
+
+with the risk-neutral limit `p*q`. The implementation uses stable `log1p`/`expm1` arithmetic and handles probabilities exactly zero or one. Entry cost is sunk in this comparison. Lower and upper model probabilities give a range of certainty equivalents. A missing, stale, mismatched or unapproved forecast withholds a released position action. An unapproved forecast can show a separately named experimental `scenario_decision`; it does not become a released recommendation. No optional-stopping theorem turns a negative expected value after fees into an edge. The paper ledger remains responsible for actual depth-based fills and settlement.
+
+## Attachment gap analysis that changed implementation
+
+| Topic | Correction and resulting choice |
+| --- | --- |
+| Long inventory | Lower bid/ask quotes discourage additional sellers and encourage buyers to take inventory. The attached paper reverses those counterparties. Inventory quote direction is explicitly tested. |
+| HJB and linear methods | A maximum makes a general HJB nonlinear, but GLFT transforms its particular problem into linear ODEs and spectral approximations. A blanket assertion that linear methods fail is too strong. The execution layer solves its own finite convex problem directly. [GLFT](https://arxiv.org/abs/1105.3115). |
+| Reservation price | It is a subjective inventory valuation under assumptions, not a guaranteed tradable fair price or a settlement forecast. The lab labels it a quote scenario. [Avellaneda–Stoikov, §§2.2, 3](https://math.nyu.edu/inmemoriam/avellaneda/HighFrequencyTrading.pdf). |
+| OFI inputs | Best-queue event changes suffice for classic OFI; occasional snapshots cannot recover omitted event order. The lab uses only its latest observed contiguous stream generation and gates missing history. |
+| Hawkes inference | Self-exciting activity does not determine direction or remove bots. Only quote-arrival timing is fitted; no invented sentiment scores or accuracy histories enter the probability. |
+| A–C precision | Finite-step corrections, units and the cost-versus-risk distinction matter. The implementation solves the actual discrete objective rather than treating its continuous limit as exact. |
+| LMSR | LMSR is an alternative automated-market-maker mechanism. Kalshi's displayed order book is a CLOB; LMSR cost/softmax equations cannot replace its depth or fees. No LMSR fills are represented as Kalshi fills. |
+| Deep learning | A CNN/LSTM architecture requires a suitable event-history dataset, leakage controls, calibration and fee-aware tests. Its name or greater parameter count does not substantiate better event probabilities. No untrained DeepLOB model is presented as a feature. [Deep LOB forecasting survey](https://arxiv.org/abs/2403.09267). |
+| Hardware latency | NIC-specific kernel bypass, cache-line padding and busy polling depend on hardware, scheduler, runtime and workload. They do not confer nanosecond guarantees on a hosted Node application. Existing engineering benchmarks remain separate. |
+| Synthetic results | Positive controls, simulations, local CPU measurements and model-conditional objective changes are named separately from empirical market predictions and realized results. |
+
+## Validation and reproduction
+
+Run `node --test tests/execution-research.test.mjs` from `web/`. Tests compare OFI to independent arithmetic, Hawkes recursion to a quadratic likelihood oracle, and the execution optimum to a coarse exhaustive search. They cover quantity conservation, zero-risk TWAP, extreme parameters, future-holdout mutation, both market sides, all eight categories, existing per-level fee calculations, stale books, missing forecasts, partial depth and strict input validation. The core tests make no external requests and use no credentials.
+
+Run `node tools/validate_execution_research.mjs` for the bounded research experiment. The inspectable output is `review/execution-research-validation.json`, with source hashes and runtime details. Its 32 category/side/action cases use explicitly synthetic profiles to test adapters and mathematical invariants. Five toggle ablations each change an actual numeric result while preserving settlement probabilities. Five planted-signal controls pass the local gate; five independent-noise controls do not. Those outcomes check the validation mechanism, not real-market accuracy. The CPU benchmark retains all 41 measured observations after five warmups; p50/p95/p99 are local empirical calculation percentiles with thin tail resolution, excluding network, storage, rendering and exchange latency.
+
+The runner also performs three separate 10,000-path stock liquidation simulations using the same random increments for the model and TWAP: an assumed zero-drift diffusion, a symmetric jump stress, and a volatility scale estimated from historical IBM daily closes. Optional `--fetch-stock` makes one bounded, unpaid request to Alpha Vantage's documented IBM demonstration endpoint. The response is cached under ignored `web/.research/`; raw provider data are not committed or publicly redistributed. The report records response hash, provider, retrieval time and date bounds. Subsequent runs use the local cache. A clean installation without that private cache still runs the synthetic diffusion and jump experiments; the historical-scale case is explicitly absent until fetched.
+
+The observed IBM input had 100 daily closes from June 15 to November 4, 2026. The daily return split was 59 fit, 20 calibration and 20 untouched holdout observations. A zero-return forecast's calibration 90% interval covered 85% of that small holdout. This is a descriptive **single-asset return-interval check**, not probability calibration, model selection across stocks or evidence of profitable prediction. The fitted daily return RMS is converted to a per-minute dollar volatility using `reference_price * RMS / sqrt(390)`, an assumption of uniform intraday variance that ignores overnight/intraday differences. Survivorship, short history, corporate actions, regimes and provider limitations remain. No intraday order-flow or impact dataset was inferred from daily closes. [Alpha Vantage daily-series documentation](https://www.alphavantage.co/documentation/#daily).
+
+In the assumed 0.20 USD/sqrt-minute diffusion example, the model trades faster than TWAP: analytic expected cost is about $66.19 versus $22.67, while conditional variance is about 12,376 versus 1,520,889 USD². With the chosen 0.001 inverse-USD risk preference, the objective is $78.56 versus $1,543.56. Paired Monte Carlo results approximate those conditional moments; adding jump stress increases variance and demonstrates model sensitivity. These are simulated costs for a 2,000-share liquidation under supplied impact/spread assumptions. They are neither dollar profits nor an observed benefit to a real trader.
+
+No production migration, new paid provider, extra stream connection or cloud deployment is required by this math layer. Model promotion still requires a frozen prospective protocol, sufficient independent event data and fee-aware executable outcomes.
