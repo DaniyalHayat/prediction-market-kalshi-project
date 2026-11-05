@@ -1,9 +1,9 @@
 export const PREFERENCE_KEY='kalshi-market-lab:appearance:v1';
 export const DEFAULT_PREFERENCES=Object.freeze({theme:'graphite',layout:'balanced',density:'comfortable',model:'validated'});
 export const THEMES={
-  graphite:{name:'Graphite',description:'Neutral black, clear blue accents',panel:'#10151d',ink:'#edf2f9',muted:'#a9b6c8',accent:'#8db8ff'},
-  midnight:{name:'Midnight',description:'Deep navy with cool highlights',panel:'#0b1016',ink:'#e8f2ff',muted:'#a2b8cf',accent:'#9bcdff'},
-  light:{name:'Light',description:'Paper white for bright rooms',panel:'#ffffff',ink:'#172231',muted:'#536173',accent:'#174d91'}
+  graphite:{name:'Black',description:'Near-black with quiet gray surfaces',panel:'#0a0a0a',ink:'#ededed',muted:'#a1a1a1',accent:'#ededed'},
+  midnight:{name:'Charcoal',description:'Soft neutral gray for longer sessions',panel:'#141414',ink:'#ededed',muted:'#ababab',accent:'#ededed'},
+  light:{name:'Light',description:'Paper white for bright rooms',panel:'#ffffff',ink:'#171717',muted:'#606060',accent:'#262626'}
 };
 export function appearance(value){
   let data=value;

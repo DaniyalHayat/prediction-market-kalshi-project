@@ -9,8 +9,10 @@ import {portfolioTickers} from './paper-state.mjs';
 import {portfolioTotals} from './portfolio-state.mjs';
 import {paperCapital} from './paper-capital.mjs';
 import Chart from './Chart.jsx';
+import PaperCash from './PaperCash.jsx';
+import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 export default function Portfolio({onOpen,onMarkets,clock=Date.now(),model='validated',theme='graphite'}){
-  const {engine,ledger,bankroll,changeBankroll,commit,storageError}=usePaperLedger();
+  const {engine,ledger,bankroll,adjustCash,commit,storageError}=usePaperLedger();
   const [riskLimit,setRiskLimit]=useState(''),[showClosed,setShowClosed]=useState(false),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[error,setError]=useState(''),[observations,setObservations]=useState([]);
   const acting=useRef(false),lastSample=useRef(0);
   const tickers=useMemo(()=>portfolioTickers(ledger?.positions),[ledger]);
@@ -32,6 +34,7 @@ export default function Portfolio({onOpen,onMarkets,clock=Date.now(),model='vali
         recorded=engine.estimate(quote,actual.ticker,actual.side,'sell',requested,{coefficient:actual.entry_assumptions?.coefficient??.07,slippage:2,live:true});
         return engine.applyClose(current,actual.id,recorded,{id:crypto.randomUUID()});});
       setMessage(`Recorded ${count(recorded.filled)} paper contracts closed for ${dollars(recorded.cash)} net of modeled exit fees.${recorded.unfilled?' Unfilled contracts remain open.':''}`);
+      emitAnalytics('paper_close',{ticker:position.ticker});
     }catch(e){setError(e.message);}finally{acting.current=false;setBusy('');}
   }
   async function settle(position){
@@ -46,7 +49,8 @@ export default function Portfolio({onOpen,onMarkets,clock=Date.now(),model='vali
     <div className="page-heading"><div><span className="eyebrow">Your paper account</span><h1 id="portfolio-title">Portfolio</h1><p>Live bid-side value, recorded costs and a fresh review of each open position.</p></div><button className="secondary" disabled={!ledger} onClick={()=>exportJSON({...ledger,exported_at:new Date().toISOString(),classification:'SIMULATED PAPER RECORDS'},'kalshi-paper-ledger.json')}><Download size={15}/>Export ledger</button></div>
     {model==='challenger'&&<p className="notice experimental-note"><strong>Experimental ensemble selected.</strong> Model comparisons are paper research. Unmet release requirements remain visible in each action.</p>}
     <div className="portfolio-metrics"><div><span>Available paper cash</span><strong>{dollars(capital?.available)}</strong></div><div><span>Open cost basis</span><strong>{dollars(totals.open_basis)}</strong></div><div><span>Net bid exit value</span><strong>{dollars(totals.marked_value)}</strong></div><div><span>Unrealized P/L</span><strong className={totals.unrealized>0?'positive':totals.unrealized<0?'negative':''}>{dollars(totals.unrealized)}</strong></div><div><span>Realized P/L</span><strong className={totals.realized>0?'positive':totals.realized<0?'negative':''}>{dollars(totals.realized)}</strong></div></div>
-    <div className="portfolio-controls"><label>Starting balance, $<input type="number" min="1" max="1000000000" value={bankroll} onChange={e=>changeBankroll(e.target.value)}/></label><label>Optional per-position loss limit, $<input type="number" min="0" max="1000000000" placeholder="No limit set" value={riskLimit} onChange={e=>setRiskLimit(e.target.value)}/></label><span className="live-label"><span className="status-dot"/>{tickers.length} open contracts{refreshing&&<><Loader2 size={13} className="spin"/>Refreshing research</>}</span></div>
+    <PaperCash capital={capital} ledger={ledger} onAdjust={adjustCash}/>
+    <div className="portfolio-controls"><label>Optional per-position loss limit, $<input type="number" min="0" max="1000000000" placeholder="No limit set" value={riskLimit} onChange={e=>setRiskLimit(e.target.value)}/></label><span className="live-label"><span className="status-dot"/>{tickers.length} open contracts{refreshing&&<><Loader2 size={13} className="spin"/>Refreshing research</>}</span></div>
     {storageError&&<p className="notice error" role="alert">{storageError}</p>}{error&&<p className="notice error" role="alert">{error}</p>}{message&&<p className="notice success" role="status">{message}</p>}
     {!totals.fully_marked&&totals.open_count>0&&<p className="notice">Full-portfolio exit value and unrealized P/L wait until every open position has enough fresh executable depth. Partial and stale marks are not treated as complete fills.</p>}
     {observations.length>1&&<details className="portfolio-performance"><summary>Observed portfolio P/L this session</summary><Chart rows={observations} unit="usd" height={180} theme={theme} label="Observed paper portfolio profit and loss during this visible session"/><p className="footnote">Realized P/L plus complete net bid marks, sampled while this view is visible. This series is not backfilled and resets when the page reloads.</p></details>}

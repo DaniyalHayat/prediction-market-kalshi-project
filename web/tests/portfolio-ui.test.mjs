@@ -32,7 +32,7 @@ test('portfolio totals withhold residual values when any position has incomplete
   const pendingSettlement=portfolioTotals(ledger,{...complete,q:{...complete.q,status:'settled'}});assert.equal(pendingSettlement.marked_value,9);
 });
 test('ledger writes use the latest retained balance before authorizing another entry',()=>{
-  const memory=new Map([[PAPER_STORAGE,JSON.stringify(paper.emptyLedger())],[PAPER_BALANCE,'5']]);
+  const memory=new Map([[PAPER_STORAGE,JSON.stringify({...paper.emptyLedger(),starting_balance:5})],[PAPER_BALANCE,'1000']]);
   const storage={getItem:key=>memory.get(key)??null,setItem:(key,value)=>memory.set(key,value)};
   const stale=paper.emptyLedger(),buy=(id)=>(current,balance)=>{const cost=entry();assert.ok(paperCapital(current,balance).available>=cost.cash,'Insufficient remaining cash');return paper.applyOpen(current,cost,{id});};
   updateStoredLedger(paper,storage,buy('first'),stale);
