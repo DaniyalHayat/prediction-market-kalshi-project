@@ -12,6 +12,10 @@ No resource has been provisioned or imported, and no deployment is authorized. T
 
 The reference permits one backend task, the existing four-query-connection pool and one dedicated LISTEN connection. It uses a public task address for HTTPS egress while security groups allow inbound application traffic only from the ALB. The database has no internet route and accepts port 5432 only from the task security group. There is no NAT gateway, Kubernetes cluster, Kafka cluster or automatic scaling. ALB-to-task traffic uses HTTP inside the VPC; end-to-end TLS would require a separate application/certificate configuration review.
 
+The non-root container keeps a read-only root filesystem and a separate ephemeral model-cache mount at `/tmp/market-lab-models`. The Dockerfile must create that directory owned by the node user and declare a matching `VOLUME`; ECS uses the image directory metadata to initialize the volume. This mount uses the task's existing 20-GiB ephemeral allocation and has no separate 128-MiB quota. Application retention limits still apply. It does not enable a model download at task startup. [ECS bind mount ownership and lifetime](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bind-mounts.html).
+
+Before any RDS activation, supply the correct current RDS CA bundle as backend `DATABASE_CA_CERT` configuration through the reviewed runtime environment/secret mapping and validate certificate verification. Do not weaken `rejectUnauthorized` or reuse a Supabase CA bundle for a different database host.
+
 Deployment uses minimum healthy 0 / maximum 100 percent. This prevents temporary backend duplication against the small database role budget, at the cost of brief replacement downtime and interrupted streams. Increasing replica count or switching to overlapping deployments requires a connection-budget and stream-reconnect review. The single-AZ database and single backend are not a high-availability topology.
 
 ## Cost decision
