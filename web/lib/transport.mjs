@@ -37,6 +37,14 @@ export async function readJSON(response, {source = 'Data service', maximumBytes 
 }
 
 export async function fetchJSON(url, options = {}) {
-  const {source, maximumBytes, ...request} = options;
-  return (await readJSON(await fetch(url, {...request, headers: {Accept: 'application/json', ...request.headers}}), {source, maximumBytes})).data;
+  const {source, maximumBytes, timeoutMs=65000, ...request} = options;
+  if(!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000)throw new RangeError('Choose a request deadline from 1 to 300000 milliseconds');
+  const deadline=new AbortController(),timer=setTimeout(()=>deadline.abort(),timeoutMs);
+  try{
+    const signal=request.signal?AbortSignal.any([request.signal,deadline.signal]):deadline.signal;
+    return (await readJSON(await fetch(url, {...request,signal,headers: {Accept: 'application/json', ...request.headers}}), {source, maximumBytes})).data;
+  }catch(error){
+    if(deadline.signal.aborted&&!request.signal?.aborted)throw new DataResponseError(`${source||'Data service'} did not finish in time. Try again shortly.`,{status:504,code:'REQUEST_TIMEOUT'});
+    throw error;
+  }finally{clearTimeout(timer);}
 }
