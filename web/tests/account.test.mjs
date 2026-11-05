@@ -56,6 +56,39 @@ test('verified sessions refresh, revoke on logout and clear stale owner cookies 
   const other=fixture();other.auth.auth.signInWithPassword=async()=>{throw new Error('PRIVATE_PROVIDER_DETAIL');};const failed=await other.login();assert.equal(failed.status,503);assert.ok(!(await failed.text()).includes('PRIVATE_PROVIDER_DETAIL'));
 });
 
+test('getUser outages preserve owner and guest cookies and recover without switching to a guest account',async()=>{
+  for(const status of [429,500,503]){
+    const f=fixture(),signed=await f.login(),active=cookie(signed),verify=f.auth.auth.getUser;
+    f.auth.auth.getUser=async()=>({error:{status,message:'PRIVATE_UPSTREAM_ERROR'},data:{user:null}});
+    const failure=await f.request('session',{cookie:active+'; __Host-market_guest=retained-guest'});
+    assert.equal(failure.status,503);assert.equal(failure.headers.get('Retry-After'),status===429?'60':'15');assert.deepEqual(failure.headers.getSetCookie(),[]);
+    const body=await failure.json();assert.equal(body.kind,undefined);assert.ok(!JSON.stringify(body).includes('PRIVATE_UPSTREAM'));
+    f.auth.auth.getUser=verify;assert.equal((await (await f.request('session',{cookie:active})).json()).kind,'owner');
+  }
+  const f=fixture(),active=cookie(await f.login());f.auth.auth.getUser=async()=>{throw new Error('PRIVATE_NETWORK_ERROR');};
+  const failure=await f.request('session',{cookie:active});assert.equal(failure.status,503);assert.equal(failure.headers.get('Retry-After'),'15');assert.deepEqual(failure.headers.getSetCookie(),[]);
+});
+
+test('refresh outages and incomplete results preserve sessions while actual invalid refresh tokens clear them',async()=>{
+  for(const result of [{error:{status:429},data:{}},{error:{status:503},data:{}},{error:null,data:{session:{}}},null]){
+    const f=fixture(),active=cookie(await f.login()),refresh=f.auth.auth.refreshSession;f.setTime(start+3590000);f.auth.auth.refreshSession=async()=>result;
+    const failure=await f.request('session',{cookie:active});assert.equal(failure.status,503);assert.deepEqual(failure.headers.getSetCookie(),[]);assert.ok(failure.headers.get('Retry-After'));
+    f.auth.auth.refreshSession=refresh;assert.equal((await (await f.request('session',{cookie:active})).json()).kind,'owner');
+  }
+  const network=fixture(),networkCookie=cookie(await network.login());network.setTime(start+3590000);network.auth.auth.refreshSession=async()=>{throw new Error('PRIVATE_REFRESH_NETWORK_ERROR');};
+  const unavailable=await network.request('session',{cookie:networkCookie});assert.equal(unavailable.status,503);assert.equal(unavailable.headers.get('Retry-After'),'15');assert.deepEqual(unavailable.headers.getSetCookie(),[]);
+  const f=fixture(),active=cookie(await f.login());f.setTime(start+3590000);f.auth.auth.refreshSession=async()=>({error:{status:400,code:'refresh_token_not_found'},data:{}});
+  const invalid=await f.request('session',{cookie:active});assert.equal(invalid.status,200);assert.equal((await invalid.json()).kind,'guest');assert.ok(invalid.headers.getSetCookie().some(value=>value.startsWith('__Host-market_owner=;')&&value.includes('Max-Age=0')));
+});
+
+test('authorized portfolio writes reject fabricated finances before calling persistence',async()=>{
+  const f=fixture(),active=cookie(await f.login());let writes=0;
+  f.storage.saveOwnerPortfolio=async()=>{writes++;return {conflict:false,value:{}};};
+  const ledger={version:1,starting_balance:100,positions:[{id:'p',ticker:'KXTEST-YES',side:'yes',original_quantity:1,remaining_quantity:1,entry_cost:-500,entry_fee:-1,remaining_basis:1,realized_pnl:1000000}],trades:[{id:'t',position_id:'p',ticker:'KXTEST-YES',side:'yes',action:'buy',filled:100,cash:-500,fee:-1}]};
+  const rejected=await f.request('account/portfolio',{method:'PUT',cookie:active,body:{revision:0,watchlist:[],ledger}});
+  assert.equal(rejected.status,400);assert.match((await rejected.json()).error,/reconcile/);assert.equal(writes,0);
+});
+
 test('portfolio validation rejects dropped rows, duplicate identities and malformed saved contracts',()=>{
   assert.equal(validatePortfolio({ledger:empty,watchlist:['KXTEST-YES','KXTEST-YES'],revision:0}).watchlist.length,1);
   assert.throws(()=>validatePortfolio({ledger:{...empty,positions:[{id:'bad'}]},watchlist:[],revision:0}));
@@ -90,5 +123,9 @@ test('PostgreSQL owner portfolio CAS prevents lost updates and scopes records by
     assert.deepEqual(await store.readOwnerPortfolio(other),{ledger:null,watchlist:[],revision:0});
     const stale=await store.saveOwnerPortfolio(owner,{ledger:empty,watchlist:[],revision:1});assert.equal(stale.conflict,true);assert.equal(stale.value.revision,2);
     assert.equal((await store.saveOwnerPortfolio(other,{ledger:empty,watchlist:[],revision:2})).conflict,true);
+    const f=fixture({storage:store});f.user.id=randomUUID();const active=cookie(await f.login());
+    const authenticated=await Promise.all([1,2].map(amount=>f.request('account/portfolio',{method:'PUT',cookie:active,body:{revision:0,watchlist:[],owner_id:other,ledger:{...empty,starting_balance:amount*10000}}})));
+    assert.deepEqual(authenticated.map(row=>row.status).sort(),[200,409]);assert.equal((await store.readOwnerPortfolio(f.user.id)).revision,1);assert.equal((await store.readOwnerPortfolio(other)).revision,0);
+    const invalid=await f.request('account/portfolio',{method:'PUT',cookie:active,body:{revision:1,watchlist:[],ledger:{...empty,starting_balance:-1}}});assert.equal(invalid.status,400);assert.equal((await store.readOwnerPortfolio(f.user.id)).revision,1);
   }finally{await store.close();}
 });
