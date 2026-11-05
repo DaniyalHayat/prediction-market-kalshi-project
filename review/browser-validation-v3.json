@@ -1,0 +1,38 @@
+{
+  "review_date": "2026-11-04 America/New_York",
+  "scope": "Local loopback development preview plus saved Google Analytics and Tag Manager settings",
+  "production_application_deployed": false,
+  "preview_url": "http://127.0.0.1:8768/",
+  "backend_database": "Disposable local PostgreSQL 17 fixture",
+  "desktop_browser_checks": {
+    "neutral_black_interface": "Visually verified",
+    "contract_switch": "Washington title/ticker changed immediately and old quotes were cleared before the new packet arrived",
+    "cash_controls": "Added 100 simulated dollars, decreased 100, restored 20000 available on the localhost guest fixture; both movements recorded separately from trading P/L",
+    "paper_entry_and_close": {
+      "ticker": "KXNBAGAME-26NOV04PHIDET-PHI",
+      "contracts": 1,
+      "entry_cost_including_fee": 0.93,
+      "net_close_proceeds": 0.90,
+      "incremental_realized_pnl": -0.03,
+      "open_quantity_after_close": 0,
+      "existing_simulated_history_preserved": true
+    },
+    "on_demand_news": "Actual source items appeared only after Load contract news. After the fix, the Washington reload returned three current items and excluded the earlier 2015 wrong-opponent game page.",
+    "long_reads": "Both analysis and news reading modes changed. Detailed analysis included real last-five records, head-to-head coverage and 24 of 24 requested boxscores with dated source limitations.",
+    "retained_search": "HTTP 200, hybrid_rrf, real pinned 384-dimensional q8 MiniLM, postgres_array fallback on the plain local PostgreSQL fixture",
+    "post_tipoff_model_explanation": "Validated pregame model explicitly withheld after start; experimental live model distinguished",
+    "mobile_visual_capture": "Not established; responsive CSS and regression checks do not substitute for a phone-sized browser capture"
+  },
+  "google_settings": {
+    "container": "GTM-5635HXLP",
+    "live_version": 2,
+    "public_script_http": 200,
+    "destination": "G-NJN43KL0FQ",
+    "event_scoped_dimensions": ["market_category", "reading_mode", "save_action", "cash_action"],
+    "key_event": {"name": "paper_entry", "counting": "once per session", "default_monetary_value": null},
+    "overview": "Ten app-focused cards saved and verified after reload",
+    "privacy": "Additional analytics consent required on both tags; automatic event and user-provided-data detection disabled",
+    "visitor_dataset": "No established visitor dataset; populated production collection is not claimed"
+  },
+  "production_preview_limit": "Automatic approval review rejected the local production-preview launch with 'blocked by policy' and no further explanation. It was not retried. The production build passed; browser checks used the narrower loopback development preview."
+}
