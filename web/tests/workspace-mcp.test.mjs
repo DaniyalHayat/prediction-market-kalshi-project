@@ -25,10 +25,11 @@ async function listen(t,options={}){
 }
 const packet=value=>JSON.parse(value.content.find(row=>row.type==='text').text);
 test('MCP execution quantities and dollar costs use distinct explicit units',()=>{
-  const value=publicResearch({ticker,decision:{candidates:[{side:'yes',execution:{side:'yes',requested:1,filled:1,unfilled:0,available:1234.5,cost:.42,fee:.01,all_in:.43,vwap:.42,breakeven:.43,slippage_cents:0}}]}});
+  const value=publicResearch({ticker,decision:{candidates:[{side:'no',probability:.7,lower_probability:.6,expected_edge:.02,execution:{side:'no',requested:1,filled:1,unfilled:0,available:1234.5,cost:.42,fee:.01,all_in:.43,vwap:.42,breakeven:.43,slippage_cents:0}}]}});
   const e=value.decision.candidates[0].execution;
   assert.equal(e.available_contracts_within_slippage,1234.5);assert.equal(e.entry_notional_usd,.42);assert.equal(e.estimated_entry_fee_usd,.01);assert.equal(e.all_in_entry_usd,.43);
   assert.equal(e.available,undefined);assert.equal(e.cost,undefined);assert.match(e.units_note,/not dollars/);assert.match(value.units.quantity,/never an account balance/);
+  assert.equal(value.account_balances_available,false);assert.equal(value.decision.candidates[0].side_win_probability_fraction,.7);assert.equal(value.decision.candidates[0].expected_edge_usd_per_filled_contract,.02);
 });
 const edgeHeaders={'x-market-edge-secret':edgeSecret,'x-market-country':'US','x-market-client-ip':'198.51.100.7'};
 function memoryQuota(){const used=new Map();return {used,consume:async(key,limit,amount=1)=>{const before=used.get(key)||0;if(before+amount>limit)return false;used.set(key,before+amount);return true;}};}
@@ -38,7 +39,8 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
   const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_contract','get_price_history','get_research','get_source_status']);
   assert.ok(tools.tools.every(tool=>tool.annotations.readOnlyHint&&tool.annotations.destructiveHint===false));
-  const contract=await client.callTool({name:'get_contract',arguments:{ticker}});assert.equal(packet(contract).market.ticker,ticker);assert.equal(packet(contract).book.raw.orderbook_fp.no_dollars[0][0],'.58');
+  const contract=await client.callTool({name:'get_contract',arguments:{ticker}});assert.equal(packet(contract).market.ticker,ticker);assert.equal(packet(contract).book.no_bid_levels[0].bid_price_usd_per_contract,.58);
+  assert.equal(packet(contract).book.no_bid_levels[0].quantity_contracts,10);assert.equal(packet(contract).book.metrics,undefined);assert.equal(packet(contract).account_balances_available,false);
   assert.equal(packet(contract).quotes.yes_ask_usd,.42);assert.equal(packet(contract).quotes.no_ask_usd,.6);
   assert.match(packet(contract).quotes.unit,/USD per contract/);assert.match(packet(contract).quotes.costs_note,/exclude entry fees/);
   const rejected=await client.callTool({name:'get_contract',arguments:{ticker:'KXCPI-26NOV-T0.2'}});assert.equal(rejected.isError,true);assert.match(packet(rejected).reason,/selected contract/);
