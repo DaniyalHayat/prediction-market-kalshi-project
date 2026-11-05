@@ -14,7 +14,7 @@ import {MockLanguageModelV4,simulateReadableStream} from 'ai/test';
 const ticker='KXNBAGAME-26NOV07SASPOR-SAS',secret='service-test-'.repeat(5),edgeSecret='edge-test-'.repeat(5);
 const source='https://external-api.kalshi.com/trade-api/v2/markets/'+ticker;
 const dependencies={marketDetails:async()=>({market:{ticker,title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',rules_primary:'The exact selected outcome.'},source_url:source,as_of:'2026-11-04T12:00:00Z'}),
-  book:async()=>({raw:{orderbook_fp:{yes_dollars:[['.4','10']],no_dollars:[['.58','10']]}},source_url:source+'/orderbook',as_of:'2026-11-04T12:00:00Z'}),
+  book:async()=>({metrics:{book_bid:.4,book_ask:.42},raw:{orderbook_fp:{yes_dollars:[['.4','10']],no_dollars:[['.58','10']]}},source_url:source+'/orderbook',as_of:'2026-11-04T12:00:00Z'}),
   workspaceResearch:async()=>({ticker,summary:'PASS: independent holdout not established',opinion:{side:'PASS'},sources:[{url:source}],extensions:{music:{spotify:{references:[{name:'PRIVATE_CATALOG_SENTINEL'}]}}}}),
   contractHistory:async()=>({ticker,rows:[{time:'2026-11-04T12:00:00Z',value:.4}]}),warehouseStatus:async()=>({configured:true,source_batches:3}),providerStatus:()=>[]};
 async function listen(t,options={}){
@@ -33,6 +33,8 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_contract','get_price_history','get_research','get_source_status']);
   assert.ok(tools.tools.every(tool=>tool.annotations.readOnlyHint&&tool.annotations.destructiveHint===false));
   const contract=await client.callTool({name:'get_contract',arguments:{ticker}});assert.equal(packet(contract).market.ticker,ticker);assert.equal(packet(contract).book.raw.orderbook_fp.no_dollars[0][0],'.58');
+  assert.equal(packet(contract).quotes.yes_ask_usd,.42);assert.equal(packet(contract).quotes.no_ask_usd,.6);
+  assert.match(packet(contract).quotes.unit,/USD per contract/);assert.match(packet(contract).quotes.costs_note,/exclude entry fees/);
   const rejected=await client.callTool({name:'get_contract',arguments:{ticker:'KXCPI-26NOV-T0.2'}});assert.equal(rejected.isError,true);assert.match(packet(rejected).reason,/selected contract/);
   const traversal=await client.callTool({name:'get_contract',arguments:{ticker:'../portfolio/balance'}});assert.equal(traversal.isError,true);
   const research=await client.callTool({name:'get_research',arguments:{ticker}});assert.equal(packet(research).opinion.side,'PASS');assert.ok(!JSON.stringify(research).includes('PRIVATE_CATALOG_SENTINEL'));
@@ -105,11 +107,12 @@ test('assistant uses real MCP-shaped tools, budgets before generation and closes
   t.after(()=>{for(const [key,value] of [['MARKET_BACKEND_URL',previous.backend],['ASSISTANT_SERVICE_SECRET',previous.secret]])if(value===undefined)delete process.env[key];else process.env[key]=value;});
   const calls=[];let closed=false;
   const client={listTools:async()=>({tools:[{name:'get_research',description:'Public research',inputSchema:{type:'object',properties:{ticker:{type:'string'}},required:['ticker']}}]}),
-    callTool:async input=>{calls.push(input);return {content:[{type:'text',text:JSON.stringify({ticker,opinion:{side:'PASS'}})}]};},close:async()=>{closed=true;}};
+    callTool:async input=>{calls.push(input);return {content:[{type:'text',text:JSON.stringify({ticker,opinion:{side:'PASS'},sources:[{url:'javascript:alert(1)'},{url:'https://user:private-credential-sentinel@example.com/'},{url:source}]})}]};},close:async()=>{closed=true;}};
   const request=()=>new Request('https://predictir.dev/api/assistant',{method:'POST',headers:{Origin:'https://predictir.dev','Content-Type':'application/json'},body:JSON.stringify({ticker,messages:[{role:'user',content:'Explain the model.'}]})});
   const response=await assistantResponse(request(),{createClient:async()=>client,fetcher:async(url,options)=>{calls.push({reserve:url.pathname,body:JSON.parse(options.body)});return {reserved_usd:.025};},
     generate:options=>({fullStream:(async function*(){const result=await options.tools.get_research.execute({ticker});assert.equal(result.opinion.side,'PASS');assert.equal(options.prepareStep({stepNumber:2,messages:[]}).toolChoice,'none');yield {type:'text-delta',text:'PASS: no supported edge.'};await options.onFinish();})()})});
-  assert.match(await response.text(),/PASS/);assert.equal(calls[0].reserve,'/internal/assistant/reserve');assert.match(calls[0].body.fingerprint,/^[a-f0-9]{64}$/);assert.equal(closed,true);
+  const answer=await response.text();assert.match(answer,/PASS/);assert.ok(answer.includes(source));assert.match(answer,/Sources checked/);assert.ok(!answer.includes('javascript:'));assert.ok(!answer.includes('private-credential-sentinel'));
+  assert.equal(calls[0].reserve,'/internal/assistant/reserve');assert.match(calls[0].body.fingerprint,/^[a-f0-9]{64}$/);assert.equal(closed,true);
   const blocked=await assistantResponse(request(),{fetcher:async()=>{throw Object.assign(new Error('budget'),{status:429});},generate:()=>{throw new Error('must not generate');}});
   assert.equal(blocked.status,429);
 });
