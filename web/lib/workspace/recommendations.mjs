@@ -43,7 +43,7 @@ export function tradeCandidates(market,book,research,{budget=20,now=Date.now(),c
           !favorable?'The lower probability bound does not clear all-in entry cost plus the buffer.':
           eligible?'The released model lower bound clears this budget-sized execution and buffer.':
           scenarioEligible?'Experimental paper candidate: the cost screen passes, but the challenger has not passed its promotion gate.':reason||'The model release gate is incomplete.'],
-        quote_as_of:book.as_of,source_as_of:research.forecast.source_as_of,classification:isExperimental?'EXPERIMENTAL_PAPER_SCENARIO':'PAPER_RESEARCH_SCENARIO',paper_only:true,estimated:true,
+        quote_as_of:book.as_of,source_as_of:research.forecast.source_as_of,max_source_age_seconds:research.forecast.max_source_age_seconds,inplay:Boolean(research.forecast.inplay),classification:isExperimental?'EXPERIMENTAL_PAPER_SCENARIO':'PAPER_RESEARCH_SCENARIO',paper_only:true,estimated:true,
         entry_buffer_cents:bufferCents,fee_coefficient:coefficient,close_time:market.close_time});
     }catch(error){rows.push({ticker:market.ticker,title:market.yes_sub_title||market.title,event_ticker:market.event_ticker,side:side.toUpperCase(),probability:p,interval:range,eligible:false,scenario_eligible:false,reasons:[error.message]});}
   }
