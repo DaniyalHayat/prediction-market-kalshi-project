@@ -40,8 +40,15 @@ test('targeted cursor advances with exact numeric IDs and marks bounded paginati
   assert.equal(result.coverage.truncated,true);assert.equal((await durable.get('x-search-cursor#'+scope.key)).newest_id,'2118176390805647693');assert.equal(result.posts.length,2);
 });
 
-test('evidence retrieval passes selected entities to X without broad topic-only fetching',async()=>{
-  let options;await contractEvidence({ticker:'SELECTED',title:'NBA game',yes_sub_title:'Los Angeles Lakers'},{enabled:true,selectedTicker:'SELECTED',sports:{teams:[{name:'Los Angeles Lakers'},{name:'Boston Celtics'}]}},{now:()=>NOW,sportsNews:async()=>({articles:[]}),publicXFeed:async value=>{options=value;return {posts:[]};},redditEvidence:async()=>({posts:[]})});assert.ok(options.entities.includes('lakers'));assert.ok(options.entities.includes('Boston Celtics'));
+test('explicit X opt-in passes selected entities and the default makes no paid call',async()=>{
+  let options;
+  const market={ticker:'SELECTED',title:'NBA game',yes_sub_title:'Los Angeles Lakers'};
+  const scope={enabled:true,selectedTicker:'SELECTED',sports:{teams:[{name:'Los Angeles Lakers'},{name:'Boston Celtics'}]}};
+  const dependencies={now:()=>NOW,sportsNews:async()=>({status:'empty',articles:[]}),publicXFeed:async value=>{options=value;return {posts:[]};}};
+  await contractEvidence(market,scope,dependencies);
+  assert.equal(options,undefined);
+  await contractEvidence(market,{...scope,includeX:true},dependencies);
+  assert.ok(options.entities.includes('lakers'));assert.ok(options.entities.includes('Boston Celtics'));
 });
 
 test('Spotify references require exact artist or track identity rather than a similar search result',async()=>{

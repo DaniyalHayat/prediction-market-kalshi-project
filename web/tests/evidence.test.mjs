@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {contractEvidence} from '../lib/workspace/evidence.mjs';
+import {contractEvidence,sportsNews} from '../lib/workspace/evidence.mjs';
 import {rankEvidence} from '../lib/workspace/source-ranking.mjs';
 import {filterRedditPosts,redditEvidence,publicXFeed} from '../lib/workspace/social.mjs';
 import {robotsAllowed,permittedPublicPage} from '../lib/workspace/public-pages.mjs';
@@ -9,12 +9,58 @@ import {parsePlayerStats,playerEvidence} from '../lib/workspace/sports.mjs';
 import {filmResearch} from '../lib/workspace/film.mjs';
 import {retryDelay} from '../lib/workspace/providers.mjs';
 const NOW=Date.parse('2026-11-05T01:00:00Z'),market={ticker:'KXNBAGAME-26NOV05LALBOS-LAL',title:'Los Angeles Lakers at Boston Celtics',yes_sub_title:'Los Angeles Lakers',rules_primary:'The Los Angeles Lakers win against the Boston Celtics.'},sports={teams:[{id:'1',name:'Los Angeles Lakers'},{id:'2',name:'Boston Celtics'}]};
+const nflMarket={ticker:'KXNFLGAME-26NOV08ARISEA-ARI',event_ticker:'KXNFLGAME-26NOV08ARISEA',title:'Arizona wins',yes_sub_title:'Arizona',
+  rules_primary:'If Arizona wins the Arizona vs Seattle Pro Football game originally scheduled for Nov 8, 2026, then the market resolves to Yes.'};
+const nflSports={teams:[{id:'ARI',espn_team_id:'22',name:'Arizona Cardinals'},{id:'SEA',espn_team_id:'26',name:'Seattle Seahawks'}],
+  event:{id:'401873048',nfl_game_url:'https://www.nfl.com/games/cardinals-at-seahawks-2026-reg-9'}};
 function memoryStore(){const values=new Map(),cache=new Map(),quotas=new Map();return {values,quotas,get:async k=>values.get(k),save:async value=>values.set(value.pk,value),consume:async(k,limit,amount=1)=>{const used=quotas.get(k)||0;if(used+amount>limit)return false;quotas.set(k,used+amount);return true;},cached:async(k,ttl,producer)=>{if(!cache.has(k))cache.set(k,Promise.resolve().then(producer));return cache.get(k);}};}
 
 test('selected-contract opt-in gates every evidence provider before any retrieval',async()=>{
   let calls=0;const deps={sportsNews:async()=>{calls++;},publicXFeed:async()=>{calls++;},redditEvidence:async()=>{calls++;}};
   for(const options of [{},{enabled:true,selectedTicker:'OTHER'},{selectedTicker:market.ticker}])assert.equal((await contractEvidence(market,options,deps)).status,'not_queried');
   assert.equal(calls,0);
+});
+test('NFL team feeds are scoped, deduplicated and still render when one team request fails',async()=>{
+  const requests=[];
+  const result=await sportsNews('nfl',{sports:nflSports,get:async(name,url,options)=>{
+    requests.push({name,url,options});
+    if(url.includes('team=22'))throw new Error('Fixture source unavailable');
+    const match={id:12,headline:'Seattle Seahawks quarterback update ahead of Arizona Cardinals game',description:'Fixture update.',published:new Date(NOW-60000).toISOString(),links:{web:{href:'https://www.espn.com/nfl/story/_/id/12'}}};
+    return {as_of:new Date(NOW).toISOString(),source_url:url,data:{articles:[match,match,{...match,id:13,links:{web:{href:'https://espn.com.untrusted.example/'}}}]}};
+  }});
+  assert.deepEqual(requests.map(row=>new URL(row.url).searchParams.get('team')),['22','26']);
+  assert.ok(requests.every(row=>row.options.timeoutMs===4500&&row.options.ttl===900));
+  assert.equal(result.status,'partial');assert.equal(result.articles.length,1);
+});
+test('NFL brief distinguishes the exact matchup, related team reports and official references',async()=>{
+  let socialCalls=0;
+  const row={publisher:'ESPN',platform:'publisher_metadata',as_of:new Date(NOW-60000).toISOString()};
+  const value=await contractEvidence(nflMarket,{enabled:true,selectedTicker:nflMarket.ticker,sports:nflSports},{
+    now:()=>NOW,sportsNews:async()=>({status:'available',articles:[
+      {...row,title:'Seahawks QB ruled out for Arizona Cardinals matchup',excerpt:'Fixture report names both clubs and the quarterback change.',url:'https://www.espn.com/nfl/story/_/id/1'},
+      {...row,title:'Cardinals trade update at quarterback',url:'https://www.espn.com/nfl/story/_/id/2'},
+      {...row,title:'Arizona Cardinals vs Dallas Cowboys game recap',url:'https://www.espn.com/nfl/story/_/id/3'},
+      {...row,title:'Seattle Seahawks guaranteed lock of the day',url:'https://www.espn.com/nfl/story/_/id/4'}
+    ]}),publicXFeed:async()=>{socialCalls++;},redditEvidence:async()=>{socialCalls++;}
+  });
+  assert.equal(socialCalls,0);
+  assert.equal(value.items.length,1);assert.equal(value.related_items.length,1);
+  assert.equal(value.items[0].claim_type,'availability_report');
+  assert.match(value.news_summary,/quarterback change/);
+  assert.deepEqual(value.news_sections.slice(0,2).map(section=>section.heading),['What changed','Why it matters']);
+  assert.equal(value.source_links[1].url,'https://www.nfl.com/injuries/league/2026/reg9');
+  assert.ok(value.feeds.some(feed=>feed.kind==='reddit'&&feed.status==='opt_in'));
+});
+test('without dated reports, category sources and settlement checks remain usable',async()=>{
+  const cpi={ticker:'KXCPI-26NOV',title:'US Consumer Price Index',rules_primary:'The contract settles on the October CPI release.'};
+  const value=await contractEvidence(cpi,{enabled:true,selectedTicker:cpi.ticker},{
+    now:()=>NOW,sportsNews:async()=>({status:'not_applicable',articles:[]})
+  });
+  assert.equal(value.status,'context_available');
+  assert.equal(value.items.length,0);
+  assert.match(value.news_summary,/BLS CPI release schedule/);
+  assert.ok(value.news_sections.some(section=>section.heading==='Settlement check'));
+  assert.equal(value.source_links[0].status,'reference');
 });
 test('ranked context requires exact entity tokens, bounded fresh dates and diverse attributed publishers',()=>{
   const row={title:'Los Angeles Lakers confirmed starting lineup',url:'https://www.espn.com/nba/story/1',as_of:'2026-11-05T00:00:00Z',excerpt:'Lineup context.'};

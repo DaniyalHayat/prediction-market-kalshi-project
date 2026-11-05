@@ -1,4 +1,5 @@
 import {api} from './api.mjs';
+import {executionCurve} from '../lib/workspace/execution-curve.mjs';
 
 export const EXECUTION_DEFAULTS=Object.freeze({enabled:true,side:'yes',action:'buy',contracts:20,horizon_seconds:300,steps:12,
   risk_aversion:.001,temporary_impact:.0001,volatility:.02,inventory:0,order_flow:true,arrival_clustering:true,inventory_skew:true,optimal_schedule:true});
@@ -21,8 +22,24 @@ export function executionControls(value=EXECUTION_DEFAULTS){
   return result;
 }
 export function executionFingerprint(controls){return JSON.stringify(executionControls(controls));}
+export function executionDepth({book,ticker,side,action,contracts,fees,now=Date.now(),closed=false}){
+  if(closed)return {status:'closed'};
+  if(book?.ticker!==ticker||!Number.isFinite(Date.parse(book?.as_of)))return {status:'missing'};
+  const age=(now-Date.parse(book.as_of))/1000;
+  const observed={asOf:book.as_of,age:Math.max(0,Math.floor(age)),stream:book.transport==='exchange-websocket'};
+  if(age>=90||age< -5)return {...observed,status:'stale'};
+  const feeVerified=Number.isFinite(fees?.coefficient)&&fees.coefficient>=0&&fees.coefficient<=1;
+  let curve;
+  try{curve=executionCurve(book,ticker,side,action,{now,coefficient:feeVerified?fees.coefficient:.07});}
+  catch{return {...observed,status:'unusable'};}
+  const quantity=Number(contracts),validQuantity=Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=10000;
+  return {...observed,status:curve.levels?'fresh':'empty',available:curve.available,best:curve.best,limit:curve.limit,
+    quote:validQuantity?curve.quote(quantity):null,feeVerified};
+}
 export async function requestExecution(ticker,controls,{signal,transport=api,model='validated'}={}){
-  const value=await transport('/api/workspace/execution-research',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({ticker,controls:executionControls(controls),model})});
+  const submitted=executionControls(controls);
+  const value=await transport('/api/workspace/execution-research',{method:'POST',headers:{'Content-Type':'application/json'},signal,timeoutMs:30000,body:JSON.stringify({ticker,controls:submitted,model})});
   if(value?.ticker!==ticker)throw new Error('The execution result belongs to a different contract. Run this contract again.');
+  if(value.controls&&executionFingerprint(value.controls)!==executionFingerprint(submitted))throw new Error('The execution result uses different settings. Run this scenario again.');
   return value;
 }

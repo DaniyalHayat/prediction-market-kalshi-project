@@ -32,6 +32,7 @@ export function evaluatePaperPosition(position,book,research,{now=Date.now(),fee
   result.forecast_fresh=forecast.fresh;
   if(Number.isFinite(maxPositionLoss)&&maxPositionLoss>=0&&basis>maxPositionLoss)return {...result,action:'TRIM',suggested_reduce_fraction:Math.max(0,Math.min(1,1-maxPositionLoss/basis)),reason:'The remaining cost basis exceeds your explicit position-loss limit. Reducing exposure restores that limit independently of a forecast.'};
   if(!forecast.valid)return {...result,reason:forecast.reason};
+  if(research.forecast.outcomes)return {...result,reason:'Open Execution lab to compare a win, loss and $0.50 tie payout against the current exit price.'};
   const probability=position.side==='yes'?forecast.probability:1-forecast.probability;
   const interval=position.side==='yes'?forecast.interval:[1-forecast.interval[1],1-forecast.interval[0]];
   Object.assign(result,{probability,interval,model:forecast.model,fair_value_range:interval.map(p=>p*q),expected_hold_profit_range:interval.map(p=>p*q-basis),

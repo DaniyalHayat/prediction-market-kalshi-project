@@ -7,7 +7,8 @@ import {EXECUTION_DEFAULTS} from '../ui/execution-state.mjs';
 import {executionResearch} from '../lib/workspace/execution-research.mjs';
 
 test('the execution lab renders usable scenario controls without an automatic calculation or fabricated result',()=>{
-  const html=renderToStaticMarkup(createElement(ExecutionLab,{market:{ticker:'KXTEST-A'},onControlsChange:()=>{},onAssistant:()=>{}}));
+  const html=renderToStaticMarkup(createElement(ExecutionLab,{market:{ticker:'KXTEST-A'},book:null,fees:null,clock:Date.now(),closed:false,
+    onRefreshDepth:async()=>{},onControlsChange:()=>{},onAssistant:()=>{}}));
   assert.match(html,/Execution lab/);assert.match(html,/Run scenario/);assert.match(html,/Risk-aware schedule/);assert.match(html,/Editable, not fitted by default/);
   assert.match(html,/min="30"/);assert.match(html,/Scenario assumptions/);assert.ok(!html.includes('Modeled execution cost'));assert.ok(!html.includes('No eligible estimate'));
   assert.equal((html.match(/type="checkbox"/g)||[]).length,5);
@@ -27,6 +28,15 @@ test('actual execution outputs render for every market category and NO quotes re
     const input={market:{ticker,category},book,forecast:{valid:true,fresh:true,eligible:true,probability:.6,interval:[.5,.7]},controls:{...EXECUTION_DEFAULTS,side:'no'},now};
     const value=executionResearch(input);
     const html=renderToStaticMarkup(createElement(ExecutionResults,{value,outdated:false,onAssistant:()=>{}}));
-    assert.match(html,/Current NO bid \/ ask/);assert.ok(!html.includes('Current YES bid / ask'));assert.match(html,/Independent P\(YES\)/);assert.match(html,/60\.0%/);assert.match(html,/20 \/ 20 contracts filled/);assert.match(html,/Risk-aware schedule/);assert.match(html,/Needs more data/);assert.ok(!html.includes('[object Object]'));
+    assert.match(html,/Scenario NO bid \/ ask/);assert.ok(!html.includes('Scenario YES bid / ask'));assert.match(html,/Independent P\(YES\)/);assert.match(html,/60\.0%/);assert.match(html,/20 \/ 20 contracts filled/);assert.match(html,/Risk-aware schedule/);assert.match(html,/Needs more data/);assert.ok(!html.includes('[object Object]'));
   }
+});
+
+test('NFL scenario distinguishes the three event outcomes from the tie-adjusted expected settlement',()=>{
+  const value={ticker:'KX-NFL-FIXTURE',controls:EXECUTION_DEFAULTS,
+    forecast:{probability:.61,outcomes:{win:.61,loss:.37,tie:.02},expected_settlement_value:.62}};
+  const html=renderToStaticMarkup(createElement(ExecutionResults,{value,onAssistant:()=>{}}));
+  assert.match(html,/YES team win chance/);assert.match(html,/61\.0%/);assert.match(html,/Opposing team win chance 37\.0%/);
+  assert.match(html,/Tie chance 2\.0%/);assert.match(html,/Modeled YES settlement \$0\.62/);assert.match(html,/A tie pays \$0\.50/);
+  assert.match(html,/Download PDF/);assert.match(html,/Ask why/);
 });

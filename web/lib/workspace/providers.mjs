@@ -29,17 +29,19 @@ export function retryDelay(headers,status,now=Date.now()){
 export function recordProviderStatus(id,value){status.set(id,{id,name:id,...value});}
 export function providerStatus(){
   const defaults=[{id:'Kalshi public exchange',detail:'Public rules, catalog, observed prices and order books.'},
+    {id:'ESPN NFL',detail:'Regular-season results, exact fixture and kickoff. Runs on matching NFL contracts.'},
+    {id:'ESPN NFL news',detail:'Headlines from the teams in the selected NFL contract.'},
     {id:'ESPN NBA',detail:'Completed regular-season schedules, matched fixtures and reported availability.'},
     {id:'ESPN Premier League',detail:'Premier League results and exact-date fixtures; no cup or extra-time model.'},
     {id:'Apple Music US chart',detail:'US song-rank snapshots; not artist stream totals or Spotify charts.'},
     {id:'Spotify catalog references',detail:'Display-only artist references; excluded from AI and forecasting.',configured:Boolean(process.env.SPOTIFY_CLIENT_ID&&process.env.SPOTIFY_CLIENT_SECRET)},
-    {id:'X public chart news',detail:'Allowlisted public posts, shared cache and conservative paid-read allowance.',configured:Boolean(process.env.X_BEARER_TOKEN)},
-    {id:'Reddit selected-trade context',detail:'Explicit selected-trade opt-in. Bounded public pages respect robots and access limits; approved external OAuth is optional.'}];
-  const rows=new Map(defaults.map(row=>[row.id,{...row,name:row.id,status:row.configured===false?'not_configured':'not_queried'}]));
+    {id:'X public chart news',status:'opt_in',detail:'Opt in for curated public accounts. Reads share a cached allowance.',configured:Boolean(process.env.X_BEARER_TOKEN)},
+    {id:'Reddit selected-trade context',status:'opt_in',detail:'Opt in on a contract. When provider access is blocked, open the targeted search directly.'}];
+  const rows=new Map(defaults.map(row=>[row.id,{...row,name:row.id,status:row.configured===false?'not_configured':row.status||'on_selection'}]));
   for(const [key,value] of status)rows.set(key,value);
   return [...rows.values()].map(row=>({...row,usage:providerUsage.get(row.id)||null}));
 }
-export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_000,fetcher=fetch,format='json'}={}) {
+export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_000,fetcher=fetch,format='json',timeoutMs=16000}={}) {
   const parsed=new URL(url);
   if(parsed.protocol!=='https:'||!hosts.has(parsed.hostname)||parsed.username||parsed.password)throw new RangeError('Source address is not permitted');
   if(!['json','text'].includes(format))throw new RangeError('Unsupported source format');
@@ -55,7 +57,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
     const provider=parsed.hostname.includes('espn.com')?'espn':parsed.hostname.includes('apple.com')?'apple_music':parsed.hostname==='api.x.com'?'x':parsed.hostname.includes('spotify.com')?'spotify':parsed.hostname.includes('reddit.com')?'reddit':'kworb';
     return observeProviderAttempt(provider,async()=>{
     let response;
-    try{response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'KalshiMarketLab/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(16000)});}
+    try{response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'KalshiMarketLab/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});}
     catch(error){throw upstreamFailure(error,'request');}
     if(response.status===429||response.status===402||response.status>=500){
       cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,response.status));

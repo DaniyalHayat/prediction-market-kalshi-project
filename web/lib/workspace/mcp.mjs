@@ -8,6 +8,7 @@ import {warehouseStatus} from './warehouse.mjs';
 import {searchRetainedEvidence} from './semantic.mjs';
 import {workspaceExecutionResearch,executionToolPacket} from './execution-service.mjs';
 import {normalizeExecutionControls} from './execution-research.mjs';
+import {contractEvidence} from './evidence.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
@@ -23,7 +24,8 @@ export function publicResearch(value){
   })}:undefined;
   return {ticker:value.ticker,title:value.title,as_of:value.as_of,status:value.status,summary:value.summary,opinion:value.opinion,
     account_balances_available:false,units:{forecast_probability:'P(YES), 0 to 1; multiply by 100 for percent',candidate_probability:'Win probability of the candidate side, 0 to 1',price:'USD per $1 binary payout contract',quantity:'Number of contracts, never an account balance'},
-    forecast:value.forecast,decision,drivers:value.drivers,rules:value.rules,sources:(value.sources||[]).filter(s=>!s.url?.includes('api.spotify.com')),
+    forecast:value.forecast,decision,drivers:value.drivers,rules:value.rules,paper_scenarios:value.paper_scenarios,market_signal:value.market_signal,
+    sources:(value.sources||[]).filter(s=>!s.url?.includes('api.spotify.com')),
     errors:value.errors,extensions:{sports:value.extensions?.sports,music:music?{scope:music.scope,comparability:music.comparability,
       forecast:music.forecast,persistence:music.persistence,source_updated:music.apple?.source_updated,scope_note:music.apple?.note}:undefined}};
 }
@@ -35,12 +37,14 @@ export function boundPacket(value,maximum=14000){
     if(Buffer.byteLength(JSON.stringify(packet))<=maximum)return packet;
   }
   const lean={ticker:value.ticker,title:value.title,as_of:value.as_of,summary:value.summary,opinion:value.opinion,
-    account_balances_available:value.account_balances_available,units:value.units,forecast:value.forecast,decision:value.decision,sources:value.sources,scope:'Additional details omitted to keep the research packet bounded.'};
+    account_balances_available:value.account_balances_available,units:value.units,forecast:value.forecast,decision:value.decision,
+    paper_scenarios:value.paper_scenarios,market_signal:value.market_signal,evidence:value.evidence,sources:value.sources,
+    scope:'Additional details omitted to keep the research packet bounded.'};
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
 export function createResearchServer({tickerScope,modelScope='baseline',executionScope,dependencies={}}={}) {
-  const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,searchRetainedEvidence,workspaceExecutionResearch,...dependencies};
+  const deps={marketDetails,book,workspaceResearch,contractHistory,warehouseStatus,providerStatus,searchRetainedEvidence,workspaceExecutionResearch,contractEvidence,...dependencies};
   const server=new McpServer({name:'predictir',version:'4.0.0'});
   if(tickerScope)validateTicker(tickerScope);
   if(!['baseline','validated','challenger'].includes(modelScope))throw new RangeError('Unknown research model');
@@ -69,7 +73,17 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
         note:'Displayed quantities are public bid liquidity in contracts. Buying YES uses opposite NO bids at 1 minus bid price, and conversely for buying NO.'},
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]};
   });
-  register('get_research','Read deterministic public research, uncertainty, validation, cost screen and evidence gaps for the selected contract. Does not contain Spotify catalog content or private journals.',{ticker},async({ticker})=>publicResearch(await deps.workspaceResearch(ticker,{assistant:true,model:modelScope})));
+  register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker},async({ticker})=>{
+    const research=await deps.workspaceResearch(ticker,{assistant:true,model:modelScope}),packet=publicResearch(research);
+    if(research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
+    const evidence=await deps.contractEvidence(research.market,{enabled:true,selectedTicker:ticker,redditEnabled:false,includeX:false,headlineMode:'official',
+      sports:research.extensions?.sports,settlementSources:research.rules?.settlement_sources}).catch(()=>null);
+    const matches=[...(evidence?.items||[]),...(evidence?.related_items||[])].filter(row=>row.url&&row.title).slice(0,3);
+    const links=(evidence?.source_links||[]).filter(row=>row.url).slice(0,2);
+    return {...packet,evidence:matches.map(row=>({title:String(row.title).slice(0,180),url:row.url,publisher:row.publisher,
+      excerpt:String(row.excerpt||'').slice(0,300),match_scope:row.match_scope})),
+      sources:[...links,...matches.map(row=>({label:row.publisher||'Attributed reporting',url:row.url})),...packet.sources].slice(0,8)};
+  });
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{
     const value=await deps.contractHistory(ticker,Number(hours));return {...value,units:{price:'USD per contract',volume:'Contracts'},rows:value.rows.slice(-120).map(({value:price,volume,...row})=>({...row,price_usd_per_contract:price,volume_contracts:volume}))};
   });

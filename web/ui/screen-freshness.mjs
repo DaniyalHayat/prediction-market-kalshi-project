@@ -1,5 +1,5 @@
 export function screenRefreshDelay(value){
-  const rows=[...(value?.candidates||[]),...(value?.watchlist||[])];
+  const rows=[...(value?.candidates||[]),...(value?.paper_scenarios||[]),...(value?.watchlist||[])];
   if(!rows.length&&value?.ticker)rows.push(value);
   return rows.some(row=>row.inplay||Number.isFinite(row.max_source_age_seconds)&&row.max_source_age_seconds<=60)?20000:60000;
 }
@@ -9,7 +9,8 @@ export function screenFreshness(row,{now=Date.now(),checkedAt,error}={}){
   if(!Number.isFinite(quote)||quote>now+5000)return {current:false,reason:'A usable matching quote observation time is unavailable.'};
   let expires=quote+90000;
   const close=Date.parse(row?.close_time||'');if(Number.isFinite(close))expires=Math.min(expires,close);
-  if(Number.isFinite(row?.probability)||Number.isFinite(row?.probability_yes)){
+  const eventStart=Date.parse(row?.event_start||'');if(Number.isFinite(eventStart))expires=Math.min(expires,eventStart);
+  if(Number.isFinite(row?.probability)||Number.isFinite(row?.probability_yes)||Number.isFinite(row?.settlement_value)){
     const source=Date.parse(row.source_as_of||''),maximum=Number.isFinite(row.max_source_age_seconds)?Math.min(86400,Math.max(10,row.max_source_age_seconds)):row.inplay?30:86400;
     if(!Number.isFinite(source)||source>now+5000)return {current:false,reason:'The independent forecast source time could not be verified.'};
     expires=Math.min(expires,source+maximum*1000);

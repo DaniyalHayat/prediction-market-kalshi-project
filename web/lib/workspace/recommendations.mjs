@@ -19,6 +19,7 @@ export function budgetScenario(curve,{budget,probability,interval,targetMultipli
 export function tradeCandidates(market,book,research,{budget=20,now=Date.now(),coefficient=.07,slippage=2,bufferCents=2,experimental=false}={}) {
   if(!Number.isFinite(bufferCents)||bufferCents<0||bufferCents>25)throw new RangeError('Invalid execution buffer');
   const f=usableForecast(research,now,market.ticker),reason=f.reason||research?.opinion?.reason;
+  if(research?.forecast?.outcomes)return [];
   if(!f.valid||!f.fresh)return [{ticker:market.ticker,title:market.yes_sub_title||market.title,event_ticker:market.event_ticker,side:'PASS',eligible:false,scenario_eligible:false,probability:null,interval:null,reasons:[reason||'Independent probability unavailable.']}];
   const open=['active','open'].includes(market.status)&&Date.parse(market.close_time)>now;
   const isExperimental=Boolean(research.forecast?.experimental),rows=[];
