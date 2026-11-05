@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26.12.1'
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Install locked dependencies
@@ -71,3 +71,14 @@ jobs:
         run: node tools/build_cloud.mjs && python tools/package_cloud.py
       - name: Check typed sizing and CMS persistence
         run: npm run typecheck && npm run cms:verify
+      - name: Build the hosted backend from its deployment context
+        run: docker build --tag predictir-ci:local --file Dockerfile .
+      - name: Check the hosted backend starts without application credentials
+        run: |
+          trap 'docker logs predictir-ci; docker rm --force predictir-ci >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name predictir-ci --env PORT=8780 --publish 127.0.0.1:8780:8780 predictir-ci:local
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8780/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
