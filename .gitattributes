@@ -1,3 +1,5 @@
 web/research-data/*.json.gz -filter -diff -merge -text
 web/public/research/*.pdf -filter -diff -merge -text
 output/pdf/*.pdf -filter -diff -merge -text
+web/public/favicon.ico -filter -diff -merge -text
+web/public/favicon.png -filter -diff -merge -text
