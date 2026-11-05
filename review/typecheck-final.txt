@@ -1,0 +1,2 @@
+npm notice run kalshi-live-figma@1.0.0 typecheck
+npm notice run tsc --noEmit

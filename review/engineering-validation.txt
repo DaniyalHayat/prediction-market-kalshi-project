@@ -1,20 +1,23 @@
-Verified 2026-11-05 02:14:44 UTC on feature/black-evidence-lab-v3.
-Account fix revision: 82b04ad. Later root-owned frontend updates require their own final integration check.
+Verified 2026-11-05 02:17:15 UTC on feature/black-evidence-lab-v3.
+Source revision: 6bafe0aa6ca8b3275c3b9980fe6030514627744f. Final checks include the committed financial/Auth fixes, client identity guards, guest-cache expiry and analytics configuration.
 
 RESULT: PASS. No production deployment, cloud resource change or real account creation.
 
-npm test after the material account fixes: 284 passed, 0 failed, 2 intentional default skips.
-  Node: 276 total; 274 passed, 0 failed, 2 skipped.
+npm test after all material account and frontend fixes: 286 passed, 0 failed, 2 intentional default skips.
+  Node: 278 total; 276 passed, 0 failed, 2 skipped.
   TypeScript: 10 total; 10 passed, 0 failed, 0 skipped.
   Full output: review/npm-test-after-account-fixes.txt.
-  Core financial replay/outage fixes and cross-tab client guards were included. The final null-SDK hardening was subsequently covered by 19 focused account tests (19 passed, no skips) and typecheck.
+  Includes null/incomplete SDK handling, financial replay, authenticated CAS, cross-tab client guards and guest-cache expiry. The separate 19-test focused account run also passed with no skips.
   PostgreSQL integration used a disposable local PG17 *_test database.
   Cloud/account/provider credentials were removed from the test-process environment.
   Opt-in actual MiniLM and separate semantic database checks were independently passed by the evidence agent, including native vector and plain-array fallback. See web/docs/semantic-verification.json.
 
 npm run typecheck: PASS (exit 0).
+  Full output: review/typecheck-final.txt.
 npm run build: PASS (exit 0), Next.js 16.4.3.
-  This build preceded the later account hardening and root-owned frontend updates. The backend fix was subsequently import-tested and typechecked; this lane did not repeat the production build.
+  Final build includes all committed account and frontend fixes. Private credentials were explicitly blanked in the spawned build process so local dotenv could not restore them.
+  Approved public IDs: GTM-5635HXLP and G-NJN43KL0FQ.
+  Full output: review/next-build-final.txt.
   Local Next development was stopped before the production build.
   Static routes: / and /_not-found.
   Dynamic routes: /api/[...path], /api/assistant and /api/paper/size.

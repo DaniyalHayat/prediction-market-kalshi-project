@@ -1,0 +1,30 @@
+[Local paths redacted]
+▲ Next.js 16.4.3 (Turbopack)
+- Environments: .env.local
+⚠ Warning: Next.js ignored package-lock.json in [parent directory] because it is outside the current Git repository ([project checkout]).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.mjs took 34ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 552ms
+  Running TypeScript ...
+  Finished TypeScript in 2.6s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/4) ...
+  Generating static pages using 7 workers (1/4)
+  Generating static pages using 7 workers (2/4)
+  Generating static pages using 7 workers (3/4)
+✓ Generating static pages using 7 workers (4/4) in 593ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/[...path]
+├ ƒ /api/assistant
+└ ƒ /api/paper/size
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
