@@ -1,0 +1,164 @@
+{
+  "measured_at": "2026-11-05T00:38:44.362Z",
+  "classification": "Four-request live microbenchmark with synthetic public-research facts; no private journal/chat data",
+  "sdk": "ai@7.0.162",
+  "requests": 4,
+  "maximum_requests": 4,
+  "maximum_output_tokens_per_request": 1200,
+  "rates_usd_per_million_tokens": {
+    "google/gemini-2.5-flash-lite": {
+      "input": 0.1,
+      "output": 0.4
+    },
+    "openai/gpt-5-nano": {
+      "input": 0.05,
+      "output": 0.4
+    }
+  },
+  "results": [
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "A: scoped read-only tool routing",
+      "status": "completed",
+      "latency_ms": 928.1551999999999,
+      "finish_reason": "tool-calls",
+      "requested_reasoning": "existing provider default",
+      "steps": 1,
+      "input_tokens": 132,
+      "output_tokens": 23,
+      "reasoning_tokens": 0,
+      "text_tokens": 23,
+      "cache_read_tokens": 0,
+      "estimated_catalog_cost_usd": 0.000022400000000000002,
+      "gateway_reported_cost_usd": "0.0000224",
+      "warnings": [],
+      "model_returned": "google/gemini-2.5-flash-lite",
+      "tool_calls": [
+        {
+          "name": "get_research",
+          "ticker": "DEMO-26NOV04-YES"
+        }
+      ],
+      "correct": true
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "task": "A: scoped read-only tool routing",
+      "status": "completed",
+      "latency_ms": 1032.0111000000002,
+      "finish_reason": "tool-calls",
+      "requested_reasoning": "minimal",
+      "steps": 1,
+      "input_tokens": 255,
+      "output_tokens": 40,
+      "reasoning_tokens": 0,
+      "text_tokens": 40,
+      "cache_read_tokens": 0,
+      "estimated_catalog_cost_usd": 0.00002875,
+      "gateway_reported_cost_usd": "0.00002875",
+      "warnings": [],
+      "model_returned": "openai/gpt-5-nano",
+      "tool_calls": [
+        {
+          "name": "get_research",
+          "ticker": "DEMO-26NOV04-YES"
+        }
+      ],
+      "correct": true
+    },
+    {
+      "model": "openai/gpt-5-nano",
+      "task": "B: source-grounded budget explanation",
+      "status": "completed",
+      "latency_ms": 1712.8348,
+      "finish_reason": "stop",
+      "requested_reasoning": "minimal",
+      "steps": 1,
+      "input_tokens": 544,
+      "output_tokens": 139,
+      "reasoning_tokens": 0,
+      "text_tokens": 139,
+      "cache_read_tokens": 0,
+      "estimated_catalog_cost_usd": 0.00008280000000000001,
+      "gateway_reported_cost_usd": "0.0000828",
+      "warnings": [],
+      "model_returned": "openai/gpt-5-nano",
+      "answer": "Short answer: With a $20 budget, the target value is $40. The model-based probability of reaching YES is 0.6, with a range [0.4, 0.8]. Total potential settlements: win value $43.32, lose value $3.32; target total value is $40, chance to reach target is 0.6, target probability range [0.4, 0.8]. It is a synthetic benchmark fixture and not an approved recommendation. Source: https://github.com/DaniyalHayat/prediction-market-kalshi-project",
+      "checks": {
+        "win_total_value": true,
+        "lose_total_value": true,
+        "point_probability": true,
+        "interval": true,
+        "experimental_status": true,
+        "source": true
+      },
+      "correct": true
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "task": "B: source-grounded budget explanation",
+      "status": "completed",
+      "latency_ms": 1223.2315000000003,
+      "finish_reason": "stop",
+      "requested_reasoning": "existing provider default",
+      "steps": 1,
+      "input_tokens": 355,
+      "output_tokens": 100,
+      "reasoning_tokens": 0,
+      "text_tokens": 100,
+      "cache_read_tokens": 0,
+      "estimated_catalog_cost_usd": 0.0000755,
+      "gateway_reported_cost_usd": "0.0000755",
+      "warnings": [],
+      "model_returned": "google/gemini-2.5-flash-lite",
+      "answer": "The $20 contract has a chance of reaching $40 or more. The model-based probability for YES is 0.6, with a range of [0.4, 0.8]. The potential total settlement values are $43.32 (win) or $3.32 (lose). This is a synthetic benchmark fixture and not an approved recommendation. Source: https://github.com/DaniyalHayat/prediction-market-kalshi-project",
+      "checks": {
+        "win_total_value": true,
+        "lose_total_value": true,
+        "point_probability": true,
+        "interval": true,
+        "experimental_status": true,
+        "source": true
+      },
+      "correct": true
+    }
+  ],
+  "aggregate": {
+    "google/gemini-2.5-flash-lite": {
+      "completed_tasks": 2,
+      "correct_tasks": 2,
+      "workflow_latency_ms": 2151.3867,
+      "estimated_workflow_cost_usd": 0.00009790000000000001,
+      "total_input_tokens": 487,
+      "total_output_tokens": 123,
+      "reported_reasoning_tokens": 0
+    },
+    "openai/gpt-5-nano": {
+      "completed_tasks": 2,
+      "correct_tasks": 2,
+      "workflow_latency_ms": 2744.8459000000003,
+      "estimated_workflow_cost_usd": 0.00011155,
+      "total_input_tokens": 799,
+      "total_output_tokens": 179,
+      "reported_reasoning_tokens": 0
+    }
+  },
+  "total_estimated_catalog_cost_usd": 0.00020945000000000002,
+  "scope": "One actual local tool-routing/execution step and one grounded follow-up answer per model. The tool uses the same structured research shape as MCP, not a remote MCP network round trip. Reported times include model/Gateway latency but exclude production browser and MCP transport. One sample per task cannot establish general model quality, p95 latency or a durable pricing advantage.",
+  "cost_note": "Catalog-based estimate uses total input/output counts, including reported reasoning output. No cache discount or provider-specific billing correction is assumed. Gateway-reported cost is preserved where present.",
+  "sources": [
+    "https://developers.openai.com/api/docs/models/gpt-5-nano",
+    "https://developers.openai.com/api/docs/guides/reasoning",
+    "https://ai-sdk.dev/providers/ai-sdk-providers/openai",
+    "https://ai-gateway.vercel.sh/v1/models"
+  ],
+  "total_gateway_reported_cost_usd": 0.00020944999999999997,
+  "recommendation": {
+    "keep_current_model": "google/gemini-2.5-flash-lite",
+    "reason": "Both models completed the scoped tool call and preserved all numeric/release/source facts. In this two-step microbenchmark, GPT-5 nano used more total tokens and was slower and more expensive despite its lower input-token list price. No production routing change is justified by this sample.",
+    "nano_relative_extra_catalog_cost": 0.13942798774259435,
+    "nano_relative_extra_latency": 0.2758496182950281,
+    "generalization_limit": "One sample for each phase; not a broad benchmark, p95 estimate or permanent provider ranking."
+  },
+  "grading_note": "Numeric interval grading accepts equivalent decimal [0.4,0.8] and percentage 40%-80% forms. Both returned answers were manually inspected for the same facts; no extra model requests were made for regrading."
+}
