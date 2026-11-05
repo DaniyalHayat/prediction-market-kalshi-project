@@ -70,11 +70,40 @@ test('lease deadline is assigned after conflict-lock waiting and old release can
 
 test('expired cache producers cannot overwrite a fresh successor and still return its retained result',{skip:!url,timeout:15000},async t=>{
   const {store,pool,tag}=await fixture(t),key='fenced#'+tag,pk='cache#'+createHash('sha256').update(key).digest('hex');let finish,started;
+  const replica=makePostgresStore({pool,storageURL:null,storageKey:null});
   const producing=new Promise(resolve=>{started=resolve;}),result=new Promise(resolve=>{finish=resolve;});
   const old=store.cached(key,60,async()=>{started();await result;return {generation:'old'};});await producing;
   await pool.query("UPDATE market_lab.leases SET expires_at=clock_timestamp()-interval '1 second' WHERE key=$1",[pk]);
-  assert.deepEqual(await store.cached(key,60,async()=>({generation:'new'})),{generation:'new'});finish();
+  try{assert.deepEqual(await replica.cached(key,60,async()=>({generation:'new'})),{generation:'new'});}finally{finish();}
   assert.deepEqual(await old,{generation:'new'});assert.deepEqual((await store.get(pk)).value,{generation:'new'});
+});
+
+test('same-process requests share a slow exact-key refresh and the durable expiry still controls subsequent reads',{skip:!url,timeout:15000},async t=>{
+  const {store,pool,tag}=await fixture(t),key='slow#'+tag,pk='cache#'+createHash('sha256').update(key).digest('hex');
+  let finish,started,calls=0;
+  const producing=new Promise(resolve=>{started=resolve;}),done=new Promise(resolve=>{finish=resolve;});
+  const value={as_of:new Date().toISOString()};
+  const leader=store.cached(key,3,async()=>{calls++;started();await done;return value;});
+  await producing;
+  const followers=Promise.allSettled(Array.from({length:12},()=>store.cached(key,3,async()=>{calls++;return {unexpected:true};})));
+  try{
+    assert.deepEqual(await store.cached(key+'#other',3,async()=>({separate:true})),{separate:true});
+    await pause(1850);
+  }finally{finish();}
+  assert.deepEqual(await leader,value);
+  assert.deepEqual(await followers,Array.from({length:12},()=>({status:'fulfilled',value})));
+  assert.equal(calls,1);
+  await pool.query("UPDATE market_lab.records SET expires_at=clock_timestamp()-interval '1 second' WHERE pk=$1",[pk]);
+  assert.deepEqual(await store.cached(key,3,async()=>({refreshed:true})),{refreshed:true});
+});
+
+test('a shared refresh failure reaches all callers and frees the key for a retry',{skip:!url,timeout:15000},async t=>{
+  const {store,tag}=await fixture(t),key='failed#'+tag,error=Object.assign(new Error('Provider unavailable'),{status:503});
+  let calls=0;
+  const results=await Promise.allSettled(Array.from({length:3},()=>store.cached(key,3,async()=>{calls++;throw error;})));
+  assert.deepEqual(results,Array.from({length:3},()=>({status:'rejected',reason:error})));
+  assert.equal(calls,1);
+  assert.deepEqual(await store.cached(key,3,async()=>({retry:true})),{retry:true});
 });
 
 test('a held refresh lease reports typed local contention without starting another producer',{skip:!url,timeout:15000},async t=>{
