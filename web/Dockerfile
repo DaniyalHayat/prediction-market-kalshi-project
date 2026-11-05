@@ -10,7 +10,6 @@ COPY --chown=node:node cloud ./cloud
 COPY --chown=node:node public ./public
 COPY --chown=node:node database ./database
 RUN mkdir -p /tmp/market-lab-models && chown node:node /tmp/market-lab-models
-VOLUME ["/tmp/market-lab-models"]
 USER node
 EXPOSE 8780
 CMD ["node", "--max-old-space-size=384", "cloud/railway.mjs"]
