@@ -7,6 +7,8 @@ import {workspaceGET} from '../../../lib/workspace/router.mjs';
 import {proxyBackend} from '../../../lib/workspace/proxy.mjs';
 import {makeAccountHandler} from '../../../lib/workspace/account.mjs';
 import {cloudEnabled,store} from '../../../lib/cloud/store.mjs';
+import {parseExecutionRequest,workspaceExecutionResearch} from '../../../lib/workspace/execution-service.mjs';
+import {readProxyBody} from '../../../lib/workspace/proxy.mjs';
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -46,13 +48,18 @@ export async function POST(request,context) {
   const proxied=await proxyBackend(request,path);if(proxied)return proxied;
   if(endpoint.startsWith('account/'))return makeAccountHandler({storage:cloudEnabled()?store():null})(request,endpoint);
   try {
+    if(endpoint==='workspace/execution-research'){
+      if(!(request.headers.get('content-type')||'').toLowerCase().startsWith('application/json'))return Response.json({error:'Use application/json'},{status:415,headers});
+      const input=parseExecutionRequest(JSON.parse(await readProxyBody(request,8000)));
+      return Response.json(await workspaceExecutionResearch(input.ticker,input),{headers});
+    }
     if(!["intelligence/forward/start","intelligence/forward/checkpoint"].includes(endpoint))return Response.json({error:"Unknown paper-research path"},{status:404,headers});
     const text=await request.text();
     if(text.length>8000)return Response.json({error:"Paper protocol too large"},{status:413,headers});
     const input=JSON.parse(text || "{}");
     const result=endpoint.endsWith("/start") ? await startForward(input) : await checkpointForward(input.id);
     return Response.json(result,{status:endpoint.endsWith("/start") ? 201 : 200,headers});
-  } catch(error) {return Response.json({error:error.message},{status:error.status || (error instanceof RangeError || error instanceof SyntaxError ? 400 : 503),headers});}
+  } catch(error) {return Response.json({error:error instanceof SyntaxError?'Request must be valid JSON':error instanceof RangeError?error.message:'The requested research could not be refreshed. Try again shortly.'},{status:error.status || (error instanceof RangeError || error instanceof SyntaxError ? 400 : 503),headers});}
 }
 export async function PUT(request,context){
   const {path}=await context.params,endpoint=path.join('/');

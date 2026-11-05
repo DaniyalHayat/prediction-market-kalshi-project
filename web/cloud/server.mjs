@@ -177,7 +177,10 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         }
         if(url.pathname==='/mcp'){
           const ticker=validateTicker(req.headers['x-market-ticker']),modelScope=req.headers['x-market-model']==='challenger'?'challenger':'baseline';
-          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope});
+          const rawExecution=req.headers['x-market-execution'];
+          if(rawExecution&&Buffer.byteLength(String(rawExecution))>2000)throw new RangeError('Execution controls exceed their limit');
+          const executionScope=rawExecution?JSON.parse(rawExecution):undefined;
+          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope,executionScope});
         }
         return json(res,{error:'Unknown service path'},404);
       }
@@ -212,7 +215,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
       await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
-        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
+        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');

@@ -38,7 +38,7 @@ function memoryQuota(){const used=new Map();return {used,consume:async(key,limit
 test('actual MCP handshake lists only read-only tools and scopes all market reads',async t=>{
   const server=createResearchServer({tickerScope:ticker,dependencies}),client=new Client({name:'test-client',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
   await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
-  const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_contract','get_price_history','get_research','get_source_status','search_retained_evidence']);
+  const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['analyze_execution_lab','get_contract','get_price_history','get_research','get_source_status','search_retained_evidence']);
   assert.ok(tools.tools.every(tool=>tool.annotations.readOnlyHint&&tool.annotations.destructiveHint===false));
   const contract=await client.callTool({name:'get_contract',arguments:{ticker}});assert.equal(packet(contract).market.ticker,ticker);assert.equal(packet(contract).book.no_bid_levels[0].bid_price_usd_per_contract,.58);
   assert.equal(packet(contract).book.no_bid_levels[0].quantity_contracts,10);assert.equal(packet(contract).book.metrics,undefined);assert.equal(packet(contract).account_balances_available,false);
@@ -55,7 +55,7 @@ test('HTTP MCP initialization and tool calls require backend authorization',asyn
   const denied=await fetch(url+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(denied.status,401);
   const client=new Client({name:'real-http-test',version:'1'});
   await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',url),{requestInit:{headers:{Authorization:'Bearer '+secret,'X-Market-Ticker':ticker}}}));
-  t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,5);
+  t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,6);
   assert.equal(packet(await client.callTool({name:'get_contract',arguments:{ticker}})).ticker,ticker);
 });
 test('edge gate denies direct access, disallowed origins and blocked/unknown countries',async t=>{
