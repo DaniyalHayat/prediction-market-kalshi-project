@@ -6,7 +6,9 @@ Predictir brings contract rules, live market prices, independent forecasts and t
 
 **[Open Predictir](https://predictir.dev)**
 
-The Azure edition runs the Predictir interface on Azure Container Apps with a private API, PostgreSQL 17, managed identities and Key Vault. The same code also supports an offline replay with recorded inputs. [Azure release and verification guide](terraform/azure/README.md)
+**[Open Predictir on Azure](https://predictirazv2k8lc-front.bravesky-edec19fa.centralus.azurecontainerapps.io)**
+
+The Azure trial edition runs the Predictir interface on Azure Container Apps with a private API, PostgreSQL 17, managed identities and Key Vault. Ask why uses the selected contract and panel. Guests can preview, confirm, save and discard paper scenarios in their own session. The same code supports an offline replay with recorded inputs. [Azure release guide](terraform/azure/README.md) · [Release checks](https://github.com/DaniyalHayat/predictir/actions/runs/42027518473)
 
 [Latest release checks](docs/RELIABILITY_VERIFICATION.md): live market and paper-account checks, one-hour log reviews, provider verification, analytics and hosting settings.
 
