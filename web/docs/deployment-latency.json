@@ -15,7 +15,7 @@
     "region_evidence": "Applied environment configuration, successful deployment manifest and one RUNNING instance; diagnostic runtime_region was unset."
   },
   "mean_reduction_ms": 36.042857142857144,
-  "relative_reduction": 0.6517864052810341,
+  "relative_reduction": 0.6517864062621096,
   "replicas": 1,
   "added_services": 0,
   "added_volumes": 0,
