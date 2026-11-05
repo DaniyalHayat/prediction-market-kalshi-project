@@ -186,6 +186,19 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
     catch(error){closing=true;await listener.end().catch(()=>{});throw error;}
     return async()=>{closing=true;await listener.end().catch(()=>{});};
   }
-  return {kind:'postgres',db,get,put:item=>save(item),save,consume,lease,archive,readArchive,cached,appendAudit,readAudit,auditIds,
+  async function readOwnerPortfolio(owner){
+    if(typeof owner!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(owner))throw new RangeError('Invalid portfolio owner');
+    const row=(await db.query('SELECT ledger,watchlist,revision FROM market_lab.owner_portfolios WHERE owner_id=$1',[owner])).rows[0];
+    return row?{...row,revision:Number(row.revision)}:{ledger:null,watchlist:[],revision:0};
+  }
+  async function saveOwnerPortfolio(owner,{ledger,watchlist,revision}){
+    if(typeof owner!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(owner)||!Number.isSafeInteger(revision)||revision<0||revision>1e9||!ledger||Array.isArray(ledger)||typeof ledger!=='object'||!Array.isArray(watchlist)||watchlist.length>200||watchlist.some(value=>typeof value!=='string'||!/^[A-Za-z0-9_.-]{1,140}$/.test(value)))throw new RangeError('Invalid owner portfolio');
+    const row=revision===0?(await db.query(`INSERT INTO market_lab.owner_portfolios(owner_id,ledger,watchlist,revision) VALUES($1,$2,$3,1)
+      ON CONFLICT(owner_id) DO NOTHING RETURNING ledger,watchlist,revision`,[owner,ledger,watchlist])).rows[0]:
+      (await db.query('UPDATE market_lab.owner_portfolios SET ledger=$2,watchlist=$3,revision=revision+1,updated_at=now() WHERE owner_id=$1 AND revision=$4 RETURNING ledger,watchlist,revision',[owner,ledger,watchlist,revision])).rows[0];
+    if(row)return {conflict:false,value:{...row,revision:Number(row.revision)}};
+    return {conflict:true,value:await readOwnerPortfolio(owner)};
+  }
+  return {kind:'postgres',db,get,put:item=>save(item),save,consume,lease,archive,readArchive,cached,appendAudit,readAudit,auditIds,readOwnerPortfolio,saveOwnerPortfolio,
     journalRows,pendingRows,reschedule,settle,searchMarkets,listenJobs,reserveAssistantBudget,settleAssistantBudget,transaction,close:()=>db.end()};
 }

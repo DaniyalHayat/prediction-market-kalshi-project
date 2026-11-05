@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {readJSON} from '../transport.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
+import {observeProviderAttempt} from '../runtime/telemetry.mjs';
 
 const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map(),failureStreak=new Map();
 const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','oauth.reddit.com','www.reddit.com','kworb.net']);
@@ -36,7 +37,8 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
     const configured=Number(process.env.PROVIDER_DAILY_REQUEST_LIMIT||1000),limit=Number.isInteger(configured)&&configured>=1?Math.min(12000,configured):1000;
     if(count>=limit)throw Object.assign(new Error('Provider daily allowance reached'),{status:429});
     providerUsage.set(id,{day,requests:count+1,limit});
-    const response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'KalshiMarketLab/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(16000)});
+    const provider=parsed.hostname.includes('espn.com')?'espn':parsed.hostname.includes('apple.com')?'apple_music':parsed.hostname==='api.x.com'?'x':parsed.hostname.includes('spotify.com')?'spotify':parsed.hostname.includes('reddit.com')?'reddit':'kworb';
+    const response=await observeProviderAttempt(provider,()=>fetcher(url,{headers:{Accept:'application/json','User-Agent':'KalshiMarketLab/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(16000)}));
     if(response.status===429||response.status===402||response.status>=500){
       cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,response.status));
     }

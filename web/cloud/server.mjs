@@ -15,7 +15,10 @@ import {validateTicker} from '../lib/live.mjs';
 import {handleMCP} from '../lib/workspace/mcp.mjs';
 import {serviceAuthorized,reserveAssistant} from '../lib/workspace/assistant.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
-import {traceContext,structuredLog} from '../lib/runtime-observability.mjs';
+import {traceContext} from '../lib/runtime-observability.mjs';
+import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
+import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
+import {makeAccountHandler} from '../lib/workspace/account.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
@@ -35,8 +38,13 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
   getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
-  monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger=production?structuredLog:()=>{}}={}){
+  monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger,telemetry=runtimeTelemetry,accountOptions={}}={}){
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
+  const recentLogs=[],logPipeline=createLogPipeline({write:line=>{const record=JSON.parse(line);recentLogs.push(record);if(recentLogs.length>200)recentLogs.shift();if(production&&!logger)process.stdout.write(line+'\n');}});
+  function recordLog(event,values){
+    const level=values.status>=500?'error':values.status>=400?'warn':'info',safe=sanitizeOperationalRecord(event,values,level);
+    logger?.(event,safe);logPipeline.log(event,safe,level);
+  }
   const eventLoop=monitorEventLoopDelay({resolution:20});
   const allowedOrigins=new Set(['https://predictir.dev','https://www.predictir.dev']);
   function validOrigin(origin){
@@ -47,7 +55,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   function headers(req,res){
     const origin=req.headers.origin;
     if(origin&&validOrigin(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');}
-    res.setHeader('Access-Control-Allow-Headers','Authorization,Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers','Authorization,Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,OPTIONS');
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
     res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
@@ -121,7 +129,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   const server=createServer({maxHeaderSize:16384,headersTimeout:10000,requestTimeout:25000,keepAliveTimeout:5000},async(req,res)=>{
     headers(req,res);
     const started=performance.now();let trace,route='unknown',reported=false;
-    const report=()=>{if(reported)return;reported=true;logger('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:Math.round((performance.now()-started)*100)/100,
+    const report=()=>{if(reported)return;reported=true;const durationMs=Math.round((performance.now()-started)*100)/100;telemetry.observeRequest({route,status:res.statusCode,durationMs});recordLog('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:durationMs,
       trace_id:trace?.traceId,span_id:trace?.spanId,parent_id:trace?.parentId,baggage_dropped:trace?.baggageDropped,open_streams:connections});};
     res.once('finish',report);res.once('close',report);
     try{
@@ -129,7 +137,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       const url=new URL(req.url,'http://localhost'),edgeVerified=serviceAuthorized(req.headers['x-market-edge-secret'],edgeSecret);
       trace=traceContext(req.headers,{trusted:edgeVerified||serviceAuthorized(req.headers.authorization,serviceSecret)});
       res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
-      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/assistant\/reserve)$/.test(url.pathname)?url.pathname:'unknown';
+      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|settle)))$/.test(url.pathname)?url.pathname:'unknown';
       const identity=requestIdentity(req,edgeVerified);
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
@@ -142,6 +150,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         if(!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
         const raw=await readBody(req,20000),input=JSON.parse(raw||'{}');
         if(url.pathname==='/internal/diagnostics'){
+          if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'HTTP fetch-to-response-headers per attempt; Supabase Auth SDK call duration. Request duration includes response body work.'});
+          if(input.operation==='runtime_metrics'){res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4; charset=utf-8','Cache-Control':'no-store'});return res.end(telemetry.prometheus());}
           if(!storageEnabled()||storage().kind!=='postgres')return json(res,{error:'The relational store is not configured'},503);
           if(input.operation==='usage_allowances'){
             const month=new Date(now()).toISOString().slice(0,7),day=new Date(now()).toISOString().slice(0,10);
@@ -156,7 +166,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
           }
           if(input.operation!=='database_latency'||!Number.isInteger(input.samples)||input.samples<1||input.samples>9)throw new RangeError('Choose usage_allowances or database_latency with one through nine samples');
           await quota(3);const milliseconds=[];
-          for(let i=0;i<input.samples;i++){const start=performance.now();await storage().db.query('SELECT 1');milliseconds.push(Math.round((performance.now()-start)*100)/100);}
+          for(let i=0;i<input.samples;i++){const start=performance.now();await observeProviderAttempt('postgres',()=>storage().db.query('SELECT 1'),telemetry);milliseconds.push(Math.round((performance.now()-start)*100)/100);}
           return json(res,{operation:'database_latency',samples_ms:milliseconds,mean_ms:milliseconds.reduce((a,b)=>a+b,0)/milliseconds.length,
             runtime_region:process.env.RAILWAY_REGION||'unknown',pool:{total:storage().db.totalCount,idle:storage().db.idleCount,waiting:storage().db.waitingCount}});
         }
@@ -175,7 +185,15 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(production&&!edgeVerified)return json(res,{error:'Open the application at predictir.dev'},403);
       if(edgeVerified&&!isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'This service is unavailable in your region'},403);
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
-      if(!['GET','POST'].includes(req.method))return json(res,{error:'Method not allowed'},405);
+      if(!['GET','POST','PUT'].includes(req.method))return json(res,{error:'Method not allowed'},405);
+      if(url.pathname==='/api/session'||url.pathname.startsWith('/api/account/')){
+        await quota(2);const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
+        const handler=makeAccountHandler({storage:storageEnabled()?storage():null,secret:process.env.ACCOUNT_COOKIE_SECRET||serviceSecret,secure:production,...accountOptions});
+        const output=await handler(new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(body?{body}:{})}),url.pathname.slice(5));
+        const outputHeaders=Object.fromEntries(output.headers),cookies=output.headers.getSetCookie();if(cookies.length)outputHeaders['set-cookie']=cookies;
+        res.writeHead(output.status,outputHeaders);return res.end(Buffer.from(await output.arrayBuffer()));
+      }
+      if(req.method==='PUT')return json(res,{error:'Method not allowed'},405);
       if(url.pathname==='/api/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);return await sse(req,res,[url.searchParams.get('ticker')],identity);}
       if(url.pathname==='/api/portfolio/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);
         const raw=url.searchParams.get('tickers')||'';if(raw.length>1750)throw new RangeError('Portfolio watchlist is too long');return await sse(req,res,raw.split(','),identity,true);}
@@ -210,7 +228,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   const monitor=setInterval(async()=>{
     if(!server.listening)return;
     const current=process.cpuUsage(),used=Math.ceil((current.user-previousCpu.user+current.system-previousCpu.system)/1000);previousCpu=current;
-      const memory=process.memoryUsage();logger('runtime.health',{event_loop_p99_ms:Math.round(eventLoop.percentile(99)/1e4)/100,heap_mb:Math.round(memory.heapUsed/1048576),rss_mb:Math.round(memory.rss/1048576),open_streams:connections});eventLoop.reset();
+      const memory=process.memoryUsage();let pool;try{pool=storageEnabled()?storage().db:null;}catch{}
+      recordLog('runtime.health',{event_loop_p99_ms:Math.round(eventLoop.percentile(99)/1e4)/100,heap_mb:Math.round(memory.heapUsed/1048576),rss_mb:Math.round(memory.rss/1048576),open_streams:connections,pool_total:pool?.totalCount,pool_idle:pool?.idleCount,pool_waiting:pool?.waitingCount});eventLoop.reset();
       if(!storageEnabled())return;
     try{const stop=await storage().get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await storage().consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
     catch{disabled=true;}

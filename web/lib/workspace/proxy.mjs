@@ -1,6 +1,6 @@
 import {isCountryAllowed} from './geo.mjs';
 import {traceContext} from '../runtime-observability.mjs';
-const known=/^\/(?:health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|context|history|research|opinions|recommendations|search|sources|attribution)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
+const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|context|history|research|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
 export async function readProxyBody(request,maximum=20000){
   if(Number(request.headers.get('content-length')||0)>maximum)throw Object.assign(new RangeError('Request too large'),{status:413});
   const reader=request.body?.getReader(),chunks=[];let size=0;
@@ -11,9 +11,12 @@ export async function proxyBackend(request,path,{fetcher=fetch}={}){
   if(!process.env.MARKET_BACKEND_URL)return null;
   if(!Array.isArray(path)||path.length>5||path.some(part=>typeof part!=='string'))return Response.json({error:'Unknown API route'},{status:404});
   const route='/'+path.join('/');
-  if(!known.test(route)||!['GET','POST','OPTIONS'].includes(request.method))return Response.json({error:'Unknown API route'},{status:404});
+  const privateRoute=route==='/session'||route.startsWith('/account/');
+  if(!known.test(route)||!['GET','POST','OPTIONS',...(route==='/account/portfolio'?['PUT']:[])].includes(request.method))return Response.json({error:'Unknown API route'},{status:404});
+  if(privateRoute&&request.headers.get('sec-fetch-site')==='cross-site')return Response.json({error:'Open this action from the application.'},{status:403});
   const origin=request.headers.get('origin'),own=new URL(request.url).origin;
   if(origin&&origin!==own)return Response.json({error:'Use the application origin'},{status:403});
+  if(privateRoute&&['POST','PUT'].includes(request.method)&&!origin)return Response.json({error:'Use the application origin'},{status:403});
   const country=request.headers.get('x-vercel-ip-country');
   if(process.env.VERCEL==='1'&&!isCountryAllowed(country))return Response.json({error:'This service is unavailable in your region'},{status:403});
   let url;try{
@@ -26,14 +29,19 @@ export async function proxyBackend(request,path,{fetcher=fetch}={}){
     'x-market-client-ip':request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()||'local',Accept:streaming?'text/event-stream':'application/json',
     traceparent:trace.traceparent,tracestate:trace.tracestate};
   if(route==='/journal'&&request.headers.get('authorization'))headers.Authorization=request.headers.get('authorization');
+  if(privateRoute&&request.headers.get('cookie'))headers.Cookie=request.headers.get('cookie');
+  if(privateRoute&&origin)headers.Origin=origin;
+  if(privateRoute&&request.headers.get('sec-fetch-site'))headers['Sec-Fetch-Site']=request.headers.get('sec-fetch-site');
   try{
-    let body;if(request.method==='POST'){body=await readProxyBody(request);headers['Content-Type']='application/json';}
+    let body;if(['POST','PUT'].includes(request.method)){body=await readProxyBody(request,route==='/account/portfolio'?1500000:20000);headers['Content-Type']='application/json';}
     const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,AbortSignal.timeout(streaming?55000:50000)])});
     const type=result.headers.get('content-type')||'';
     if(/text\/html/i.test(type))return Response.json({error:'The data service returned a web page instead of data. Try again shortly.'},{status:502});
     const outputHeaders={'Cache-Control':'no-store','Content-Type':result.headers.get('content-type')||'application/json','X-Content-Type-Options':'nosniff',traceparent:trace.traceparent};
     if(result.headers.has('retry-after'))outputHeaders['Retry-After']=result.headers.get('retry-after');
     if(streaming)outputHeaders['X-Accel-Buffering']='no';
-    return new Response(result.body,{status:result.status,headers:outputHeaders});
+    const output=new Response(result.body,{status:result.status,headers:outputHeaders});
+    if(privateRoute){output.headers.set('Vary','Cookie');for(const cookie of result.headers.getSetCookie())output.headers.append('Set-Cookie',cookie);}
+    return output;
   }catch(error){return Response.json({error:error.status===413?'Request too large':'The data service is temporarily unavailable. Try again shortly.'},{status:error.status===413?413:503});}
 }
