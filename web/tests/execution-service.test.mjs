@@ -45,6 +45,11 @@ test('an unsupported or unavailable fee schedule remains an explicit assumption 
   assert.equal(result.fee_schedule.status,'assumed_default');assert.equal(result.immediate_execution.fee_coefficient,.07);assert.equal(result.settlement.decision,'REVIEW');assert.match(result.assumptions.fees,/not a verified fee quote/);assert.equal(result.independent_forecast_unchanged,true);
 });
 
+test('execution packets preserve an experimental outcome model label and its failed release gate',async()=>{
+  const dependencies=fixtures(),read=dependencies.workspaceResearch;dependencies.workspaceResearch=async(...args)=>{const value=await read(...args);return {...value,forecast:{...value.forecast,experimental:true,eligible:false,validation:{passed:false}}};};
+  const result=await workspaceExecutionResearch(ticker,{},dependencies);assert.equal(result.forecast.probability,.7);assert.equal(result.forecast.experimental,true);assert.equal(result.forecast.eligible,false);assert.equal(result.settlement.decision,'REVIEW');
+});
+
 test('fresh but unaligned flow cannot change a different REST book; atomic native snapshots use their matching sequence',async()=>{
   const dependencies=fixtures(),row={received_at:iso,time_seconds:now/1000,sequence:1,generation:'current',bid_price:.1,ask_price:.12,bid_size:10,ask_size:12,exchange_sequence:35};
   dependencies.feed.observations=()=>[row];

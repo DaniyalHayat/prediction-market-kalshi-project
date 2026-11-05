@@ -42,11 +42,12 @@ export function explainExecutionMath(packet,ticker,now=Date.now()){
   if(!c||!e||!s)return 'The execution comparison is incomplete. Run it again from the selected contract.';
   const lines=[`Execution lab: ${c.contracts} hypothetical ${c.side.toUpperCase()} contracts, ${c.action}, over ${c.horizon_seconds} seconds.`,
     'This is an experimental execution comparison. The independent outcome forecast is unchanged.',
-    `The current book fills ${e.filled} contracts and leaves ${e.unfilled} unfilled within the 2-cent limit. Modeled fees are ${usd(e.fee)}; ${c.action==='buy'?'cash required':'net proceeds'} are ${usd(e.cash)}. This is a snapshot estimate.`,
+    `The current book fills ${e.filled} contracts and leaves ${e.unfilled} unfilled within the 2-cent limit. Modeled fees: ${usd(e.fee)}; ${c.action==='buy'?'cash required':'net proceeds'}: ${usd(e.cash)}. This is a snapshot estimate.`,
     `The ${s.enabled?'risk-weighted':'equal-quantity'} schedule has modeled cost ${usd(s.expected_cost)} and objective ${usd(s.objective)}, compared with ${usd(s.benchmark_twap?.objective)} for equal slices. The objective includes the supplied risk preference; it is not expected trading profit.`,
     `Volatility and temporary price impact are editable assumptions. They have not been calibrated from a book snapshot.`];
   if(packet.fee_schedule?.note)lines.push(packet.fee_schedule.note);
-  for(const [label,value] of [['Order flow',packet.order_flow],['Arrival clustering',packet.arrival_model]])if(value)lines.push(`${label}: ${value.validation_status||'unavailable'}. ${value.reason||''}`);
+  if(packet.forecast?.experimental)lines.push('The selected independent outcome estimate is experimental and has not passed its release checks.');
+  for(const [label,value] of [['Order flow',packet.order_flow],['Arrival clustering',packet.arrival_model]])if(value)lines.push(`${label}: ${(value.validation_status||'unavailable').replaceAll('_',' ')}. ${value.reason||''}`);
   if(packet.inventory_quotes)lines.push(`Inventory quote scenario: buy at ${usd(packet.inventory_quotes.bid)}, sell at ${usd(packet.inventory_quotes.ask)} per $1 payout contract. These are model quotes, not submitted orders or guaranteed fills.`);
   if(packet.settlement?.available)lines.push(`Hypothetical existing-position comparison: ${packet.settlement.decision}. ${packet.settlement.reason} Hold payoff ${usd(packet.settlement.hold_expected_value)} versus net exit ${usd(packet.settlement.sell_now_value)}.`);
   else lines.push('No supported hold-versus-exit decision is available without a fresh independent probability range.');

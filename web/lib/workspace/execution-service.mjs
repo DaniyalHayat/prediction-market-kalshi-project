@@ -27,6 +27,7 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
   const depth=native?captured.book:restDepth,aligned=recent&&(captured?native:matches(depth)),history=aligned?rows:[],feeVerified=Number.isFinite(fees?.coefficient)&&fees.coefficient>=0&&fees.coefficient<=1,coefficient=feeVerified?fees.coefficient:.07;
   const result=executionResearch({market:research.market,book:depth,forecast,book_history:history,observation_end_seconds:native?captured.observed_until_seconds:undefined,controls:parsed.controls,fee_coefficient:coefficient,now});
   return {...result,ticker,title:research.market.yes_sub_title||research.title||research.market.title,as_of:new Date(now).toISOString(),book_as_of:depth.as_of,
+    forecast:{...result.forecast,eligible:forecast.eligible,experimental:forecast.experimental,release_reason:forecast.reason},
     data_quality:{...result.data_quality,gaps:[...(result.data_quality?.gaps||[]),...(!aligned?[recent?'The current book and event window are unaligned; live flow adjustments are withheld.':'A recent continuous stream window is unavailable; live flow adjustments are withheld.']:[])]},
     fee_schedule:{status:feeVerified?'series_coefficient_available':'assumed_default',coefficient,
       note:feeVerified?'Uses the reported series coefficient with the modeled taker formula; individual market exceptions are not verified.':'The current fee coefficient could not be verified. A 0.07 general taker assumption is used for this scenario.'},
