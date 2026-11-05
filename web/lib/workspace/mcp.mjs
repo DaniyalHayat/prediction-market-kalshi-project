@@ -38,7 +38,11 @@ export function createResearchServer({tickerScope,modelScope='baseline',dependen
     const m=detail.market;
     return {ticker,market:{ticker:m.ticker,event_ticker:m.event_ticker,title:m.title,yes_sub_title:m.yes_sub_title,status:m.status,
       result:m.result,close_time:m.close_time,expected_expiration_time:m.expected_expiration_time},
-      rules:{primary:String(m.rules_primary||'').slice(0,5000),secondary:String(m.rules_secondary||'').slice(0,2000)},as_of:detail.as_of,book:{as_of:depth.as_of,metrics:depth.metrics,
+      rules:{primary:String(m.rules_primary||'').slice(0,5000),secondary:String(m.rules_secondary||'').slice(0,2000)},as_of:detail.as_of,
+      quotes:{unit:'USD per contract with a $1 binary settlement payout',yes_ask_usd:depth.metrics?.book_ask??null,
+        no_ask_usd:Number.isFinite(depth.metrics?.book_bid)?Math.round((1-depth.metrics.book_bid)*1e8)/1e8:null,
+        costs_note:'Visible asks exclude entry fees, slippage and quantity-dependent depth. Quote percentages are not independent model probabilities.'},
+      book:{as_of:depth.as_of,metrics:depth.metrics,
       raw:{orderbook_fp:Object.fromEntries(Object.entries(depth.raw.orderbook_fp).filter(([side,rows])=>['yes_dollars','no_dollars'].includes(side)&&Array.isArray(rows)).map(([side,rows])=>[side,rows.slice(0,12)]))}},
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]};
   });
