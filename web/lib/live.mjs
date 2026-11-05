@@ -109,7 +109,7 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
   if(!/^\/(markets(?:\/|$)|series(?:\/|$)|events(?:\/|$))/.test(path) || path.includes('..'))throw new RangeError('Only public market-data paths are supported');
   if(cloudEnabled() && fetcher===fetch) {
     const key=path+'?'+new URLSearchParams(params).toString();
-    const ttl=path.endsWith('/orderbook')?3:path.startsWith('/series')&&!path.includes('/markets/')?3600:path.includes('candlesticks')?60:20;
+    const ttl=path.endsWith('/orderbook')||path==='/markets/orderbooks'?3:path.startsWith('/series')&&!path.includes('/markets/')?3600:path.includes('candlesticks')?60:20;
     return store().cached(key,ttl,()=>request(path,params,(...args)=>fetch(...args),now));
   }
   const query = new URLSearchParams(params); query.sort();
@@ -180,6 +180,14 @@ export async function book(ticker, contracts = 100) {
   if (!Number.isFinite(contracts) || contracts <= 0 || contracts > 1e6) throw new RangeError("Invalid contract count");
   const result = await request("/markets/"+encodeURIComponent(ticker)+"/orderbook",{depth:"100"});
   return {ticker,raw:result.data,metrics:bookMetrics(result.data,contracts),as_of:result.as_of,source_url:result.source_url};
+}
+export async function batchBooks(tickers,getter=request) {
+  if(!Array.isArray(tickers)||tickers.length<1||tickers.length>12)throw new RangeError('Choose one to twelve contracts');
+  const allowed=new Set(tickers.map(validateTicker));
+  const params=new URLSearchParams([...allowed].sort().map(ticker=>['tickers',ticker]));
+  const result=await getter('/markets/orderbooks',params);
+  return new Map((result.data.orderbooks||[]).filter(row=>allowed.has(row.ticker)&&row.orderbook_fp)
+    .map(row=>[row.ticker,{ticker:row.ticker,raw:{orderbook_fp:row.orderbook_fp},as_of:result.as_of,source_url:result.source_url}]));
 }
 export async function marketDetails(ticker) {
   validateTicker(ticker);

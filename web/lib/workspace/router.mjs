@@ -1,4 +1,4 @@
-import {request,marketDetails,book,validateTicker,number,validQuote} from '../live.mjs';
+import {request,marketDetails,book,batchBooks,validateTicker,number,validQuote} from '../live.mjs';
 import {marketFees} from '../cloud/resolve.mjs';
 import {marketBrief} from '../intelligence/brief.mjs';
 import {executionEstimate} from '../intelligence/math.mjs';
@@ -120,7 +120,7 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
       decision={...decision,side:'insufficient_edge',reasons:[reason],candidates:[]};summary=reason;status='evidence_only';
     }
     const side=['yes','no'].includes(decision.side)?decision.side.toUpperCase():'PASS';
-    const value={...brief,forecast,decision,summary,status,market_signal,quote_as_of:depth?.as_of,model_selection:{requested:model,applied:alternative?'challenger':'baseline',reason:model==='challenger'&&!alternative?'An audited challenger is unavailable for this exact contract; baseline research is shown.':null},
+    const value={...brief,forecast,decision,summary,status,market_signal,fee_coefficient:fees?.coefficient??null,quote_as_of:depth?.as_of,model_selection:{requested:model,applied:alternative?'challenger':'baseline',reason:model==='challenger'&&!alternative?'An audited challenger is unavailable for this exact contract; baseline research is shown.':null},
       opinion:{side,reason:decision.reasons?.[0]||(side==='PASS'?'No supported cost advantage was established.':'The modeled conservative bound clears one-contract entry costs; inspect validation and assumptions.'),
         basis:'Independent-data research screen; conditional paper sizing is available in Paper position.',supported_allocation:side==='PASS'?0:null},
       extensions:{...(sports?{sports}:{}),...(music?{music}:{}),post_status:'not_queried',post_note:'Public social feeds are loaded only by the selected-contract evidence action.'},
@@ -168,20 +168,38 @@ export async function workspaceOpinions(raw,{research=workspaceResearch,model='b
 export async function workspaceRecommendations(category='sports',budget=20,model='baseline',dependencies={}) {
   model=modelChoice(model);
   if(!Number.isFinite(budget)||budget<1||budget>10000)throw new RangeError('Choose a paper budget from $1 to $10,000');
-  const deps={markets:workspaceMarkets,research:workspaceResearch,book,fees:marketFees,...dependencies};
+  const deps={markets:workspaceMarkets,research:workspaceResearch,book,batchBooks,...dependencies};
   const useCache=!Object.keys(dependencies).length,key=category+'#'+model;
   const scan=async()=>{
     const list=await deps.markets(category),seen=new Set(),ordered=[...list.markets].sort((a,b)=>{
-      const priority=m=>/^KX(?:NFL|NBA|EPL)GAME-/.test(m.ticker)||inferResearchFamily(m.ticker)?0:1;
+      const priority=m=>/^KXNFLGAME-/.test(m.ticker)?0:/^KX(?:NBA|EPL)GAME-/.test(m.ticker)||inferResearchFamily(m.ticker)?1:2;
       return priority(a)-priority(b)||(b.volume_24h||0)-(a.volume_24h||0);
     });
     const selected=[];for(const row of ordered){const event=row.event_ticker||row.ticker;if(!seen.has(event)){seen.add(event);selected.push(row);}if(selected.length>=12)break;}
-    const rows=await boundedMap(selected,3,async market=>{
-      try{const [research,depth,fees]=await Promise.all([deps.research(market.ticker,{fast:true,model}),deps.book(market.ticker,10000),deps.fees(market.ticker).catch(()=>null)]);
-        return {market:{...market,...research.market},research,depth,fees};}
-      catch(error){return {market,error:String(error.message).slice(0,180)};}
+    const researchByTicker=new Map();
+    for(const {ticker} of selected)for(const mode of ['fast','full']){
+      const cached=researchCache.get(ticker+'#'+model+'#'+mode+'#0');
+      if(cached?.until>Date.now()&&!researchByTicker.has(ticker))researchByTicker.set(ticker,cached.value);
+    }
+    const probe=selected.filter(row=>!researchByTicker.has(row.ticker)&&(/^KX(?:NFL|NBA|EPL)GAME-/.test(row.ticker)||inferResearchFamily(row.ticker))).slice(0,3);
+    let deadline;
+    const budgetedResearch=Promise.race([Promise.allSettled(probe.map(async ({ticker})=>{
+      const value=await deps.research(ticker,{fast:true,model});
+      if(value?.market?.ticker===ticker)researchByTicker.set(ticker,value);
+    })),new Promise(resolve=>{deadline=setTimeout(resolve,2500);})]).finally(()=>clearTimeout(deadline));
+    const batch=selected.length?await deps.batchBooks(selected.map(row=>row.ticker)).catch(()=>new Map()):new Map();
+    const missing=selected.filter(row=>!batch.has(row.ticker)).slice(0,3);
+    await Promise.all([budgetedResearch,...missing.map(async ({ticker})=>{
+      try{const depth=await deps.book(ticker,1);if(depth?.ticker===ticker)batch.set(ticker,depth);}catch{}
+    })]);
+    const rows=selected.map(market=>{
+      const research=researchByTicker.get(market.ticker),depth=batch.get(market.ticker);
+      return depth?{market:{...market,...research?.market},research,depth,fee_coefficient:research?.fee_coefficient}:
+        {market,error:'A matching public book was unavailable for this scan.'};
     });
-    return {rows,as_of:new Date().toISOString(),coverage:{catalog_contracts:list.markets.length,scanned_events:selected.length,maximum_events:12,catalog_partial:Boolean(list.partial),source_errors:list.errors||[],scope:'A bounded liquid-event scan. It is not an exchange-wide best-trade claim.'}};
+    return {rows,as_of:new Date().toISOString(),coverage:{catalog_contracts:list.markets.length,scanned_events:selected.length,maximum_events:12,
+      books_returned:batch.size,model_checks:researchByTicker.size,catalog_partial:Boolean(list.partial),source_errors:list.errors||[],
+      scope:'A bounded liquid-event scan with batch depth and up to three additional model checks.'}};
   };
   let data=useCache?scanCache.get(key):null;
   const lifetime=data?.rows.some(row=>row.research?.forecast?.inplay)?5000:30000;
@@ -192,12 +210,12 @@ export async function workspaceRecommendations(category='sports',budget=20,model
     finally{if(useCache)scanInflight.delete(key);}
   }
   const candidates=data.rows.flatMap(row=>row.error?[{ticker:row.market.ticker,title:row.market.title,event_ticker:row.market.event_ticker,side:'PASS',eligible:false,reasons:[row.error]}]:
-    tradeCandidates(row.market,row.depth,row.research,{budget,coefficient:Number.isFinite(row.fees?.coefficient)?row.fees.coefficient:.07,experimental:model==='challenger'})
-      .map(value=>({...value,fee_source:Number.isFinite(row.fees?.coefficient)?'series_metadata':'general_assumption'})));
+    tradeCandidates(row.market,row.depth,row.research,{budget,coefficient:Number.isFinite(row.fee_coefficient)?row.fee_coefficient:.07,experimental:model==='challenger'})
+      .map(value=>({...value,fee_source:Number.isFinite(row.fee_coefficient)?'series_metadata':'general_assumption'})));
   const result=rankCandidates(candidates,{experimental:model==='challenger'});
   const selectedEvents=new Set(result.candidates.map(row=>row.event_ticker||row.ticker));
   const scenarios=rankPaperScenarios(data.rows.flatMap(row=>row.error||selectedEvents.has(row.market.event_ticker||row.market.ticker)?[]:
-    paperScenarios(row.market,row.depth,row.research,{budget,coefficient:row.fees?.coefficient??.07})));
+    paperScenarios(row.market,row.depth,row.research,{budget,coefficient:row.fee_coefficient??.07})));
   return {...result,paper_scenarios:scenarios,as_of:data.as_of,budget,model,coverage:data.coverage,
     assumptions:{paper_only:true,independent_probability:true,entry_buffer_cents:2,slippage_cents:2,settlement_payout_per_contract:1,settlement_fee:0,quantity_step:1,fee_policy:'Series coefficient when supplied; otherwise the explicit general 0.07 assumption. Rounded per price level. Exchange billing can differ.',
       risk_size:{drawdown_floor:.8,drawdown_probability:.1},budget_scope:'Each row is a separate use of this budget; do not add the scenarios as if each had its own extra cash.'}};

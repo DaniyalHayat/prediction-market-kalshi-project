@@ -55,9 +55,9 @@ function PricePath({signal,now}){
   if(!signal)return null;
   const age=now-Date.parse(signal.observed_at),current=signal.status==='available'&&age>=0&&age<=180000;
   return <section className="method"><div className="section-title"><h3>One-minute price model</h3><span className="tag">Exchange quotes</span></div>
-    {current?<><div className="model-numbers"><div><small>Last midpoint</small><strong>{cents(signal.last_midpoint)}</strong></div><div><small>Next YES midpoint</small><strong>{cents(signal.prediction)}</strong></div><div><small>Replay residual range</small><strong>{signal.interval.map(cents).join(' – ')}</strong></div></div>
-      <p>{signal.model} · {count(signal.replay.replay_n)} held-out minute steps · {cents(signal.replay.model_rmse)} model error vs {cents(signal.replay.persistence_rmse)} with no price change.</p>
-      <details><summary>How this was tested</summary><p>{signal.scope} Coverage on the replay segment was {percent(signal.replay.residual_range_coverage)}. The modeled quantity is the quote midpoint.</p></details></>:
+    {current?<><div className="model-numbers"><div><small>Last midpoint</small><strong>{cents(signal.last_midpoint)}</strong></div><div><small>Next YES midpoint</small><strong>{cents(signal.prediction)}</strong></div><div><small>{signal.replay?'Replay residual range':'Recent quote changes'}</small><strong>{signal.replay?signal.interval.map(cents).join(' – '):count(signal.updates)}</strong></div></div>
+      {signal.replay?<><p>{signal.model} · {count(signal.replay.replay_n)} held-out minute steps · {cents(signal.replay.model_rmse)} model error vs {cents(signal.replay.persistence_rmse)} with no price change.</p>
+        <details><summary>How this was tested</summary><p>{signal.scope} Coverage on the replay segment was {percent(signal.replay.residual_range_coverage)}. The modeled quantity is the quote midpoint.</p></details></>:<p>{signal.scope} A holdout needs more observations.</p>}</>:
       <p className="muted">{signal.reason||'Waiting for a recent candle before showing the next-minute estimate.'}</p>}</section>;
 }
 function Research({value,loading,onAssistant,onPaper,history,now,compact=false}) {

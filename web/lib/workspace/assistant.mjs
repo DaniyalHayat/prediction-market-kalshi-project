@@ -9,7 +9,7 @@ import {normalizeExecutionControls} from './execution-research.mjs';
 import {applicationOriginMatches} from './proxy.mjs';
 const MODEL='google/gemini-2.5-flash-lite';
 const sourceLinks=sources=>'Sources checked: '+sources.map(({url,label})=>'['+(String(label||new URL(url).hostname).replace(/[\[\]\r\n]/g,' ').slice(0,100))+']('+url.replaceAll('(','%28').replaceAll(')','%29')+')').join(', ');
-const money=value=>'$'+value.toFixed(2);
+const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value);
 const price=value=>(value*100).toFixed(1)+'¢';
 const pct=value=>(value*100).toFixed(1)+'%';
 
@@ -33,7 +33,7 @@ export function explainContract(packet,ticker,now=Date.now()){
   }
   const signal=packet.market_signal;
   if(signal?.status==='available'&&now-Date.parse(signal.observed_at)<180000){
-    lines.push(`The one-minute price model projects a YES midpoint of ${price(signal.prediction)} from ${price(signal.last_midpoint)}, with a replay-based range of ${signal.interval.map(price).join(' to ')}. This describes quote movement.`);
+    lines.push(`The one-minute price model projects a YES midpoint of ${price(signal.prediction)} from ${price(signal.last_midpoint)}${signal.interval?', with a replay-based range of '+signal.interval.map(price).join(' to '):' from '+signal.updates+' recent quote changes'}. This describes quote movement.`);
   }
   const evidence=(packet.evidence||[]).slice(0,3);
   if(evidence.length){
