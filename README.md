@@ -17,13 +17,11 @@ Previously titled Kalshi Market Lab. The repository address is retained so exist
 <details>
 <summary>Methods, engineering and local setup</summary>
 
-[Updated Figma source workspace](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj) · [Security and data handling](docs/SECURITY.md)
-
-The updated Figma source import succeeded, but its preview returned connection error M8. Use the verified hosted app below for execution; updated Figma preview and publication are not claimed.
+[Security and data handling](docs/SECURITY.md)
 
 **[Open Kalshi Market Lab](https://predictir.dev)**. The current workspace runs on Vercel, Railway and Supabase. It includes eight market categories, native streaming, contract-specific research, cost-aware screens, a paper portfolio, private prospective journals, and a read-only MCP research assistant. [Deployment and reproduction](web/docs/DEPLOYMENT.md) · [Integration ranking and costs](web/docs/INTEGRATIONS.md) · [Sports validation](web/docs/sports-validation.json).
 
-The [previous AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/) remains available for its existing journal records. It is a separate data store. Figma source/preview status is separate from the current hosted web application.
+The [AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/lab.html) uses a separate journal store. The current Figma export opens the standalone workbench.
 
 The research upgrade adds selectable dark themes, ranked budget scenarios, live paper-position decisions and confirmed settlement accounting. The experimental NBA ensemble and score-clock model are selectable alongside validated research. [Full feature review](web/docs/FEATURE_REVIEW.md), [pregame model evidence](web/docs/NBA_RESEARCH.md), [in-play replay](web/docs/NBA_INPLAY.md) and [runtime benchmarks](web/docs/RUNTIME_RESEARCH.md) explain the methods, measured results and integration decisions.
 
@@ -113,6 +111,6 @@ Paper trades stay in this browser's storage. Clearing site data removes that jou
 
 ## November 4 implementation and validation
 
-The web application adds TypeScript sizing at `POST /api/paper/size`: integer enumeration maximizes worst-case expected log wealth under supplied probability bounds, fees, visible depth and loss limits. Stale/mismatched quotes are rejected and zero position is allowed. This is conditional simulation, not established real-world optimality. Payload CMS/SQLite implements a local research-note collection with draft/reviewed status and access rules. From `web`, run `npm run cms:verify` for real database CRUD and blocked anonymous reads. This is a local API integration, not a deployed admin site. `npm test`, `npm run typecheck`, `npm run build`, and `npm run verify:artifacts` check behavior, types, production compilation and artifact hashes. The local checks require no paid services; hosted provider usage is described in the deployment guide. No real orders are involved.
+The web application adds TypeScript sizing at `POST /api/paper/size`: integer enumeration maximizes worst-case expected log wealth under supplied probability bounds, fees, visible depth and loss limits. Stale/mismatched quotes are rejected and zero position is allowed. This is conditional simulation, not established real-world optimality. Payload CMS/SQLite implements a local research-note collection with draft/reviewed status and access rules. From `web`, run `npm run cms:verify` for real database CRUD and blocked anonymous reads. This is a local API integration, not a deployed admin site. `npm test`, `npm run typecheck`, `npm run build`, and `npm run verify:artifacts` check behavior, types, production compilation and public assets. The local checks require no paid services; hosted provider usage is described in the deployment guide. No real orders are involved.
 
 </details>

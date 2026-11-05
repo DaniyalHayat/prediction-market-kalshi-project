@@ -50,7 +50,7 @@ jobs:
         run: npm ci
       - name: Check Railway Dockerfile compatibility
         run: node tools/check_railway_dockerfile.mjs
-      - name: Verify checked-in dashboard artifact hashes
+      - name: Verify public browser assets
         run: npm run verify:artifacts
       - name: Install pgTAP in the disposable database
         run: |

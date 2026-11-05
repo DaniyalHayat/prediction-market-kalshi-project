@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kalshi Market Lab | Live contract workbench</title>
 <link rel="stylesheet" href="lab.css"><link rel="stylesheet" href="lab-theme.css"><script type="module" src="lab.js"></script></head>
-<body><header><a class="brand" href="lab.html">Kalshi Market Lab</a><span class="badge">RESEARCH &amp; PAPER TRADING</span><a href="dashboard/index.html">Full research dashboard ↗</a></header>
+<body><header><a class="brand" href="lab.html">Kalshi Market Lab</a><span class="badge">RESEARCH &amp; PAPER TRADING</span><a href="https://predictir.dev/">Predictir dashboard ↗</a></header>
 <main><div class="intro"><div><p class="eyebrow">FROM A LIVE CONTRACT TO A TESTABLE VIEW</p><h1>Inspect the market.<br>Keep your forecast honest.</h1><p>Live exchange depth, your probability range, explicit costs, and a journal scored only after settlement.</p></div><div class="connection" role="status" aria-live="polite"><span id="dot"></span><strong id="status">Choose a contract</strong><small id="freshness">No quote loaded</small><button id="pause" disabled>Pause stream</button></div></div>
 <form id="lookup" class="lookup"><label for="market">Kalshi market URL or exact contract ticker</label><div><input id="market" placeholder="Paste a kalshi.com/markets/… link" required autocomplete="off"><button>Find contract</button></div><label for="contracts">Contract within this event</label><div><select id="contracts" disabled><option>Load a market first</option></select><button type="button" id="watch" disabled>Watch live</button></div></form>
 <p id="error" class="error" role="alert" hidden></p>

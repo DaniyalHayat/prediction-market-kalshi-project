@@ -13,6 +13,29 @@ async function server(t,options={}){
   t.after(async()=>{instance.closeAllConnections();await new Promise(resolve=>instance.close(resolve));});
   return 'http://127.0.0.1:'+instance.address().port;
 }
+test('the standalone workbench keeps old dashboard links on the journal origin',async t=>{
+  const url=await server(t,{production:false});
+  for(const path of ['/','/dashboard','/dashboard/','/dashboard/index.html']){
+    const response=await fetch(url+path+'?token=fixture',{redirect:'manual'});
+    assert.equal(response.status,302);
+    assert.equal(response.headers.get('location'),'/lab.html');
+  }
+  const workbench=await fetch(url+'/lab.html');
+  assert.equal(workbench.status,200);
+  assert.match(await workbench.text(),/Live contract workbench/);
+  for(const path of ['/lab.js','/risk-client.js','/dashboard/paper.js','/dashboard/evidence/index.json']){
+    assert.equal((await fetch(url+path,{method:'HEAD'})).status,200,path);
+  }
+  for(const name of ['runtime.js','data-app-build.json','cloud-navigation.js','snapshot.'+'a'.repeat(64)+'.json']){
+    assert.equal((await fetch(url+'/dashboard/'+name,{method:'HEAD'})).status,404,name);
+  }
+});
+test('the Railway API host still sends browser visitors to Predictir',async t=>{
+  const url=await server(t);
+  const response=await fetch(url+'/dashboard/index.html',{redirect:'manual'});
+  assert.equal(response.status,302);
+  assert.equal(response.headers.get('location'),'https://predictir.dev/');
+});
 test('trace context rejects invalid IDs and trust-boundary state, while correlating verified hops',()=>{
   const input='00-'+'a'.repeat(32)+'-'+'b'.repeat(16)+'-01';
   assert.equal(parseTraceparent(input).sampled,true);
