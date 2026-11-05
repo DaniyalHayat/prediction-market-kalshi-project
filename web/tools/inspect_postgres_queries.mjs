@@ -11,7 +11,8 @@ const catalog={
   triggers:"SELECT c.relname AS table_name,t.tgname,pg_get_triggerdef(t.oid) AS definition FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgrelid IN ('market_lab.records'::regclass,'market_lab.quotas'::regclass,'market_lab.leases'::regclass) AND NOT t.tgisinternal ORDER BY c.relname,t.tgname",
   policies:"SELECT tablename,policyname,roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='market_lab' AND tablename IN ('records','quotas','leases') ORDER BY tablename,policyname",
   active_waits:"SELECT wait_event_type,wait_event,count(*) AS sessions,max(clock_timestamp()-query_start)::text AS oldest_query_age FROM pg_stat_activity WHERE usename=$1 AND pid<>pg_backend_pid() AND state<>'idle' GROUP BY wait_event_type,wait_event",
-  pgss_location:"SELECT n.nspname AS schema FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='pg_stat_statements' LIMIT 1"
+  pgss_location:"SELECT n.nspname AS schema,has_schema_privilege(n.oid,'USAGE') AS schema_usage,has_table_privilege(c.oid,'SELECT') AS table_select FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='pg_stat_statements' LIMIT 1",
+  pgss_info_access:"SELECT n.nspname AS schema,has_schema_privilege(n.oid,'USAGE') AS schema_usage,has_table_privilege(c.oid,'SELECT') AS table_select FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='pg_stat_statements_info' LIMIT 1"
 };
 
 export async function inspectPostgresQueries(client,{role='market_lab_app'}={}){
@@ -27,10 +28,13 @@ export async function inspectPostgresQueries(client,{role='market_lab_app'}={}){
     await client.query("SET LOCAL statement_timeout='8s'");
     await client.query("SET LOCAL lock_timeout='2s'");
     for(const [name,sql] of Object.entries(catalog))await inspect(name,sql,name==='active_waits'?[role]:[]);
-    const schema=result.queries.pgss_location?.[0]?.schema;
+    const access=result.queries.pgss_location?.[0],schema=access?.schema;
     if(typeof schema==='string'&&/^[a-z_][a-z0-9_]*$/.test(schema)){
-      await inspect('statement_stats',`SELECT CASE WHEN query ILIKE '%market_lab.records%' THEN 'records' WHEN query ILIKE '%market_lab.quotas%' THEN 'quotas' ELSE 'leases' END AS table_family,queryid::text,calls,rows,total_exec_time,mean_exec_time,stddev_exec_time,min_exec_time,max_exec_time,shared_blks_hit,shared_blks_read,shared_blks_dirtied,shared_blks_written,wal_records,wal_fpi,wal_bytes::text FROM "${schema}".pg_stat_statements WHERE userid=(SELECT oid FROM pg_roles WHERE rolname=$1) AND (query ~* '^[[:space:]]*insert[[:space:]]+into[[:space:]]+market_lab[.](records|quotas|leases)' OR query ~* '^[[:space:]]*with[[:space:]]+locked[[:space:]]+as[[:space:]]+materialized') ORDER BY total_exec_time DESC LIMIT 12`,[role]);
-      await inspect('statement_stats_window',`SELECT stats_reset FROM "${schema}".pg_stat_statements_info`);
+      if(access.schema_usage&&access.table_select)await inspect('statement_stats',`SELECT CASE WHEN query ILIKE '%market_lab.records%' THEN 'records' WHEN query ILIKE '%market_lab.quotas%' THEN 'quotas' ELSE 'leases' END AS table_family,queryid::text,calls,rows,total_exec_time,mean_exec_time,stddev_exec_time,min_exec_time,max_exec_time,shared_blks_hit,shared_blks_read,shared_blks_dirtied,shared_blks_written,wal_records,wal_fpi,wal_bytes::text FROM "${schema}".pg_stat_statements WHERE userid=(SELECT oid FROM pg_roles WHERE rolname=$1) AND (query ~* '^[[:space:]]*insert[[:space:]]+into[[:space:]]+market_lab[.](records|quotas|leases)' OR query ~* '^[[:space:]]*with[[:space:]]+locked[[:space:]]+as[[:space:]]+materialized') ORDER BY total_exec_time DESC LIMIT 12`,[role]);
+      else result.queries.statement_stats={unavailable:'insufficient_existing_privileges',schema_usage:Boolean(access.schema_usage),table_select:Boolean(access.table_select)};
+      const info=result.queries.pgss_info_access?.[0];
+      if(info?.schema===schema&&info.schema_usage&&info.table_select)await inspect('statement_stats_window',`SELECT stats_reset FROM "${schema}".pg_stat_statements_info`);
+      else result.queries.statement_stats_window={unavailable:info?'insufficient_existing_privileges':'statistics_view_not_installed'};
     }
     return result;
   }finally{await client.query('ROLLBACK');}
