@@ -22,25 +22,30 @@ export async function publicXFeed({topic='music',maximumAccounts=2,enabled=false
     try{
       const failure=await durable.get('x-public-cooldown');
       if(failure?.until>now()){feeds.push({author,...empty('cooldown','Shared X retrieval is paused after a provider error.'),retry_at:new Date(failure.until).toISOString()});continue;}
-      const result=await durable.cached('x-public-feed#'+author,1800,async()=>{
-        const user=await durable.cached('x-user#'+author,2592000,async()=>{
-          if(!await reserve(10))return {unavailable:true};
+      const result=await durable.cached('x-public-feed#'+author,1800,async(context={})=>{
+        if(durable.kind==='postgres'&&typeof context.publishRecord!=='function')throw Object.assign(new Error('Durable cursor fencing is unavailable'),{status:503,code:'CACHE_FENCE_UNAVAILABLE'});
+        const user=await durable.cached('x-user-v2#'+author,2592000,async()=>{
+          if(!await reserve(10))throw Object.assign(new Error('Shared X lookup allowance reached'),{status:429,code:'X_BUDGET_REACHED'});
           const response=await get('X public account lookup','https://api.x.com/2/users/by/username/'+author,{ttl:2592000,headers:{Authorization:'Bearer '+env.X_BEARER_TOKEN},maximumBytes:50000});
           if(!/^\d+$/.test(response.data.data?.id||'')||String(response.data.data.username).toLowerCase()!==author.toLowerCase())throw new Error('Public account identity was not established');
           return {id:response.data.data.id,username:response.data.data.username};
         });
-        if(user.unavailable)return empty('budget_reached','Shared X lookup or monetary allowance reached.');
-        if(!await reserve(25,5))return empty('budget_reached','Shared X post-read or monetary allowance reached.');
+        if(user.unavailable)throw Object.assign(new Error('A prior budget-failure identity cache is invalid'),{status:503,code:'X_IDENTITY_UNAVAILABLE'});
+        if(!await reserve(25,5))throw Object.assign(new Error('Shared X post allowance reached'),{status:429,code:'X_BUDGET_REACHED'});
         const previous=await durable.get('x-cursor#'+author),params=new URLSearchParams({max_results:'5','tweet.fields':'created_at,public_metrics','exclude':'retweets,replies'});
         if(/^\d+$/.test(previous?.newest_id||''))params.set('since_id',previous.newest_id);
         const response=await get(topic==='music'?'X public chart news':'X selected-trade news',`https://api.x.com/2/users/${user.id}/tweets?${params}`,{ttl:1,headers:{Authorization:'Bearer '+env.X_BEARER_TOKEN},maximumBytes:100000});
         const rows=(response.data.data||[]).filter(p=>/^\d+$/.test(p.id)&&typeof p.text==='string'&&Number.isFinite(Date.parse(p.created_at))&&Date.parse(p.created_at)<=now()+300000).map(p=>({id:p.id,author,title:p.text.slice(0,220),excerpt:p.text.slice(0,900),created_at:p.created_at,as_of:p.created_at,platform:'x',publisher:account.name,metrics:p.public_metrics||{},url:`https://x.com/${author}/status/${p.id}`}));
         const merged=[...new Map([...rows,...(previous?.posts||[])].map(p=>[p.id,p])).values()].filter(p=>now()-Date.parse(p.created_at)<7*86400000).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,20);
-        await durable.save({pk:'x-cursor#'+author,sk:'value',newest_id:rows[0]?.id||previous?.newest_id,posts:merged,expires_epoch:Math.floor(now()/1000)+7*86400},true);
+        const cursor={pk:'x-cursor#'+author,sk:'value',newest_id:rows[0]?.id||previous?.newest_id,posts:merged,expires_epoch:Math.floor(now()/1000)+7*86400};
+        if(typeof context.publishRecord==='function')await context.publishRecord(cursor);else await durable.save(cursor,true);
         return {status:'available',posts:merged,as_of:response.as_of};
       });
       feeds.push({author,...result});
     }catch(error){
+      if(error.code==='X_BUDGET_REACHED'){feeds.push({author,...empty('budget_reached','Shared X lookup, post-read or monetary allowance reached.')});continue;}
+      if(error.code==='CACHE_LEASE_LOST'||error.code==='CACHE_LEASE_BUSY'){feeds.push({author,...empty('refreshing','The shared refresh lease ended before publication. Retry shortly; no stale cursor was published.')});continue;}
+      if(error.code==='CACHE_FENCE_UNAVAILABLE'||error.code==='X_IDENTITY_UNAVAILABLE'){feeds.push({author,...empty('unavailable','The shared public feed cache cannot safely publish this refresh.')});continue;}
       const status=Number(error.status),seconds=status===402?86400:status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
       await durable.save({pk:'x-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
       feeds.push({author,...empty('unavailable',Number.isInteger(status)?'Public X retrieval returned HTTP '+status+'.':'Public X retrieval or its quota store is unavailable.')});

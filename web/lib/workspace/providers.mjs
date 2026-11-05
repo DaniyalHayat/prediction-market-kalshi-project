@@ -63,7 +63,9 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
       cache.set(key,{until:Date.now()+ttl*1000,value});
       status.set(id,{id,name:id,status:'available',as_of:value.as_of,url:value.source_url,detail:'Retrieval time; the observation date is shown in each dataset.'});
       return value;
-    }catch(error){const code=Number(error.status),upstreamStatus=Number.isInteger(code)&&code>=400&&code<=599?code:null;
+    }catch(error){
+      if(error.code==='CACHE_LEASE_LOST'||error.code==='CACHE_LEASE_BUSY'){const detail='The shared source refresh is busy or lost its lease; retry shortly.';status.set(id,{id,name:id,status:'refreshing',detail});throw Object.assign(new Error(detail),{status:429,code:error.code});}
+      const code=Number(error.status),upstreamStatus=Number.isInteger(code)&&code>=400&&code<=599?code:null;
       if(!upstreamStatus||upstreamStatus>=500){const failures=Math.min(5,(failureStreak.get(parsed.hostname)||0)+1);failureStreak.set(parsed.hostname,failures);cooldowns.set(parsed.hostname,Math.max(cooldowns.get(parsed.hostname)||0,Date.now()+Math.min(300000,15000*2**(failures-1))));}
       const retryAt=(cooldowns.get(parsed.hostname)||0)>Date.now()?new Date(cooldowns.get(parsed.hostname)).toISOString():null;
       const detail=upstreamStatus?id+' could not be retrieved (HTTP '+upstreamStatus+').':id+' could not be retrieved. Its source or shared cache is temporarily unavailable.';
