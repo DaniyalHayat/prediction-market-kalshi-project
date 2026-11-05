@@ -32,14 +32,21 @@ function interpretation(text,topic){
   if(topic==='music'&&/\b(streams|streaming|chart|billboard|spotify)\b/.test(text))return {claim_type:'chart_context',impact:'Chart reporting can inform momentum. Match artist versus song, platform, territory and daily versus weekly measurement; cross-chart ranks do not establish the settlement result.'};
   return {claim_type:'context',impact:'Context only; no direct settlement measurement identified. Review the dated source and whether the claim applies to the selected event.'};
 }
+export function explicitlyHistorical(title,url,now){
+  const dates=[...String(title).matchAll(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+(?:19|20)\d{2}\b/gi)].map(match=>Date.parse(match[0]));
+  const path=new URL(url).pathname,dated=path.match(/\/(20\d{2})[/-](0[1-9]|1[0-2])[/-]([0-2]\d|3[01])(?:\/|$)/);if(dated)dates.push(Date.parse(dated.slice(1).join('-')));
+  return dates.some(date=>Number.isFinite(date)&&now-date>7*86400000);
+}
 export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={}){
   const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
   const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),seen=new Set(),ranked=[];
   for(const item of (items||[]).slice(0,200)){
     const title=String(item.title||item.excerpt||'').slice(0,500),excerpt=String(item.excerpt||item.description||'').slice(0,900),text=normalize(title+' '+excerpt),url=safePublicURL(item.url),asof=item.as_of||item.published_at||item.created_at,date=Date.parse(asof);
-    if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway)\b/.test(text))continue;
+    if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||explicitlyHistorical(title,url,now)||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway)\b/.test(text))continue;
     const matched=entities.filter(entity=>{const parts=words(entity),tokens=text.split(' '),nickname=parts.at(-1),teamName=(sports?.teams||[]).some(t=>t.name===entity),distinctNickname=teamName&&nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname);return parts.length>0&&(parts.every(w=>tokens.includes(w))||distinctNickname&&tokens.includes(nickname));});
     if(!matched.length)continue;
+    const fixturePage=/\b(game details|game summary|match report|box ?score|live score|game preview|game recap|highlights)\b/.test(normalize(title));
+    if(['nba','epl'].includes(topic)&&fixturePage&&(sports?.teams||[]).length===2&&sports.teams.some(team=>!matched.includes(team.name)))continue;
     const identityURL=new URL(safePublicURL(item.publisher_url)||url),postURL=new URL(url),source=SOURCE_CATALOG.find(s=>s.handle&&item.platform==='x'&&postURL.hostname==='x.com'&&postURL.pathname.split('/')[1]?.toLowerCase()===s.handle.toLowerCase()&&s.handle.toLowerCase()===String(item.author||'').toLowerCase()||s.domain&&(identityURL.hostname===s.domain||identityURL.hostname.endsWith('.'+s.domain)));
     const tier=item.platform==='reddit'?'community_context':source?.tier||'unverified_context';
     const specificity=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart)\b/.test(text);
