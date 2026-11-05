@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PAPER_STORAGE,PAPER_BALANCE} from '../ui/paper-state.mjs';
-import {ACTIVE_ACCOUNT,GUEST_STORAGE,GUEST_DATA_LIFETIME,GUEST_INACTIVITY,accountCacheKey,guestExpired,prepareGuestSession,switchPaperAccount} from '../ui/guest-session.mjs';
+import {ACTIVE_ACCOUNT,GUEST_STORAGE,GUEST_DATA_LIFETIME,GUEST_INACTIVITY,accountCacheKey,guestExpired,prepareGuestSession,purgeExpiredGuestData,switchPaperAccount} from '../ui/guest-session.mjs';
 const now=Date.parse('2026-11-04T17:00:00Z');
 const guest=(id='guest-one',created=now)=>({id,created_at:new Date(created).toISOString(),last_active_at:new Date(created).toISOString(),expires_at:new Date(created+GUEST_DATA_LIFETIME).toISOString()});
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
@@ -9,6 +9,18 @@ test('guest data expires at six hours even with recent activity and malformed da
   const value=guest();assert.equal(guestExpired(value,now+GUEST_DATA_LIFETIME-1),false);assert.equal(guestExpired({...value,last_active_at:new Date(now+GUEST_DATA_LIFETIME-1).toISOString()},now+GUEST_DATA_LIFETIME),true);
   assert.equal(guestExpired({...value,expires_at:'broken'},now),true);
   assert.equal(guestExpired({...value,created_at:new Date(now-1000).toISOString(),last_active_at:new Date(now-GUEST_INACTIVITY).toISOString()},now),true);
+});
+test('expired guest caches are purged while the active owner ledger remains unchanged',()=>{
+  const store=storage();switchPaperAccount(store,'guest:guest-one',{guest:guest(),now});store.setItem(PAPER_STORAGE,'guest ledger');store.setItem(accountCacheKey('watchlist:guest:guest-one'),'["KXTEST-YES"]');
+  switchPaperAccount(store,'owner:me@example.test',{guest:guest(),now:now+3600000});store.setItem(PAPER_STORAGE,'owner ledger');store.setItem(accountCacheKey('owner:me@example.test'),'owner cached ledger');
+  assert.deepEqual(purgeExpiredGuestData(store,now+GUEST_DATA_LIFETIME),{removed:true,activeReset:false});
+  assert.equal(store.getItem(accountCacheKey('guest:guest-one')),null);assert.equal(store.getItem(accountCacheKey('watchlist:guest:guest-one')),null);assert.equal(store.getItem(GUEST_STORAGE),null);
+  assert.equal(store.getItem(PAPER_STORAGE),'owner ledger');assert.equal(store.getItem(accountCacheKey('owner:me@example.test')),'owner cached ledger');assert.equal(store.getItem(ACTIVE_ACCOUNT),'owner:me@example.test');
+});
+test('refreshing an owner session rotates expired guest metadata without deleting owner records',()=>{
+  const store=storage();switchPaperAccount(store,'guest:guest-one',{guest:guest(),now});store.setItem(PAPER_STORAGE,'guest ledger');switchPaperAccount(store,'owner:me@example.test',{guest:guest(),now:now+3600000});store.setItem(PAPER_STORAGE,'owner ledger');
+  const later=now+GUEST_DATA_LIFETIME;switchPaperAccount(store,'owner:me@example.test',{guest:guest('guest-two',later),now:later});
+  assert.equal(store.getItem(accountCacheKey('guest:guest-one')),null);assert.equal(store.getItem(PAPER_STORAGE),'owner ledger');assert.equal(JSON.parse(store.getItem(GUEST_STORAGE)).id,'guest-two');
 });
 test('binding an existing browser retains paper records but confirmed session rotation starts fresh',()=>{
   const store=storage();store.setItem(PAPER_STORAGE,'retained ledger');store.setItem(PAPER_BALANCE,'1000');
