@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {makePostgresStore} from '../lib/postgres-store.mjs';
 import {enqueuePipeline,runPipelineJob} from '../cloud/pipeline.mjs';
+import {applyTestSchema} from './database-fixture.mjs';
 
 const url=process.env.MARKET_TEST_DATABASE_URL;
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
@@ -12,7 +12,7 @@ test('durable pipeline PostgreSQL queue behavior',{skip:!url,timeout:30000},asyn
   const store=makePostgresStore({connectionString:url}),table='market_lab.test_jobs_'+randomUUID().replaceAll('-','');
   const s={db:{query:(sql,values)=>{if(!sql.includes('market_lab.jobs'))throw new Error('Pipeline query escaped its isolated test table');return store.db.query(sql.replaceAll('market_lab.jobs',table),values);}}};
   try{
-    for(const file of ['001_market_lab.sql','002_pipeline.sql'])await store.db.query(await readFile(new URL('../database/'+file,import.meta.url),'utf8'));
+    await applyTestSchema(store.db);
     await store.db.query(`CREATE TABLE ${table}(LIKE market_lab.jobs INCLUDING ALL); ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await t.test('replayed and concurrent scheduler ticks preserve job identities and completed states',async()=>{
       const now=Date.parse('2110-01-01T12:01:00Z');await Promise.all(Array.from({length:8},()=>enqueuePipeline(s,now)));

@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {makePostgresStore} from '../lib/postgres-store.mjs';
+import {applyTestSchema} from './database-fixture.mjs';
 const url=process.env.MARKET_TEST_DATABASE_URL;
 test('Postgres quotas, immutable evidence, audit CAS, journal isolation and rollback',{skip:!url},async()=>{
   if(!new URL(url).pathname.endsWith('_test'))throw new Error('Use a dedicated _test database');
   const s=makePostgresStore({connectionString:url}),tag=randomUUID();
   try {
-    await s.db.query(await readFile(new URL('../database/001_market_lab.sql',import.meta.url),'utf8'));
+    await applyTestSchema(s.db);
     const takes=await Promise.all(Array.from({length:30},()=>s.consume('test#'+tag,7)));
     assert.equal(takes.filter(Boolean).length,7);
     const release=await s.lease('lease#'+tag,30);assert.ok(release);
