@@ -14,7 +14,7 @@ export function usableForecast(research,now=Date.now(),expectedTicker) {
 
 export function evaluatePaperPosition(position,book,research,{now=Date.now(),feeCoefficient,slippage=2,actionBufferCents=1,maxPositionLoss,market,experimental=false}={}) {
   const q=position?.remaining_quantity,basis=position?.remaining_basis,realized=Number(position?.realized_pnl)||0;
-  const base={action:'REVIEW',reason:'Current matching evidence is required.',marked_value:null,unrealized_pnl:null,total_pnl:null,executable_quantity:0,fresh:false,status:'unavailable',fair_value_range:null,expected_hold_profit_range:null,exit_proceeds:null,exit_fee:null,probability:null,interval:null,model:null,as_of:book?.as_of||null,settlement:{confirmed:false}};
+  const base={action:'REVIEW',reason:'Current matching evidence is required.',marked_value:null,unrealized_pnl:null,total_pnl:null,executable_quantity:0,fresh:false,forecast_fresh:false,source_as_of:research?.forecast?.source_as_of||null,status:'unavailable',fair_value_range:null,expected_hold_profit_range:null,exit_proceeds:null,exit_fee:null,probability:null,interval:null,model:null,as_of:book?.as_of||null,settlement:{confirmed:false}};
   if(!Number.isFinite(q)||!Number.isFinite(basis)||q<0||basis<0||!['yes','no'].includes(position.side))return {...base,reason:'The retained paper position is invalid.'};
   if(!q)return {...base,action:'CLOSED',reason:'This paper position is closed.',marked_value:0,unrealized_pnl:0,total_pnl:realized,status:'closed'};
   const detail=market||research?.market;
@@ -30,6 +30,7 @@ export function evaluatePaperPosition(position,book,research,{now=Date.now(),fee
   if(!exit.complete)return {...result,reason:`Only ${exit.filled} of ${q} contracts have executable bid depth within the slippage limit. Full-position P/L is withheld.`};
   if(Number.isFinite(maxPositionLoss)&&maxPositionLoss>=0&&basis>maxPositionLoss)return {...result,action:'TRIM',suggested_reduce_fraction:Math.max(0,Math.min(1,1-maxPositionLoss/basis)),reason:'The remaining cost basis exceeds your explicit position-loss limit. Reducing exposure restores that limit independently of a forecast.'};
   const forecast=usableForecast(research,now,position.ticker);
+  result.forecast_fresh=forecast.fresh;
   if(!forecast.valid)return {...result,reason:forecast.reason};
   const probability=position.side==='yes'?forecast.probability:1-forecast.probability;
   const interval=position.side==='yes'?forecast.interval:[1-forecast.interval[1],1-forecast.interval[0]];
@@ -45,4 +46,19 @@ export function evaluatePaperPosition(position,book,research,{now=Date.now(),fee
   if(result.hold_vs_exit_range[1]<-buffer)return {...result,action:'EXIT',reason:prefix+'Even the upper model bound values the remaining payoff below current net bid proceeds, after the action buffer.'};
   if(result.hold_vs_exit_range[0]>buffer)return {...result,action:'HOLD',reason:prefix+'The lower model bound values the remaining payoff above current net bid proceeds, after the action buffer.'};
   return {...result,reason:'The uncertainty band overlaps the current net exit value. Neither holding nor exiting has a robust modeled advantage.'};
+}
+
+export function evaluatePaperPortfolio(positions,books,research,options={}){
+  const groups=new Map();
+  for(const position of positions){if(position.remaining_quantity>1e-8){const key=position.ticker+'#'+position.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(position);}}
+  return Object.fromEntries(positions.map(position=>{
+    const group=groups.get(position.ticker+'#'+position.side)||[],book=books[position.ticker];let allocated=book;
+    if(group.length>1&&book?.raw?.orderbook_fp){
+      const total=group.reduce((sum,row)=>sum+row.remaining_quantity,0),share=position.remaining_quantity/total,key=position.side==='yes'?'yes_dollars':'no_dollars';
+      const levels=book.raw.orderbook_fp[key];
+      if(Array.isArray(levels))allocated={...book,raw:{...book.raw,orderbook_fp:{...book.raw.orderbook_fp,[key]:levels.map(([price,quantity])=>[price,Number(quantity)*share])}}};
+    }
+    const value=evaluatePaperPosition(position,allocated,research[position.ticker],options);
+    return [position.id,{...value,...(group.length>1?{liquidity_allocation:'Proportional allocation of one shared bid book across open lots; exit fees are rounded separately per lot.',shared_lots:group.length}:{})}];
+  }));
 }
