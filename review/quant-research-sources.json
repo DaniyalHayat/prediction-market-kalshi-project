@@ -1,0 +1,3093 @@
+{
+  "schema_version": 1,
+  "checked_at_utc": "2026-11-05T03:03:25Z",
+  "scope": "Public source coverage, mathematical checks, and architecture review for the execution research model.",
+  "coverage_definitions": {
+    "checked_checkbox": "Exact target opened publicly; not a claim of complete/substantive reading.",
+    "unchecked_checkbox": "Target blocked, exact identity unresolved, or ambiguous. Attempt and limits retained.",
+    "fresh": "Additional to supplied domain/title list. Prior project references are separately disclosed; URL novelty is not research originality.",
+    "read_scope": "metadata_or_excerpt_only, abstract_read and selected_sections_read are deliberately distinct. No source is represented as fully read unless specifically stated."
+  },
+  "inputs": [
+    {
+      "id": "attachment_1",
+      "attachment_id": "cb351d0d-d3e2-4f7b-8747-a975891d6f93",
+      "name": "Pasted text.txt",
+      "bytes": 33689,
+      "sha256": "f85a71ac30e8537471623f22f4d3ade1d3007c3848306083b3994027886669bc",
+      "read_completely": true,
+      "read_method": "Bounded complete UTF-8 character segments; truncated attempts were reread."
+    },
+    {
+      "id": "attachment_2",
+      "attachment_id": "7b7b2b2c-4ed8-46bc-9c1d-848fb628b034",
+      "name": "Pasted text.txt",
+      "bytes": 5240,
+      "sha256": "629b329c825f5e7af4239c30ec475106699b50e4ebc418a9eb427c2b4db62fae",
+      "read_completely": true,
+      "read_method": "Bounded complete UTF-8 character segments; truncated attempts were reread."
+    },
+    {
+      "id": "attachment_3",
+      "attachment_id": "c6650d99-7549-4022-9e59-0c85667b5701",
+      "name": "Pasted text.txt",
+      "bytes": 19361,
+      "sha256": "81ef662dcce21063b2a7147155c5760f756e5ca74b14f0f2afd433f7b959f2b6",
+      "read_completely": true,
+      "read_method": "Bounded complete UTF-8 character segments; truncated attempts were reread."
+    }
+  ],
+  "counts": {
+    "requested_occurrences": 161,
+    "requested_domain_title_entries": 97,
+    "requested_distinct_canonical_urls": 96,
+    "requested_domains": 61,
+    "requested_open_attempts": 97,
+    "exact_targets_opened": 78,
+    "unresolved_or_ambiguous": 13,
+    "resolved_targets_blocked": 6,
+    "requested_selected_sections_read": 11,
+    "requested_abstracts_read": 9,
+    "additional_unique_papers_or_docs": 20,
+    "additional_canonical_domains": 9,
+    "additional_not_previously_referenced_in_scanned_documents": 17,
+    "additional_preexisting_document_references": 3
+  },
+  "requested_sources": [
+    {
+      "id": "R001",
+      "domain": "reddit.com",
+      "title": "r/quant on Reddit: Solarflare ef_vi vs Onload benchmarked on",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.reddit.com/r/quant/comments/1wqsbi2/solarflare_ef_vi_vs_onload_benchmarked_on/",
+      "evidence": "One self-reported Solarflare X2522-Plus benchmark; hardware and traffic details prevent treating its timing table as a universal latency guarantee.",
+      "category": "networking",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 458"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R002",
+      "domain": "docs.amd.com",
+      "title": "ef_vi - UG1586",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://docs.amd.com/r/en-US/ug1586-onload-user/ef_vi",
+      "evidence": "Official Onload UG1586 appendix for ef_vi; vendor scope is compatible adapters and layer-2 access, not cloud HTTP latency.",
+      "category": "networking",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 905"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R003",
+      "domain": "ramcloud.atlassian.net",
+      "title": "View Source",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://ramcloud.atlassian.net/wiki/plugins/viewsource/viewpagesrc.action?pageId=6848672",
+      "evidence": "RAMCloud engineering notes resolve the generic 'View Source' title to ef_vi ring-buffer setup; project notes are not universal benchmark evidence.",
+      "category": "networking",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 144"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R004",
+      "domain": "amd.com",
+      "title": "ef_vi User Guide | AMD",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://docs.amd.com/v/u/en-US/SF-114063-CD-ef_vi_User_Guide",
+      "evidence": "Resolved AMD's guide through its official download index; current guide is SF-114063-CD revision 20, distinct from Onload UG1586.",
+      "initial_url": "https://www.amd.com/en/support/downloads/solarflare-downloads.html/ethernet-adapters/solarflare/x3-series.html",
+      "category": "networking",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Exact source resolved and opened in follow-up lookup."
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R005",
+      "domain": "github.com",
+      "title": "The latency of ef_eventq_poll() and ef_vi_transmit() is not stable. #48",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://github.com/Xilinx-CNS/onload/issues/48",
+      "evidence": "Issue #48 is a user report of unstable polling/transmit timings, useful as a counterexample to deterministic-latency claims, not a controlled benchmark.",
+      "category": "networking",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 611"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R006",
+      "domain": "docs.kernel.org",
+      "title": "CPU Isolation - The Linux Kernel documentation",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://docs.kernel.org/admin-guide/cpu-isolation.html",
+      "evidence": "CPU isolation requires housekeeping/offloading and workload restrictions; it does not prohibit all kernel work or interruptions.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 198"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R007",
+      "domain": "docs.kernel.org",
+      "title": "The kernel's command-line parameters",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://docs.kernel.org/admin-guide/kernel-parameters.html",
+      "evidence": "Read nohz_full/isolcpus portions, not all 8,630 lines; flags have configuration and workload conditions.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 8630"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R008",
+      "domain": "access.redhat.com",
+      "title": "An overview and comparison of the isolcpus kernel parameter",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://access.redhat.com/solutions/480473",
+      "evidence": "Customer-portal solution opened; subscriber-only material is not treated as read or bypassed.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 279"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R009",
+      "domain": "nimrod.blog",
+      "title": "A Subtle Bug Before C++17 | Nimrod's Coding Lab",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://nimrod.blog/posts/a-subtle-bug-before-cpp17/",
+      "evidence": "Metadata/excerpt addresses pre-C++17 allocation of over-aligned types; implementation details must be checked against the language version.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 94"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R010",
+      "domain": "ryonaldteofilo.medium.com",
+      "title": "Cache Line Alignment in C++ — How It Makes Your Program Faster.",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://ryonaldteofilo.medium.com/cache-line-alignment-in-c-1aac85e4482f",
+      "evidence": "Blog article opened; cache-alignment discussion is secondary to the C++ draft and measured structure layout.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 425"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R011",
+      "domain": "medium.com",
+      "title": "Data Alignment in C++ — What It Is, Why It Hurts When Ignored, and",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://medium.com/@sagar.necindia/list/abfe4deca285",
+      "evidence": "Exact article/author URL unresolved. A Medium curated-list discovery page opened but exposed no target article content.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 31"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R012",
+      "domain": "reddit.com",
+      "title": "Idiomatic way to avoid false sharing : r/cpp - Reddit",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.reddit.com/r/cpp/comments/13spubk",
+      "evidence": "Public r/cpp thread opened; discussion provides examples, not a language-standard guarantee.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 694"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R013",
+      "domain": "moderncpp.dev",
+      "title": "Cache-Line Archaeology: Finding and Fixing False Sharing in",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.moderncpp.dev/articles/cache-line-false-sharing/",
+      "evidence": "Secondary article opened; its own CPU benchmark cannot establish a universal 64-byte cache line or app-wide speedup.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 187"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R014",
+      "domain": "stackoverflow.com",
+      "title": "How does LMAX's disruptor pattern work? - Stack Overflow",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://stackoverflow.com/questions/6559308/how-does-lmaxs-disruptor-pattern-work",
+      "evidence": "Discussion page opened; LMAX's official guide is authoritative for selectable producers/wait strategies.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 470"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R015",
+      "domain": "medium.com",
+      "title": "Pattern for concurrency in latency-sensitive systems | by Aniket Bidgar",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://medium.com/@miniproject2019/pattern-for-concurrency-in-latency-sensitive-systems-7a5675a1b8b2",
+      "evidence": "Aniket Bidgar article resolved and opened; implementation commentary is secondary, not proof of end-to-end latency.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 310"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R016",
+      "domain": "sanjeev.pages.dev",
+      "title": "The LMAX Disruptor Codebase | Stay Tuned - Sanjeev Sarda",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://sanjeev.pages.dev/lmax-disruptor/",
+      "evidence": "Codebase walkthrough opened; not used as authority for profit or portable performance.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 335"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R017",
+      "domain": "lmax-exchange.github.io",
+      "title": "LMAX Disruptor User Guide",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://lmax-exchange.github.io/disruptor/user-guide/index.html",
+      "evidence": "Read wait-strategy section: default BlockingWaitStrategy uses a lock/condition variable; claiming all Disruptor configurations avoid locks is incorrect.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 553"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R018",
+      "domain": "medium.com",
+      "title": "From Wall Street to Code: The Performance Secrets of LMAX - Medium",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://medium.com/",
+      "evidence": "Exact Medium article unresolved despite exact-title searches. Medium homepage opened; similarly titled Substack index is only a discovery candidate.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 45"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R019",
+      "domain": "semicolony.dev",
+      "title": "How Ring Buffers Work: Single-Producer, Multi-Consumer, Lock-Free",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://semicolony.dev/how-it-works/ring-buffer",
+      "evidence": "Interactive explainer opened; producer/consumer model and memory ordering still need implementation-specific checks.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 198"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R020",
+      "domain": "ora.ox.ac.uk",
+      "title": "Multi-Level Order-Flow Imbalance in a Limit Order Book",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://ora.ox.ac.uk/objects/uuid:9b7d0422-4ef1-48e7-a2d4-4eaa8a0a7ec1/files/m89dedb16194e627a2c92d14e3329bd48",
+      "evidence": "Oxford repository file returned 403. The same paper's arXiv abstract was read through an alternate public host.",
+      "category": "order_flow",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://ora.ox.ac.uk/objects/uuid%3A9b7d0422-4ef1-48e7-a2d4-4eaa8a0a7ec1/files/m89dedb16194e627a2c92d14e3329bd48: (403) Forbidden"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish ordered-event OFI, static queue imbalance and deeper-level MLOFI.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternate_urls": [
+        "https://arxiv.org/abs/1907.06230"
+      ],
+      "alternate_read_scope": "abstract_read"
+    },
+    {
+      "id": "R021",
+      "domain": "microalphas.com",
+      "title": "Order Flow Imbalance (OFI): Reading Short-Horizon Price Pressure",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://microalphas.com/order-flow-imbalance/",
+      "evidence": "Secondary OFI explainer opened; classical formula and required inputs were verified in Cont et al.'s original paper.",
+      "category": "order_flow",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 165"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish ordered-event OFI, static queue imbalance and deeper-level MLOFI.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R022",
+      "domain": "scribd.com",
+      "title": "Price Impact of Order Flow Imbalance | PDF | Econometrics - Scribd",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.scribd.com/document/815190826/The-Price-Impact-of-Order-Book-Events",
+      "evidence": "Scribd page metadata opened; no gated download attempted. Same intellectual work as Cont et al. arXiv 1011.6402.",
+      "category": "order_flow",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 2934"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish ordered-event OFI, static queue imbalance and deeper-level MLOFI.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternate_urls": [
+        "https://arxiv.org/pdf/1011.6402"
+      ],
+      "alternate_read_scope": "selected sections pp2–5 and p7",
+      "same_work_as_primary": "Cont–Kukanov–Stoikov, The Price Impact of Order Book Events"
+    },
+    {
+      "id": "R023",
+      "domain": "arxiv.org",
+      "title": "Maximum Likelihood Estimation for Hawkes Processes with self",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://arxiv.org/abs/2103.05299",
+      "evidence": "Abstract read: univariate likelihood method explicitly handles excitation or inhibition; do not generalize nonnegative-kernel stationarity rules to every variant.",
+      "category": "point_processes",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 164"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R024",
+      "domain": "spiral.imperial.ac.uk",
+      "title": "Parameter Estimation of Binned Hawkes Processes - Spiral",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://spiral.imperial.ac.uk/server/api/core/bitstreams/1ea0b220-3ab1-4e8d-88a8-4be9548c79c0/content",
+      "evidence": "Imperial accepted-paper PDF opened; title/abstract excerpt checked. Binned-count estimation differs from exact event-time likelihood.",
+      "category": "point_processes",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1405"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R025",
+      "domain": "tandfonline.com",
+      "title": "Full article: Parameter Estimation of Binned Hawkes Processes",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.tandfonline.com/doi/full/10.1080/10618600.2022.2050247",
+      "evidence": "Publisher returned 403. Accepted-manuscript alternative R024 is public; publisher full text was not read.",
+      "category": "point_processes",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.tandfonline.com/doi/full/10.1080/10618600.2022.2050247: (403) Forbidden"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R026",
+      "domain": "mdpi.com",
+      "title": "Quantitative and Comparative Analyses of Limit Order Books ... - MDPI",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.mdpi.com/2227-9091/7/4/110",
+      "evidence": "Publisher returned 429; stopped. Search metadata resolves He and Svischuk's 2019 compound-Hawkes LOB paper; full text not read.",
+      "category": "point_processes",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.mdpi.com/2227-9091/7/4/110: (429) Too Many Requests"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R027",
+      "domain": "paperswithbacktest.com",
+      "title": "Hawkes Process in Trading: Self-Exciting Models of Trade Clustering",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://paperswithbacktest.com/",
+      "evidence": "Exact Hawkes article URL unresolved. Site homepage opened; a guessed wiki route also failed and is not represented as a resolved source.",
+      "category": "point_processes",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 123"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R028",
+      "domain": "lup.lub.lu.se",
+      "title": "PARAMETER ESTIMATION FOR HAWKE'S PROCESSES",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://lup.lub.lu.se/student-papers/search/publication/9214287",
+      "evidence": "Lund student-paper record opened; student thesis metadata is not peer-reviewed market-performance evidence.",
+      "category": "point_processes",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 113"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Require event timestamps, stationarity/fit checks and held-out evaluation.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R029",
+      "domain": "scribd.com",
+      "title": "DeepLOB: CNNs for Limit Order Books | PDF - Scribd",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.scribd.com/document/659028248/1808-03668",
+      "evidence": "Scribd metadata opened; original DeepLOB arXiv paper used for technical checks.",
+      "category": "deep_learning",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1869"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R030",
+      "domain": "arxiv.org",
+      "title": "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://arxiv.org/abs/1808.03668",
+      "evidence": "Read abstract and selected original-PDF sections: ten price/volume levels, single P100 training, and simplified gross-before-fee experiments.",
+      "category": "deep_learning",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 166"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": true,
+      "alternate_urls": [
+        "https://arxiv.org/pdf/1808.03668"
+      ]
+    },
+    {
+      "id": "R031",
+      "domain": "scholar.google.com",
+      "title": "‪Zihao Zhang‬ - ‪Google Scholar‬",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://scholar.google.com/",
+      "evidence": "Exact Zihao Zhang Scholar profile unresolved. Scholar homepage reports inability to perform operation; author's publication page is an alternate discovery source.",
+      "category": "deep_learning",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 82"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternative_candidate_urls": [
+        "https://zihao-z.com/publications/"
+      ]
+    },
+    {
+      "id": "R032",
+      "domain": "arxiv.org",
+      "title": "Deep Limit Order Book Forecasting A microstructural guide - arXiv",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://arxiv.org/abs/2403.09267",
+      "evidence": "Read abstract and selected HTML conclusion; high classification performance need not yield actionable transactions; cross-exchange validation remains necessary.",
+      "category": "deep_learning",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 165"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": true,
+      "alternate_urls": [
+        "https://arxiv.org/html/2403.09267v3"
+      ]
+    },
+    {
+      "id": "R033",
+      "domain": "arxiv.org",
+      "title": "[1601.01987] Deep Learning for Limit Order Books - arXiv",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://arxiv.org/abs/1601.01987",
+      "evidence": "Abstract read. This separate 2016 spatial-network paper reports a 50-GPU training cluster; do not attribute that configuration to DeepLOB.",
+      "category": "deep_learning",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 165"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R034",
+      "domain": "maths.ox.ac.uk",
+      "title": "Algorithmic market making for options",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.maths.ox.ac.uk/system/files/media/slides%20-%20london.pdf",
+      "evidence": "Author's Oxford options-market-making slide deck opened; metadata/intro checked, not all 83 slides.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1822"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R035",
+      "domain": "stanford.edu",
+      "title": "Optimal High-Frequency Market Making - Stanford University",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://stanford.edu/class/msande448/2018/Final/Presentations/gr5.pdf",
+      "evidence": "Stanford course-project presentation opened; student simulation results are not a general theorem or independently replicated trading result.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 183"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R036",
+      "domain": "people.orie.cornell.edu",
+      "title": "High-frequency trading in a limit order book",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://people.orie.cornell.edu/sfs33/LimitOrderBook.pdf",
+      "evidence": "Read reservation-price definitions and approximation sections. Positive inventory lowers reservation value to encourage liquidation.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 861"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [
+        "desire to liquidate the inventory by selling stock"
+      ],
+      "technical_authority_used": true,
+      "alternate_urls": [
+        "https://math.nyu.edu/inmemoriam/avellaneda/HighFrequencyTrading.pdf"
+      ]
+    },
+    {
+      "id": "R037",
+      "domain": "riskhub.org",
+      "title": "Hamilton-Jacobi-Bellman Equations Explained - Risk Hub",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://riskhub.org/blogs/hamilton-jacobi-bellman-equations-explained",
+      "evidence": "Secondary HJB explainer opened; it cannot justify blanket impossibility claims about stochastic-control methods.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 155"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R038",
+      "domain": "arxiv.org",
+      "title": "High-frequency market-making with inventory constraints and ... - arXiv",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://arxiv.org/abs/1206.4810",
+      "evidence": "Abstract read: extends inventory-constrained market making to directional mid-price dynamics under stated utility assumptions.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 161"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R039",
+      "domain": "hftbacktest.readthedocs.io",
+      "title": "Guéant–Lehalle–Fernandez-Tapia Market Making Model - HftBacktest",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://hftbacktest.readthedocs.io/en/latest/tutorials/GLFT%20Market%20Making%20Model%20and%20Grid%20Trading.html",
+      "evidence": "Official HftBacktest tutorial opened; library-specific approximation/calibration instructions require their own simulation assumptions.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1164"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R040",
+      "domain": "researchgate.net",
+      "title": "Dealing with the Inventory Risk: A Solution to the Market Making",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.researchgate.net/publication/51957950_Dealing_with_the_Inventory_Risk_A_Solution_to_the_Market_Making_Problem",
+      "evidence": "ResearchGate metadata/abstract opened; original GLFT arXiv used instead of the mirror for mathematical verification.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 4342"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R041",
+      "domain": "api.pageplace.de",
+      "title": "The Financial Mathematics of Market Liquidity",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://api.pageplace.de/preview/DT0400.9781498725484_A37766086/preview-9781498725484_A37766086.pdf",
+      "evidence": "Publisher book preview opened; only preview portions are available, not the entire book.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 742"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R042",
+      "domain": "quantmemo.com",
+      "title": "Gueant, Lehalle and Fernandez-Tapia on Inventory Risk",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://quantmemo.com/writing/paper-gueant-lehalle-inventory-risk",
+      "evidence": "Secondary inventory-risk article opened; GLFT original governs formula signs and assumptions.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 113"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R043",
+      "domain": "medium.com",
+      "title": "Deep Dive into IS: The Almgren-Chriss Framework | by Anboto Labs",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://medium.com/@anboto_labs/deep-dive-into-is-the-almgren-chriss-framework-be45a1bde831",
+      "evidence": "Anboto Labs article opened; implementation/marketing claims are not independent validation of execution savings.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 390"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R044",
+      "domain": "metricgate.com",
+      "title": "Almgren-Chriss Optimal Execution Calculator - MetricGate",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://metricgate.com/docs/almgren-chriss-execution/",
+      "evidence": "Calculator documentation opened; parameter units, discrete/continuous formulas, and transaction-cost assumptions need explicit validation.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 119"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R045",
+      "domain": "quantt.co.uk",
+      "title": "Almgren-Chriss Optimal Execution Explained (2026) - Quantt",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.quantt.co.uk/resources/almgren-chriss-optimal-execution",
+      "evidence": "Secondary 2026 guide opened; publication freshness alone does not validate model calibration.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 236"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R046",
+      "domain": "quantum-blog.medium.com",
+      "title": "Almgren-Chriss Optimal Execution Model - Quantum - Medium",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://quantum-blog.medium.com/almgren-chriss-optimal-execution-model-5a85b66555d2",
+      "evidence": "Secondary model article opened; use the original Almgren–Chriss paper for the mathematical result.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 355"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R047",
+      "domain": "imperial.ac.uk",
+      "title": "Market impact models and optimal execution algorithms",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.imperial.ac.uk/media/imperial-college/research-centres-and-groups/cfm-imperial-institute-of-quantitative-finance/events/Lillo-Imperial-Lecture1.pdf",
+      "evidence": "Imperial Lecture1 PDF returned 403; search metadata resolves lecture sequence. Full slide content not read.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.imperial.ac.uk/media/imperial-college/research-centres-and-groups/cfm-imperial-institute-of-quantitative-finance/events/Lillo-Imperial-Lecture1.pdf: (403) Forbidden"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R048",
+      "domain": "dm13450.github.io",
+      "title": "Solving the Almgren Chris Model - Dean Markwick",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://dm13450.github.io/2024/06/06/Solving-the-Almgren-Chris-Model.html",
+      "evidence": "Implementation walkthrough opened; not independently executed or numerically audited in this source-only lane.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 149"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R049",
+      "domain": "gensyn.ai",
+      "title": "LMSR (Logarithmic Market Scoring Rule) - Gensyn",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.gensyn.ai/guides/lmsr-logarithmic-market-scoring-rule",
+      "evidence": "Gensyn's LMSR guide opened; describes that mechanism, not evidence Kalshi uses it.",
+      "category": "prediction_mechanisms",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 224"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R050",
+      "domain": "cultivatelabs.com",
+      "title": "How does the Logarithmic Market Scoring Rule (LMSR) work?",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.cultivatelabs.com/crowdsourced-forecasting-guide/how-does-logarithmic-market-scoring-rule-lmsr-work",
+      "evidence": "Vendor LMSR explanation opened; original Hanson's paper supplies primary mathematical provenance.",
+      "category": "prediction_mechanisms",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 49"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R051",
+      "domain": "predictionmarketmath.org",
+      "title": "Logarithmic Market Scoring Rules: Hanson's LMSR Cost Function",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://predictionmarketmath.org/en/learn/lmsr-market-maker-math/",
+      "evidence": "Exact article found through English homepage link and opened. Site's self-described peer-review/team credentials were not independently verified.",
+      "initial_url": "https://predictionmarketmath.org/",
+      "category": "prediction_mechanisms",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Exact source resolved and opened in follow-up lookup."
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R052",
+      "domain": "github.com",
+      "title": "Build Interactive LMSR (Logarithmic Market Scoring Rule ... - GitHub",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://github.com/xuy/pile/issues/2",
+      "evidence": "GitHub issue is a pedagogical-demo request, not an original LMSR derivation or verified production implementation.",
+      "category": "prediction_mechanisms",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 599"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R053",
+      "domain": "community.nasscom.in",
+      "title": "How Prediction Market Algorithms Work: LMSR Explained",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://community.nasscom.in/",
+      "evidence": "Exact community article unresolved; community homepage returned 406. Dailyhunt syndication title appeared in discovery, not read as primary evidence.",
+      "category": "prediction_mechanisms",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://community.nasscom.in/: (406) Not Acceptable"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R054",
+      "domain": "researchgate.net",
+      "title": "LOGARITHMIC MARKETS CORING RULES FOR MODULAR",
+      "attachments": [
+        2,
+        3
+      ],
+      "url": "https://www.researchgate.net/",
+      "evidence": "Exact ResearchGate record unresolved. Homepage is a login page; original Hanson author-hosted paper is available at R083.",
+      "category": "prediction_mechanisms",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 25"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternate_urls": [
+        "https://mason.gmu.edu/~rhanson/mktscore.pdf",
+        "https://www.ubplj.org/index.php/jpm/article/view/417/448"
+      ]
+    },
+    {
+      "id": "R055",
+      "domain": "quant.stackexchange.com",
+      "title": "Market Making Strategies Found by Hamilton-Jacobi-Bellman",
+      "attachments": [
+        3
+      ],
+      "url": "https://quant.stackexchange.com/questions/40589/market-making-strategies-found-by-hamilton-jacobi-bellman-equation",
+      "evidence": "Quant Stack Exchange question resolved and opened; discussion is not primary proof of HJB correctness.",
+      "category": "market_making_control",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 156"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R056",
+      "domain": "ideas.repec.org",
+      "title": "Macroscopic Market Making - IDEAS/RePEc",
+      "attachments": [
+        3
+      ],
+      "url": "https://ideas.repec.org/p/arx/papers/2307.14129.html",
+      "evidence": "RePEc metadata/abstract opened; routes to Guo, Jin and Nam's Macroscopic Market Making, arXiv 2307.14129.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 109"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R057",
+      "domain": "youtube.com",
+      "title": "The Avellaneda-Stoikov Market Making Model - YouTube",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.youtube.com/watch?v=GOeeAQXuk-Q",
+      "evidence": "One plausible exact-titled YouTube video identified; open was throttled. No video/audio/transcript watched or accuracy certification made.",
+      "category": "market_making_control",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.youtube.com/watch?v=GOeeAQXuk-Q: Online fetch throttled"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "candidate_url": "https://www.youtube.com/watch?v=GOeeAQXuk-Q",
+      "identity_warning": "Supplied generic title cannot establish a unique intended video."
+    },
+    {
+      "id": "R058",
+      "domain": "web.stanford.edu",
+      "title": "Stochastic Control for Optimal Market-Making - Stanford University",
+      "attachments": [
+        3
+      ],
+      "url": "https://web.stanford.edu/~ashlearn/RLForFinanceBook/MarketMaking.pdf",
+      "evidence": "Ashwin Rao's Stanford teaching slides opened; notation/intro checked, not a peer-reviewed model-performance study.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1900"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R059",
+      "domain": "arxiv.org",
+      "title": "[2403.09267] Deep Limit Order Book Forecasting - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/2403.09267",
+      "evidence": "Canonical duplicate of R032 (arXiv 2403.09267); supplied short and subtitle-bearing titles refer to the same paper.",
+      "category": "deep_learning",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 165"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "canonical_duplicate_of": "R032"
+    },
+    {
+      "id": "R060",
+      "domain": "ideas.repec.org",
+      "title": "DeepLOB: Deep Convolutional Neural Networks for Limit Order Books",
+      "attachments": [
+        3
+      ],
+      "url": "https://ideas.repec.org/p/arx/papers/1808.03668.html",
+      "evidence": "RePEc metadata opened; same intellectual work as DeepLOB R030.",
+      "category": "deep_learning",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 154"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R061",
+      "domain": "arxiv.org",
+      "title": "Market Making with Deep Reinforcement Learning from Limit Order",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/2305.15821",
+      "evidence": "Abstract read: Attn-LOB reinforcement-learning agent, continuous actions and hybrid reward; no reproduction or live profitability established.",
+      "category": "deep_learning",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 159"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R062",
+      "domain": "quantmemo.com",
+      "title": "Optimal Execution, Explained - Quant Memo",
+      "attachments": [
+        3
+      ],
+      "url": "https://quantmemo.com/concepts/optimal-execution",
+      "evidence": "Secondary optimal-execution overview opened; does not validate a fill model or projected savings.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 131"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R063",
+      "domain": "arxiv.org",
+      "title": "Optimal order execution subject to reference strategies - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/2401.03305",
+      "evidence": "Abstract read: client reference strategies under execution risk; closed forms depend on the stated broker-dealer utility objective.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 161"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R064",
+      "domain": "scribd.com",
+      "title": "Almgren - Chriss - Optimal Execution | PDF | Market (Economics)",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.scribd.com/document/1004647641/Almgren-Chriss-Optimal-Execution",
+      "evidence": "Scribd metadata opened; no gated download or authenticated retrieval attempted.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1725"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R065",
+      "domain": "github.com",
+      "title": "Optimal-Portfolio-Transactions/Almgren and Chriss Model.ipynb at",
+      "attachments": [
+        3
+      ],
+      "url": "https://github.com/viai957/Optimal-Portfolio-Transactions/blob/master/Almgren%20and%20Chriss%20Model.ipynb",
+      "evidence": "Notebook page opened; metadata checked, notebook not executed or accepted as calibrated trading evidence.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 169"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R066",
+      "domain": "arthur.bagourd.com",
+      "title": "A Tale of Two Models: Implementing the Almgren-Chriss framework",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.arthur.bagourd.com/wp-content/uploads/2022/08/A_Tale_of_Two_Models__Implementing_the_Almgren_Chriss_framework_through_nonlinear_and_dynamic_programming.pdf",
+      "evidence": "Author's 29-page implementation report opened; title/abstract excerpt checked, not the full report or notebooks.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1391"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R067",
+      "domain": "smallake.kr",
+      "title": "Optimal Execution of Portfolio Transactions∗",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.smallake.kr/wp-content/uploads/2016/03/optliq.pdf",
+      "evidence": "Original Almgren–Chriss paper hosted by a third party; selected sections on expected cost, variance, optimal path and discrete kappa read.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 2089"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R068",
+      "domain": "researchgate.net",
+      "title": "FPGA Based Low-Latency Market Data Feed Handler - ResearchGate",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.researchgate.net/publication/221173597_Low-latency_FPGA_Based_Financial_Data_Feed_Handler",
+      "evidence": "Exact requested ResearchGate work unresolved. Opened near-title Allred feed-handler page is a different work; Zhou et al.'s matching title found in Springer book contents.",
+      "category": "networking",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 467"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternative_candidate_urls": [
+        "https://link.springer.com/book/10.1007/978-3-662-45815-0"
+      ],
+      "identity_warning": "Opened Allred paper differs from requested Zhou et al. chapter. Exact ResearchGate URL unresolved."
+    },
+    {
+      "id": "R069",
+      "domain": "scribd.com",
+      "title": "3-Optimal Market Making - Applied Mathematical Finance - Scribd",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.scribd.com/document/1055426335/3-Optimal-Market-Making",
+      "evidence": "Scribd page metadata opened; Guéant's Optimal Market Making paper is the primary alternative, arXiv 1605.01862.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 3071"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternate_urls": [
+        "https://arxiv.org/abs/1605.01862"
+      ]
+    },
+    {
+      "id": "R070",
+      "domain": "arxiv.org",
+      "title": "[1105.3115] Dealing with the Inventory Risk. A solution to the market",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/1105.3115",
+      "evidence": "Read original abstract and Theorem 1: linear ODE transform and bid/ask offset signs. Closed-form approximations are not portable nanosecond guarantees.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 162"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [
+        "system of linear ordinary differential equations"
+      ],
+      "technical_authority_used": true,
+      "alternate_urls": [
+        "https://arxiv.org/pdf/1105.3115"
+      ]
+    },
+    {
+      "id": "R071",
+      "domain": "arxiv.org",
+      "title": "Closed-form approximations in multi-asset market making - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/1810.04383",
+      "evidence": "Abstract read: multi-asset approximations/proxies, finite-horizon and ergodic regimes; not exact universal solutions.",
+      "category": "market_making_control",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 163"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R072",
+      "domain": "ideas.repec.org",
+      "title": "Dealing with the Inventory Risk. A solution to the market making",
+      "attachments": [
+        3
+      ],
+      "url": "https://ideas.repec.org/p/arx/papers/1105.3115.html",
+      "evidence": "RePEc metadata opened; same intellectual work as GLFT R070.",
+      "category": "market_making_control",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 125"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Expose units, inventory bounds and assumptions; retain experimental status until validated.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R073",
+      "domain": "emergentmind.com",
+      "title": "Order-Flow Imbalance (OFI) - Emergent Mind",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.emergentmind.com/topics/order-flow-imbalance-ofi-7dff1686-44cf-4cf4-a602-b24df2b7c56e",
+      "evidence": "Aggregator OFI article opened; not a substitute for original formula, sampling requirements or held-out evaluation.",
+      "category": "order_flow",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 205"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish ordered-event OFI, static queue imbalance and deeper-level MLOFI.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R074",
+      "domain": "scribd.com",
+      "title": "Solarflare Ef Vi User Guide | PDF - Scribd",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.scribd.com/document/275660886/Solarflare-Ef-Vi-User-Guide",
+      "evidence": "Scribd metadata opened; current AMD guide used for authoritative API provenance.",
+      "category": "networking",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 11012"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R075",
+      "domain": "github.com",
+      "title": "openonload/src/include/etherfabric/ef_vi.h at master - GitHub",
+      "attachments": [
+        3
+      ],
+      "url": "https://github.com/majek/openonload/blob/master/src/include/etherfabric/ef_vi.h",
+      "evidence": "Historical majek OpenOnload fork header opened; fork age/API compatibility matters. Not the current vendor-support contract.",
+      "category": "networking",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 3858"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R076",
+      "domain": "redhawk.concurrent-rt.com",
+      "title": "Onload User Guide - Concurrent Real-Time Software Portal",
+      "attachments": [
+        3
+      ],
+      "url": "https://redhawk.concurrent-rt.com/docs/root/1Linux/1RedHawk/9.2/AMD-Onload-User-Guide-1.2.pdf",
+      "evidence": "Public mirror of Onload UG1586 v1.2 July 2023 opened; not current revision and not all 424 pages read.",
+      "category": "networking",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 13480"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R077",
+      "domain": "news.ycombinator.com",
+      "title": "It's an absolutely wonderful article - perhaps one of the best I've",
+      "attachments": [
+        3
+      ],
+      "url": "https://news.ycombinator.com/",
+      "evidence": "Exact HN comment unresolved despite distinctive-quote searches. HN homepage opened; Algolia public-search attempt was inaccessible.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 65"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R078",
+      "domain": "adaptivesupport.amd.com",
+      "title": "multicast packet loss in ef_vi processes while onload processes are",
+      "attachments": [
+        3
+      ],
+      "url": "https://adaptivesupport.amd.com/",
+      "evidence": "Exact AMD support thread unresolved. Public support homepage renders Loading/CSS Error; no login or workaround attempted.",
+      "category": "networking",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 7"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Measure the deployed app independently; NIC timings require matching hardware, transport and traffic.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R079",
+      "domain": "blog.hieunt.me",
+      "title": "LMAX Disruptor: A Superior Alternative to Bounded Queues for",
+      "attachments": [
+        3
+      ],
+      "url": "https://blog.hieunt.me/blog/lmax-disruptor-a-superior-alternative-to-bounded-queues-for-exchanging-data-between-concurrent-t",
+      "evidence": "Secondary Disruptor walkthrough opened; cannot replace official wait-strategy semantics.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 497"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R080",
+      "domain": "lmax-exchange.github.io",
+      "title": "LMAX Disruptor: High performance alternative to bounded queues",
+      "attachments": [
+        3
+      ],
+      "url": "https://lmax-exchange.github.io/disruptor/",
+      "evidence": "Official project landing page opened; library throughput claims remain workload-dependent.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 84"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R081",
+      "domain": "martinfowler.com",
+      "title": "The LMAX Architecture - Martin Fowler",
+      "attachments": [
+        3
+      ],
+      "url": "https://martinfowler.com/articles/lmax.html",
+      "evidence": "Fowler architecture article opened; architecture exposition is not a promise of equivalent Node/cloud performance.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 396"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R082",
+      "domain": "youtube.com",
+      "title": "LMAX Disruptor and the Concepts of Mechanical Sympathy - YouTube",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.youtube.com/",
+      "evidence": "Exact YouTube video URL unresolved. Matching Jamie Allen Vimeo page found; video/transcript was not watched/read.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 7"
+      },
+      "actual_target_opened": false,
+      "read_scope": "No video/audio/transcript consumed",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternative_candidate_urls": [
+        "https://vimeo.com/40775233"
+      ]
+    },
+    {
+      "id": "R083",
+      "domain": "mason.gmu.edu",
+      "title": "Logarithmic Market Scoring Rules for Modular Combinatorial",
+      "attachments": [
+        3
+      ],
+      "url": "https://mason.gmu.edu/~rhanson/mktscore.pdf",
+      "evidence": "Author-hosted Hanson paper opened; selected cost/scoring-rule discussion checked. Discrete finite-outcome LMSR needs its own assumptions.",
+      "category": "prediction_mechanisms",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 511"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R084",
+      "domain": "mathoverflow.net",
+      "title": "Asymptotic bounds on the maximum loss of Logarithmic Market",
+      "attachments": [
+        3
+      ],
+      "url": "https://mathoverflow.net/questions/510777/asymptotic-bounds-on-the-maximum-loss-of-logarithmic-market-scoring-rules-lmsr",
+      "evidence": "Exact canonical MathOverflow question opened after correcting discovery slug; continuous-state discussion is distinct from finite-outcome b log(n).",
+      "initial_url": "https://mathoverflow.net/questions/510777/asymptotic-bounds-on-the-maximum-loss-of-logarithmic-market-scoring-rules-lmsr-in",
+      "category": "prediction_mechanisms",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Exact source resolved and opened in follow-up lookup."
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R085",
+      "domain": "docs.kalshi.com",
+      "title": "Order Entry - Kalshi's API Documentation",
+      "attachments": [
+        3
+      ],
+      "url": "https://docs.kalshi.com/fix/order-entry",
+      "evidence": "Read FIX new-order section: limit orders, post-only option, quantity/price conventions. This is exchange order entry, not an LMSR pricing specification.",
+      "category": "prediction_mechanisms",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 429"
+      },
+      "actual_target_opened": true,
+      "read_scope": "selected_sections_read",
+      "implementation_implication": "Keep LMSR examples separate from Kalshi order-book execution.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R086",
+      "domain": "stackoverflow.com",
+      "title": "Aligning to cache line and knowing the cache line size",
+      "attachments": [
+        3
+      ],
+      "url": "https://stackoverflow.com/questions/7281699/aligning-to-cache-line-and-knowing-the-cache-line-size",
+      "evidence": "Discussion page opened; platform cache-line detection and alignment are not universally equivalent.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 534"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R087",
+      "domain": "stackoverflow.com",
+      "title": "False sharing prevention with alignas is broken - Stack Overflow",
+      "attachments": [
+        3
+      ],
+      "url": "https://stackoverflow.com/questions/63706666/false-sharing-prevention-with-alignas-is-broken",
+      "evidence": "Discussion page opened; aligning a containing structure does not automatically separate every independently written field.",
+      "category": "cpu_memory_concurrency",
+      "source_tier": "public_discussion_or_issue",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 497"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Profile the actual runtime; C++ or Java tuning does not establish Node/cloud latency.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R088",
+      "domain": "arxiv.org",
+      "title": "Optimal Execution of Limit and Market Orders with Trade ... - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/1604.04963",
+      "evidence": "Abstract read: permanent/temporary impact plus fill uncertainty, terminal penalty and parameter conditions; not guaranteed limit fills.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 162"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R089",
+      "domain": "tandfonline.com",
+      "title": "Full article: Optimal Execution: A Review",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.tandfonline.com/doi/full/10.1080/1350486X.2022.2161588",
+      "evidence": "Publisher full text returned 403; metadata/abstract discoverable only. No paywall bypass.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.tandfonline.com/doi/full/10.1080/1350486X.2022.2161588: (403) Forbidden"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R090",
+      "domain": "resolve.cambridge.org",
+      "title": "Optimal Execution - Cambridge University Press & Assessment",
+      "attachments": [
+        3
+      ],
+      "url": "https://resolve.cambridge.org/",
+      "evidence": "Supplied generic resolve.cambridge title is ambiguous and root returned 403. Public Cambridge chapter candidate opened; exact intended chapter remains unconfirmed.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://resolve.cambridge.org/: (403) Forbidden"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "alternative_candidate_urls": [
+        "https://www.cambridge.org/core/books/abs/trades-quotes-and-prices/optimal-execution/CBEFAF66FB040C76D1127FC9AFDC0482"
+      ],
+      "identity_warning": "Generic title does not uniquely identify intended chapter."
+    },
+    {
+      "id": "R091",
+      "domain": "math-evry.cnrs.fr",
+      "title": "Optimal execution cost for liquidation through a limit order market",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.maths.univ-evry.fr/prepubli/412.pdf",
+      "evidence": "Supplied CNRS domain's title resolved to an Evry author-repository PDF, but open timed out. No full-text read.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "blocked",
+        "receipt": "Failed to fetch https://www.maths.univ-evry.fr/prepubli/412.pdf: TimeoutError"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false,
+      "requested_domain_attempt": {
+        "url": "https://math-evry.cnrs.fr/",
+        "status": "inaccessible via web tool"
+      },
+      "alternate_url_attempt": {
+        "url": "https://www.maths.univ-evry.fr/prepubli/412.pdf",
+        "status": "TimeoutError"
+      }
+    },
+    {
+      "id": "R092",
+      "domain": "researchgate.net",
+      "title": "Optimal execution with limit and market orders | Request PDF",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.researchgate.net/publication/276530255_Optimal_execution_with_limit_and_market_orders",
+      "evidence": "ResearchGate metadata opened for an exact-title candidate; more than one paper has this generic title, so intended identity remains ambiguous.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "unresolved_or_ambiguous_exact_target",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 1150"
+      },
+      "actual_target_opened": false,
+      "read_scope": "target_not_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R093",
+      "domain": "github.com",
+      "title": "Almgren-Chriss - DYNAMIC PROGRAMMING.ipynb - GitHub",
+      "attachments": [
+        3
+      ],
+      "url": "https://github.com/IlluvatarEru/ElectronicMarkets/blob/master/Almgren-Chriss%20-%20DYNAMIC%20PROGRAMMING.ipynb",
+      "evidence": "Notebook page opened; not executed, audited or claimed to match the optimal strategy.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 192"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R094",
+      "domain": "mathematicsconsultants.com",
+      "title": "Optimal Liquidation Algorithms - the Almgren-Chriss Model",
+      "attachments": [
+        3
+      ],
+      "url": "https://mathematicsconsultants.com/2021/10/23/optimal-liquidation-algorithms-the-almgren-chriss-model/",
+      "evidence": "Secondary consultant explainer opened; not evidence of realized client savings or calibrated app behavior.",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 56"
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R095",
+      "domain": "simtrade.fr",
+      "title": "Understanding the Almgren-Chriss Model for Optimal Trade Execution",
+      "attachments": [
+        3
+      ],
+      "url": "https://www.simtrade.fr/blog_simtrade/understanding-almgren-chriss-model-for-optimal-trade-execution/",
+      "evidence": "Exact SimTrade article resolved and opened; secondary pedagogy, not original mathematical proof.",
+      "initial_url": "https://www.simtrade.fr/blog_simtrade/",
+      "category": "optimal_execution",
+      "source_tier": "secondary_or_discovery",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Exact source resolved and opened in follow-up lookup."
+      },
+      "actual_target_opened": true,
+      "read_scope": "metadata_or_excerpt_only",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": false
+    },
+    {
+      "id": "R096",
+      "domain": "arxiv.org",
+      "title": "Optimal Execution with Dynamic Order Flow Imbalance - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/1409.2618",
+      "evidence": "Abstract read: execution control includes informational and instantaneous impact, with approximate receding-horizon solutions.",
+      "category": "optimal_execution",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 159"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Distinguish expected-impact objectives from executable depth, fees and uncertain fills.",
+      "quotes": [],
+      "technical_authority_used": true
+    },
+    {
+      "id": "R097",
+      "domain": "arxiv.org",
+      "title": "Deep Learning for Digital Asset Limit Order Books - arXiv",
+      "attachments": [
+        3
+      ],
+      "url": "https://arxiv.org/abs/2010.01241",
+      "evidence": "Abstract read: commodity-GPU training, two-second Bitcoin forecast horizon and reported walk-forward accuracy are market/study-specific.",
+      "category": "deep_learning",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "retrieval": {
+        "method": "web.open",
+        "checked_at_utc": "2026-11-05",
+        "status": "opened",
+        "receipt": "Total lines: 158"
+      },
+      "actual_target_opened": true,
+      "read_scope": "abstract_read",
+      "implementation_implication": "Require time-ordered validation, realistic fills and costs before any predictive-performance claim.",
+      "quotes": [],
+      "technical_authority_used": true
+    }
+  ],
+  "additional_sources": [
+    {
+      "id": "A001",
+      "title": "Queue Imbalance as a One-Tick-Ahead Price Predictor in a Limit Order Book",
+      "url": "https://arxiv.org/abs/1512.03492",
+      "implication": "Paper abstract; logistic-regression prediction with stock-dependent results, not executable P&L.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "abstract_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Paper abstract; logistic-regression prediction with stock-dependent results, not executable P&L.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A002",
+      "title": "Price dynamics in a Markovian limit order market",
+      "url": "https://arxiv.org/abs/1104.4596",
+      "implication": "Stylized best-queue model; transition assumptions require calibration.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "abstract_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Stylized best-queue model; transition assumptions require calibration.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A003",
+      "title": "A Correction Note for Price Dynamics in a Markovian Limit Order Market",
+      "url": "https://epubs.siam.org/doi/10.1137/16M1057437",
+      "implication": "Published correction must accompany original model; do not silently rely on old formulas.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "Publisher correction abstract",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Published correction must accompany original model; do not silently rely on old formulas.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A004",
+      "title": "Simulating and analyzing order book data: The queue-reactive model",
+      "url": "https://arxiv.org/abs/1312.0563",
+      "implication": "Queue-state-dependent order intensities; simulator assumptions and execution probabilities require market-specific validation.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "abstract_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Queue-state-dependent order intensities; simulator assumptions and execution probabilities require market-specific validation.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A005",
+      "title": "Spectra of some self-exciting and mutually exciting point processes",
+      "url": "https://academic.oup.com/biomet/article-abstract/58/1/83/224809",
+      "implication": "Original Hawkes paper; covariance and excitation theory, not a profitability theorem.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "Published-paper summary/model introduction via public mirror",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Original Hawkes paper; covariance and excitation theory, not a profitability theorem.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened_via_public_mirror",
+        "receipt": "Publisher inaccessible redirect; original published PDF opened on public mirror."
+      },
+      "alternate_urls": [
+        "https://www.dcscience.net/Hawkes-Biometrika-1971.pdf"
+      ]
+    },
+    {
+      "id": "A006",
+      "title": "Hawkes processes in finance",
+      "url": "https://arxiv.org/abs/1502.04592",
+      "implication": "Author survey; multivariate excitation, kernels, estimation and empirical limits.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "abstract_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Author survey; multivariate excitation, kernels, estimation and empirical limits.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A007",
+      "title": "Hawkes Processes",
+      "url": "https://arxiv.org/abs/1507.02822",
+      "implication": "Author review; simulation, likelihood estimation and validation need event timestamps.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "Abstract, branching-ratio and recursive likelihood sections",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Author review; simulation, likelihood estimation and validation need event timestamps.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      },
+      "alternate_urls": [
+        "https://arxiv.org/pdf/1507.02822"
+      ]
+    },
+    {
+      "id": "A008",
+      "title": "Hawkes Models And Their Applications",
+      "url": "https://arxiv.org/abs/2405.10527",
+      "implication": "Updated author survey; estimation and application assumptions differ across domains.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "abstract_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Updated author survey; estimation and application assumptions differ across domains.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A009",
+      "title": "Strictly Proper Scoring Rules, Prediction, and Estimation",
+      "url": "https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf",
+      "implication": "Proper scores encourage honest probability distributions; retain outcomes and compare against baselines without claiming classification accuracy is calibration.",
+      "previous_project_reference": "web/docs/NBA_RESEARCH.md",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Proper scores encourage honest probability distributions; retain outcomes and compare against baselines without claiming classification accuracy is calibration.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      },
+      "preexisting_document_references": [
+        "web/docs\\nba-challenger-validation.json",
+        "web/docs\\NBA_RESEARCH.md"
+      ]
+    },
+    {
+      "id": "A010",
+      "title": "The probability of backtest overfitting",
+      "url": "https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf",
+      "implication": "Research-selection bias requires recorded trials and validation; no universal safe backtest count.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Research-selection bias requires recorded trials and validation; no universal safe backtest count.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A011",
+      "title": "The Deflated Sharpe Ratio",
+      "url": "https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf",
+      "implication": "Selection and non-normality adjustment relies on sample and trial assumptions; not proof of future profit.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Selection and non-normality adjustment relies on sample and trial assumptions; not proof of future profit.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A012",
+      "title": "Kalshi Orderbook Responses",
+      "url": "https://docs.kalshi.com/getting_started/orderbook_responses",
+      "implication": "YES/NO bid ladders imply complementary asks; static depth imbalance is not event-level OFI.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "YES/NO bid ladders imply complementary asks; static depth imbalance is not event-level OFI.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A013",
+      "title": "Kalshi Orderbook Updates",
+      "url": "https://docs.kalshi.com/websockets/orderbook-updates",
+      "implication": "Apply deltas in subscription seq order; replace on snapshot or gap. Conflation nets changes and loses individual events even with contiguous seq.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [
+        "Do not merge or deduplicate conflated streams by clock."
+      ],
+      "read_scope": "Sequence, snapshot/gap recovery and conflation rules",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Apply deltas in subscription seq order; replace on snapshot or gap. Conflation nets changes and loses individual events even with contiguous seq.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      },
+      "alternate_urls": [
+        "https://docs.kalshi.com/getting_started/quick_start_websockets"
+      ],
+      "previous_project_reference": "web/docs/RUNTIME_RESEARCH.md",
+      "preexisting_document_references": [
+        "web/docs\\RUNTIME_RESEARCH.md"
+      ]
+    },
+    {
+      "id": "A014",
+      "title": "Kalshi Rate Limits and Tiers",
+      "url": "https://docs.kalshi.com/getting_started/rate_limits",
+      "implication": "Token budgets and 429 backoff must be read from current docs, not assumed legacy fixed request counts.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Token budgets and 429 backoff must be read from current docs, not assumed legacy fixed request counts.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A015",
+      "title": "Kalshi Fee Rounding",
+      "url": "https://docs.kalshi.com/getting_started/fee_rounding",
+      "implication": "Paper execution must match current rounding and fee units.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Paper execution must match current rounding and fee units.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A016",
+      "title": "C++ draft hardware interference sizes",
+      "url": "https://eel.is/c++draft/hardware.interference",
+      "implication": "Implementation-defined constexpr constants are neither universal 64 bytes nor runtime cache-line discovery.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [
+        "implementation-defined"
+      ],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Implementation-defined constexpr constants are neither universal 64 bytes nor runtime cache-line discovery.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A017",
+      "title": "Linux Kernel False Sharing",
+      "url": "https://docs.kernel.org/kernel-hacking/false-sharing.html",
+      "implication": "Profile actual shared cache lines and structure layouts before padding.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Profile actual shared cache lines and structure layouts before padding.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A018",
+      "title": "Linux Kernel Robust Futexes",
+      "url": "https://docs.kernel.org/locking/robust-futexes.html",
+      "implication": "Uncontended lock fast paths can remain in userspace; blocking contention may enter the kernel.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Uncontended lock fast paths can remain in userspace; blocking contention may enter the kernel.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    },
+    {
+      "id": "A019",
+      "title": "PostgreSQL 17 Date/Time Functions",
+      "url": "https://www.postgresql.org/docs/17/functions-datetime.html",
+      "implication": "clock_timestamp changes during a statement; now/current_timestamp use transaction start.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "clock_timestamp changes during a statement; now/current_timestamp use transaction start.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      },
+      "preexisting_document_references": [
+        "docs\\postgres-query-hardening.md"
+      ]
+    },
+    {
+      "id": "A020",
+      "title": "PostgreSQL 17 Explicit Locking",
+      "url": "https://www.postgresql.org/docs/17/explicit-locking.html",
+      "implication": "Locks and transaction ordering matter for quota and lease publication; isolation is not latency determinism.",
+      "source_tier": "primary_paper_or_official_documentation",
+      "resolution": "resolved",
+      "actual_target_opened": true,
+      "quotes": [],
+      "read_scope": "selected_sections_read",
+      "checked_at_utc": "2026-11-05",
+      "evidence": "Locks and transaction ordering matter for quota and lease publication; isolation is not latency determinism.",
+      "technical_authority_used": true,
+      "counted_as_additional_to_requested_list": true,
+      "retrieval": {
+        "method": "web.open",
+        "status": "opened",
+        "receipt": "Public source opened; scope explicitly limited above."
+      }
+    }
+  ],
+  "auxiliary_checks": [
+    {
+      "title": "Cont–Kukanov–Stoikov original OFI paper",
+      "url": "https://arxiv.org/pdf/1011.6402",
+      "scope": "Selected sections pp2–5 and p7",
+      "counted_additional": false,
+      "reason": "Same intellectual work requested through Scribd R022."
+    },
+    {
+      "title": "Hawkes 1971 public published-paper mirror",
+      "url": "https://www.dcscience.net/Hawkes-Biometrika-1971.pdf",
+      "scope": "Summary/model introduction",
+      "counted_additional": false,
+      "reason": "Alternate host for A005; not another unique paper."
+    },
+    {
+      "title": "Brier 1950 original probability-verification paper",
+      "url": "https://journals.ametsoc.org/view/journals/mwre/78/1/1520-0493_1950_078_0001_vofeit_2_0_co_2.xml",
+      "scope": "Publisher search metadata only; open returned 403",
+      "counted_additional": false,
+      "reason": "Full text was blocked and not used for the scoring derivation."
+    },
+    {
+      "title": "Jamie Allen mechanical-sympathy video candidate",
+      "url": "https://vimeo.com/40775233",
+      "scope": "Search metadata only; no video/audio/transcript consumed",
+      "counted_additional": false,
+      "reason": "Alternate candidate for unresolved YouTube R082."
+    },
+    {
+      "title": "FPGA feed-handler exact-title chapter discovery",
+      "url": "https://link.springer.com/book/10.1007/978-3-662-45815-0",
+      "scope": "Publisher contents metadata",
+      "counted_additional": false,
+      "reason": "Zhou/Jiang/Liao/Yang/Wang chapter title matches supplied title; not the Allred near-title opened in R068."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F01",
+      "topic": "Kalshi matching versus LMSR",
+      "assessment": "Mechanisms must be separated.",
+      "sources": [
+        "https://docs.kalshi.com/fix/order-entry",
+        "https://docs.kalshi.com/getting_started/orderbook_responses",
+        "https://mason.gmu.edu/~rhanson/mktscore.pdf"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f01"
+    },
+    {
+      "id": "F02",
+      "topic": "Reservation-price direction",
+      "assessment": "Reversed trading intuition.",
+      "sources": [
+        "https://people.orie.cornell.edu/sfs33/LimitOrderBook.pdf"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f02"
+    },
+    {
+      "id": "F03",
+      "topic": "GLFT bid sign and HJB transform",
+      "assessment": "Bid sign error plus an overbroad methods claim.",
+      "sources": [
+        "https://arxiv.org/pdf/1105.3115"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f03"
+    },
+    {
+      "id": "F04",
+      "topic": "Classic OFI, queue imbalance and conflation",
+      "assessment": "Incorrect data requirement and missing transport condition.",
+      "sources": [
+        "https://arxiv.org/pdf/1011.6402",
+        "https://arxiv.org/abs/1907.06230",
+        "https://docs.kalshi.com/websockets/orderbook-updates"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f04"
+    },
+    {
+      "id": "F05",
+      "topic": "Almgren–Chriss discreteness and finite risk",
+      "assessment": "Continuous-limit approximation was presented as exact; variance claim is overstated.",
+      "sources": [
+        "https://www.smallake.kr/wp-content/uploads/2016/03/optliq.pdf"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f05"
+    },
+    {
+      "id": "F06",
+      "topic": "DeepLOB and GPU/inference claims",
+      "assessment": "Conflates distinct studies and training with inference.",
+      "sources": [
+        "https://arxiv.org/pdf/1808.03668",
+        "https://arxiv.org/abs/1601.01987",
+        "https://arxiv.org/abs/2010.01241"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f06"
+    },
+    {
+      "id": "F07",
+      "topic": "Forecast quality versus tradability",
+      "assessment": "Unsupported inference.",
+      "sources": [
+        "https://arxiv.org/html/2403.09267v3",
+        "https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf",
+        "https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf",
+        "https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f07"
+    },
+    {
+      "id": "F08",
+      "topic": "Hawkes feasibility and stability",
+      "assessment": "Overbroad computational and mathematical claims.",
+      "sources": [
+        "https://arxiv.org/pdf/1507.02822",
+        "https://arxiv.org/abs/2103.05299",
+        "https://arxiv.org/abs/1502.04592"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f08"
+    },
+    {
+      "id": "F09",
+      "topic": "CPU isolation, cache lines and locks",
+      "assessment": "Multiple systems overstatements.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/cpu-isolation.html",
+        "https://docs.kernel.org/admin-guide/kernel-parameters.html",
+        "https://eel.is/c++draft/hardware.interference",
+        "https://docs.kernel.org/kernel-hacking/false-sharing.html",
+        "https://docs.kernel.org/locking/robust-futexes.html",
+        "https://lmax-exchange.github.io/disruptor/user-guide/index.html"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f09"
+    },
+    {
+      "id": "F10",
+      "topic": "LMSR scope and loss bound",
+      "assessment": "Requires explicit outcome/state assumptions.",
+      "sources": [
+        "https://mason.gmu.edu/~rhanson/mktscore.pdf"
+      ],
+      "detail": "docs/quant-research-source-ledger.md#f10"
+    }
+  ],
+  "artifact_validation": {
+    "passed": true,
+    "requested_entries": 97,
+    "exact_target_checkboxes": 78,
+    "blocked_resolved_targets": 6,
+    "unresolved_or_ambiguous_targets": 13,
+    "additional_unique_urls": 20,
+    "attachment_digests_verified": 3,
+    "identifier_url_scope_and_checkbox_consistency": true,
+    "quotes_within_25_words_per_source": true,
+    "application_tests_run_by_this_lane": false,
+    "reason": "Source-only documentation and review-artifact changes."
+  },
+  "review_limits": [
+    "Attachments supply mostly domain/title pairs rather than canonical URLs; generic titles may remain ambiguous.",
+    "No authentication, paywall bypass, proxy rotation, credentials, private communications or paid requests used.",
+    "Source availability and API documentation can change; these receipts describe this review date.",
+    "No novelty, profit, accuracy or portable latency certification follows from source coverage.",
+    "Research implications are recommendations for validation, not claims that this lane implemented them."
+  ]
+}
