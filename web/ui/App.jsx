@@ -133,7 +133,7 @@ export default function App() {
   useEffect(()=>{const id=setInterval(()=>{if(!document.hidden&&activeView.current!=='ranked')setClock(Date.now());},1000);const key=e=>{if(e.key==='Escape'){setAssistant(false);setJournal(false);setSources(false);setAppearanceOpen(false);setArchiveOpen(false);}if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)&&!document.querySelector('.overlay,.assistant-panel')){e.preventDefault();setView('markets');setMobileDetail(false);requestAnimationFrame(()=>search.current?.focus());}};document.addEventListener('keydown',key);return()=>{clearInterval(id);document.removeEventListener('keydown',key);lookupRequest.current?.abort();};},[]);
   useEffect(()=>{
     const controller=new AbortController(),intent=listIntent.current;setListLoading(true);setListError('');setMarkets([]);setQuery('');setListLabel(categories.find(c=>c[0]===category)[1]);
-    api('/api/workspace/markets?category='+category,{signal:controller.signal}).then(value=>{
+    api('/api/workspace/markets?category='+category,{signal:controller.signal,timeoutMs:20000}).then(value=>{
       if(controller.signal.aborted||intent!==listIntent.current)return;
       setMarkets(value.markets);setCoverage(value);if(value.markets.length)select(value.markets[0],{openDetail:false});
     }).catch(e=>{if(e.name!=='AbortError'&&!controller.signal.aborted)setListError(e.message);}).finally(()=>{if(!controller.signal.aborted)setListLoading(false);});
@@ -143,7 +143,7 @@ export default function App() {
     if(view!=='markets'||listLoading||listLabel==='Opened from link')return;
     const controller=new AbortController();let busy=false;
     const refresh=async()=>{if(document.hidden||busy)return;busy=true;const intent=listIntent.current;
-      try{const value=await api('/api/workspace/markets?category='+category,{signal:controller.signal});if(!controller.signal.aborted&&intent===listIntent.current){setMarkets(current=>refreshMarketRows(current,value.markets));setCoverage(value);}}
+      try{const value=await api('/api/workspace/markets?category='+category,{signal:controller.signal,timeoutMs:20000});if(!controller.signal.aborted&&intent===listIntent.current){setMarkets(current=>refreshMarketRows(current,value.markets));setCoverage(value);}}
       catch{}finally{busy=false;}};
     const timer=setInterval(refresh,60000);document.addEventListener('visibilitychange',refresh);
     return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',refresh);};
