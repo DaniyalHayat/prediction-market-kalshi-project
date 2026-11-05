@@ -1,0 +1,61 @@
+# Copy only the relevant settings to an ignored local .tfvars file.
+# The unmodified defaults plan zero Azure resources.
+azure_enabled = false
+profile       = "replay"
+name_prefix   = "predictirlab"
+
+# Hosted replay. Use your subscription and reviewed image digests.
+# azure_enabled   = true
+# subscription_id = "00000000-0000-0000-0000-000000000000"
+# spend_approval = {
+#   approved_monthly_usd     = 5
+#   reviewed_monthly_usd     = 0
+#   accepts_metered_overages = true
+# }
+# images = {
+#   front   = "<registry>.azurecr.io/predictir-replay-front@sha256:<64-lowercase-hex>"
+#   backend = "<registry>.azurecr.io/predictir-backend@sha256:<64-lowercase-hex>"
+# }
+# existing_acr = {
+#   resource_id        = "/subscriptions/<guid>/resourceGroups/<group>/providers/Microsoft.ContainerRegistry/registries/<registry>"
+#   login_server       = "<actual-acr-login-host>.azurecr.io"
+#   authorization_mode = "abac"
+# }
+
+# Live foundation. Supply TF_VAR_postgres_admin_password through a private input.
+# profile          = "live"
+# launch_live_apps = false
+# location         = "centralus"
+# Select predictir-live-front instead of predictir-replay-front in images.front.
+# Update the reviewed estimate and explicit approved amount for your usage.
+# spend_approval = {
+#   approved_monthly_usd     = 25
+#   reviewed_monthly_usd     = 24
+#   accepts_metered_overages = true
+# }
+
+# Add the refs and temporary job after the private database and Key Vault network path exist.
+# live_secrets = {
+#   vault_resource_id    = "/subscriptions/<guid>/resourceGroups/<group>/providers/Microsoft.KeyVault/vaults/<vault>"
+#   edge_secret_uri      = "https://<vault>.vault.azure.net/secrets/predictir-edge/<version>"
+#   assistant_secret_uri = "https://<vault>.vault.azure.net/secrets/predictir-assistant/<version>"
+#   account_secret_uri   = "https://<vault>.vault.azure.net/secrets/predictir-account/<version>"
+#   database_url_uri     = "https://<vault>.vault.azure.net/secrets/predictir-app-database-url/<version>"
+#   database_ca_uri      = "https://<vault>.vault.azure.net/secrets/predictir-database-ca/<version>"
+# }
+# live_bootstrap = {
+#   image              = "<registry>.azurecr.io/predictir-bootstrap@sha256:<64-lowercase-hex>"
+#   admin_password_uri = "https://<vault>.vault.azure.net/secrets/predictir-postgres-admin/<version>"
+# }
+
+# After successful private bootstrap, remove live_bootstrap in its own reviewed plan.
+# Enable live apps in a subsequent plan.
+# launch_live_apps    = true
+# live_database_ready = true
+
+# Optional existing single-tenant Entra owner setup.
+# live_owner = {
+#   tenant_id = "<tenant-guid>"
+#   client_id = "<application-guid>"
+#   object_id = "<approved-owner-guid>"
+# }

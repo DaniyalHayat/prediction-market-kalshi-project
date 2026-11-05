@@ -1,0 +1,111 @@
+name: Azure edition verification
+
+on:
+  pull_request:
+    paths: ['web/**', 'terraform/azure/**', '.github/workflows/azure-replay.yml']
+  push:
+    branches: [main, azure-edition]
+    paths: ['web/**', 'terraform/azure/**', '.github/workflows/azure-replay.yml']
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: 'Publish verified images to the existing private Azure registry'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Test models, backend and interface
+        working-directory: web
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          node tools/validate_quant_scenarios.mjs
+          git diff --exit-code -- public/research/quant-scenario-validation.json
+      - name: Exercise contextual research in Chromium
+        working-directory: web
+        run: |
+          npm install --prefix "$RUNNER_TEMP/predictir-browser" --no-audit --no-fund --ignore-scripts playwright@1.61.1
+          "$RUNNER_TEMP/predictir-browser/node_modules/.bin/playwright" install --with-deps chromium
+          npm run dev -- --hostname 127.0.0.1 --port 37641 > "$RUNNER_TEMP/predictir-next.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          curl --retry 20 --retry-all-errors --retry-delay 1 --max-time 30 --fail --silent http://127.0.0.1:37641/ >/dev/null
+          PLAYWRIGHT_CORE_PATH="$RUNNER_TEMP/predictir-browser/node_modules/playwright-core/index.mjs" node tests/assistant-workspace.browser.mjs
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.17.1'
+          terraform_wrapper: false
+      - name: Validate the dormant Azure infrastructure
+        working-directory: terraform/azure
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform plan -input=false -out=replay.tfplan
+          terraform show -json replay.tfplan | jq -e '([.resource_changes[]?] | length) == 0'
+          terraform -chdir=hosted init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=hosted validate
+          terraform -chdir=hosted test
+          terraform -chdir=foundation init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=foundation test
+      - name: Build and verify Azure images
+        run: bash terraform/azure/ci-images.sh
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_images && vars.AZURE_IMAGE_PUBLISH_ENABLED == 'true'
+    needs: verify
+    environment: azure-image-publish
+    concurrency:
+      group: azure-image-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRY: ${{ vars.AZURE_ACR_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build and test the exact images to publish
+        run: bash terraform/azure/ci-images.sh
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Publish reviewed digests
+        run: |
+          set -euo pipefail
+          [[ "$REGISTRY" =~ ^[a-z0-9]{5,50}$ ]]
+          metadata="$(az acr show --name "$REGISTRY" --query '{host:loginServer,admin:adminUserEnabled}' --output json)"
+          jq -e '.admin == false' <<<"$metadata" >/dev/null
+          registry_host="$(jq -r '.host' <<<"$metadata")"
+          [[ "$registry_host" =~ ^${REGISTRY}(-[a-z0-9]+)?\.azurecr\.io$ ]]
+          az acr login --name "$REGISTRY" --only-show-errors
+          tag="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf '### Verified Azure image digests\n\n' >> "$GITHUB_STEP_SUMMARY"
+          for repository in predictir-replay-front predictir-live-front predictir-backend predictir-bootstrap; do
+            image="$registry_host/$repository:$tag"
+            docker tag "$repository:ci" "$image"
+            docker push "$image"
+            digest="$(az acr repository show --name "$REGISTRY" --image "$repository:$tag" --query digest --output tsv)"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            printf -- '- `%s/%s@%s`\n' "$registry_host" "$repository" "$digest" >> "$GITHUB_STEP_SUMMARY"
+          done
