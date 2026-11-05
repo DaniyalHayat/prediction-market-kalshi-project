@@ -35,6 +35,19 @@ test('MCP execution quantities and dollar costs use distinct explicit units',()=
 const edgeHeaders={'x-market-edge-secret':edgeSecret,'x-market-country':'US','x-market-client-ip':'198.51.100.7'};
 function memoryQuota(){const used=new Map();return {used,consume:async(key,limit,amount=1)=>{const before=used.get(key)||0;if(before+amount>limit)return false;used.set(key,before+amount);return true;}};}
 
+test('exhausted research-work budget leaves paper reads and scoped research available',async t=>{
+  const keys=[];
+  const storage={consume:async key=>{keys.push(key);return !key.startsWith('work#');}};
+  const url=await listen(t,{now:()=>Date.parse('2026-11-05T23:50:00Z'),storageEnabled:()=>true,storage:()=>storage,
+    getRoute:async()=>Response.json({ok:true})});
+  assert.equal((await fetch(url+'/api/workspace/portfolio-books',{headers:edgeHeaders})).status,200);
+  assert.equal((await fetch(url+'/api/workspace/research',{headers:edgeHeaders})).status,200);
+  const denied=await fetch(url+'/api/workspace/opinions',{headers:edgeHeaders});
+  assert.equal(denied.status,429);
+  assert.equal(denied.headers.get('retry-after'),'600');
+  assert.deepEqual(keys,['paper-reads#2026-11-05','research-reads#2026-11-05','work#2026-11-05']);
+});
+
 test('actual MCP handshake lists only read-only tools and scopes all market reads',async t=>{
   const server=createResearchServer({tickerScope:ticker,dependencies}),client=new Client({name:'test-client',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
   await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
