@@ -22,7 +22,7 @@ export async function alternativeMusicSources(market,{artist=null,song=null,fetc
   try{
     const response=await fetchPage('Kworb US Spotify song chart',url,{ttl:3600,maximumBytes:1_000_000});
     if(response.status!=='available')return {status:response.status,reason:response.reason,sources:[{label:'Kworb US Spotify song chart',url}],matched_tracks:[]};
-    const value=parseKworbUS(response.data.text,now),matched=value.tracks.filter(t=>artist?norm(t.artist)===norm(artist):song?norm(t.name)===norm(song):false);
+    const value=parseKworbUS(response.data.text,now),matched=value.tracks.filter(t=>song?norm(t.name)===norm(song)&&(!artist||norm(t.artist)===norm(artist)):artist?norm(t.artist)===norm(artist):false);
     return {...value,status:'available',as_of:response.as_of,source_url:url,sha256:response.sha256,matched_tracks:matched,
       settlement_match:false,settlement_note:/billboard/i.test([market.title,market.rules_primary].join(' '))?'Billboard settlement: Spotify US daily counts provide streaming context only. They do not include the Billboard chart’s full methodology.':'A secondary song chart is displayed as context until exact publisher, territory, entity unit and measurement window are matched.',
       sources:[{kind:'secondary_chart',label:'Kworb US daily Spotify song chart',url,retrieved_at:response.as_of,sha256:response.sha256}],

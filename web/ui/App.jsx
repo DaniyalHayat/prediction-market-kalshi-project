@@ -98,7 +98,7 @@ function MusicResearch({value}) {
     {value.forecast&&<p className="notice">{value.forecast.reason||`Estimated persistence: ${percent(value.forecast.probability)}`}</p>}
     {value.apple?.source_updated&&<p className="footnote">Apple feed updated {dateLabel(value.apple.source_updated)}. {value.apple.note}</p>}
     {value.spotify?.status&&value.spotify.status!=='available'&&<p className="footnote">Spotify catalog-reference status: {value.spotify.status.replaceAll('_',' ')}. {value.spotify.reason}</p>}
-    {value.spotify?.references?.length>0&&<><h4>Spotify references</h4><div className="source-list">{value.spotify.references.map(row=><a className="source-row" key={row.id} href={row.url} target="_blank" rel="noreferrer"><span><strong>{row.name}</strong><small>Spotify catalog reference</small></span><ArrowUpRight size={15}/></a>)}</div><p className="footnote">Spotify catalog references are displayed separately and are not sent to the assistant or forecasting models.</p></>}
+    {value.spotify?.references?.length>0&&<><h4>Spotify references</h4><div className="source-list">{value.spotify.references.map(row=><a className="source-row" key={row.id} href={row.url} target="_blank" rel="noreferrer"><span><strong>{row.name}</strong><small>{row.artists?.join(', ')||'Spotify artist reference'}</small></span><ArrowUpRight size={15}/></a>)}</div><p className="footnote">Spotify catalog references are displayed separately and are not sent to the assistant or forecasting models.</p></>}
   </section>;
 }
 function MarketAttribution({value}) {

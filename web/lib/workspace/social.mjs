@@ -2,10 +2,51 @@ import {sourceJSON,recordProviderStatus} from './providers.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {SOURCE_CATALOG,evidenceEntities,evidenceTopic,safePublicURL} from './source-ranking.mjs';
 import {permittedPublicPage} from './public-pages.mjs';
+import {createHash} from 'node:crypto';
 const boundedInteger=(value,fallback,maximum)=>Number.isInteger(Number(value))&&Number(value)>=1?Math.min(maximum,Number(value)):fallback;
 const empty=(status,reason)=>({status,posts:[],reason});
+export function xSearchScope(topic,entities,maximumAccounts=2){
+  if(!Array.isArray(entities))return null;
+  const terms=[...new Set(entities.filter(value=>typeof value==='string').map(value=>value.normalize('NFKC').replace(/[^\p{L}\p{N}\s'-]/gu,' ').replace(/\s+/g,' ').trim().slice(0,64)).filter(value=>value.length>=3))].sort().slice(0,8);
+  const accounts=SOURCE_CATALOG.filter(row=>row.handle&&row.topics.includes(topic)).slice(0,boundedInteger(maximumAccounts,2,2));
+  if(!terms.length||!accounts.length)return null;
+  const query='('+accounts.map(row=>'from:'+row.handle).join(' OR ')+') ('+terms.map(term=>'"'+term+'"').join(' OR ')+') -is:retweet -is:reply';
+  return {query,terms,accounts,key:createHash('sha256').update(query).digest('hex').slice(0,32)};
+}
+async function selectedXSearch(scope,{durable,get,env,now,reserve}){
+  try{
+    const failure=await durable.get('x-public-cooldown');
+    if(failure?.until>now())return {...empty('cooldown','Shared X retrieval is paused after a provider error.'),retry_at:new Date(failure.until).toISOString()};
+    const result=await durable.cached('x-selected-search#'+scope.key,1800,async(context={})=>{
+      if(durable.kind==='postgres'&&typeof context.publishRecord!=='function')throw Object.assign(new Error('Durable cursor fencing is unavailable'),{status:503,code:'CACHE_FENCE_UNAVAILABLE'});
+      if(!await reserve(50+10*scope.accounts.length,10))throw Object.assign(new Error('Shared X search allowance reached'),{status:429,code:'X_BUDGET_REACHED'});
+      const previous=await durable.get('x-search-cursor#'+scope.key),params=new URLSearchParams({query:scope.query,max_results:'10','tweet.fields':'created_at,public_metrics,author_id',expansions:'author_id','user.fields':'username',sort_order:'recency'});
+      if(/^\d{1,19}$/.test(previous?.newest_id||''))params.set('since_id',previous.newest_id);
+      const response=await get('X selected-trade news','https://api.x.com/2/tweets/search/recent?'+params,{ttl:1,headers:{Authorization:'Bearer '+env.X_BEARER_TOKEN},maximumBytes:150000});
+      if(response.data.errors?.length||!Array.isArray(response.data.data)&&response.data.meta?.result_count!==0)throw Object.assign(new Error('X search coverage was not established'),{status:502});
+      const authors=new Map((response.data.includes?.users||[]).filter(row=>/^\d+$/.test(row.id)).map(row=>[row.id,scope.accounts.find(account=>account.handle.toLowerCase()===String(row.username).toLowerCase())]));
+      const valid=(response.data.data||[]).filter(row=>/^\d{1,19}$/.test(row.id)&&typeof row.text==='string'&&Number.isFinite(Date.parse(row.created_at))&&Date.parse(row.created_at)<=now()+300000),rows=valid.flatMap(row=>{
+        const account=authors.get(row.author_id);if(!account)return [];
+        return [{id:row.id,author:account.handle,title:row.text.slice(0,220),excerpt:row.text.slice(0,900),created_at:row.created_at,as_of:row.created_at,platform:'x',publisher:account.name,metrics:row.public_metrics||{},url:`https://x.com/${account.handle}/status/${row.id}`}];
+      });
+      if(rows.length!==valid.length)throw Object.assign(new Error('X search author identity was not established'),{status:502});
+      const merged=[...new Map([...(previous?.posts||[]),...rows].map(row=>[row.id,row])).values()].filter(row=>now()-Date.parse(row.created_at)<7*86400000).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,30);
+      const newest=valid.reduce((id,row)=>!id||BigInt(row.id)>BigInt(id)?row.id:id,previous?.newest_id||null),cursor={pk:'x-search-cursor#'+scope.key,sk:'value',newest_id:newest,posts:merged,expires_epoch:Math.floor(now()/1000)+7*86400};
+      if(typeof context.publishRecord==='function')await context.publishRecord(cursor);else await durable.save(cursor,true);
+      return {status:'available',posts:merged,as_of:response.as_of,coverage:{returned:valid.length,verified_authors:rows.length,truncated:Boolean(response.data.meta?.next_token)}};
+    });
+    return {...result,query:scope.query,scope:'selected_entities',note:'One recent-search page for selected entities from at most two curated authors, excluding replies and reposts. Shared for 30 minutes. Ten post reads and possible author expansions are reserved before each paid request; pagination is not followed. Source identity and relevance do not establish predictive accuracy.'};
+  }catch(error){
+    if(error.code==='X_BUDGET_REACHED')return empty('budget_reached','Shared X lookup, post-read or monetary allowance reached.');
+    if(error.code==='CACHE_LEASE_LOST'||error.code==='CACHE_LEASE_BUSY')return empty('refreshing','The shared search refresh is busy or lost its lease. Retry shortly; no stale cursor was published.');
+    if(error.code==='CACHE_FENCE_UNAVAILABLE')return empty('unavailable','The shared search cache cannot safely publish this refresh.');
+    const status=Number(error.status),seconds=status===402?86400:status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
+    await durable.save({pk:'x-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
+    return empty('unavailable',Number.isInteger(status)?'Public X search returned HTTP '+status+'.':'Public X search or its quota store is unavailable.');
+  }
+}
 
-export async function publicXFeed({topic='music',maximumAccounts=2,enabled=false}={},dependencies={}){
+export async function publicXFeed({topic='music',entities,maximumAccounts=2,enabled=false}={},dependencies={}){
   if(!enabled)return empty('not_queried','Public X reads require explicit evidence retrieval.');
   const env=dependencies.env||process.env,configured=Boolean(env.X_BEARER_TOKEN),durable=dependencies.store||(cloudEnabled()?store():null),get=dependencies.sourceJSON||sourceJSON;
   if(!configured)return empty('not_configured','A backend X Bearer Token is required.');
@@ -17,6 +58,10 @@ export async function publicXFeed({topic='music',maximumAccounts=2,enabled=false
     if(posts&&!await durable.consume('x-posts#'+month,postLimit,posts,45*86400))return false;
     return durable.consume('x-cost-milliusd#'+month,costLimit,amount,45*86400);
   };
+  if(entities!==undefined){
+    const scope=xSearchScope(topic,entities,maximumAccounts),result=scope?await selectedXSearch(scope,{durable,get,env,now,reserve}):empty('not_queried','No supported curated authors and selected entities were established.');
+    recordProviderStatus('X selected-trade news',{status:result.status,detail:result.note||result.reason});return result;
+  }
   for(const account of accounts){
     const author=account.handle;
     try{

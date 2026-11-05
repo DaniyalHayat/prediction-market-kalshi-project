@@ -1,6 +1,6 @@
 import {sourceJSON} from './providers.mjs';
 import {publicXFeed,redditEvidence} from './social.mjs';
-import {SOURCE_CATALOG,evidenceTopic,evidenceEntities,rankEvidence,safePublicURL} from './source-ranking.mjs';
+import {SOURCE_CATALOG,evidenceTopic,evidenceEntities,evidenceSearchTerms,rankEvidence,safePublicURL} from './source-ranking.mjs';
 import {filmResearch} from './film.mjs';
 import {alternativeMusicSources} from './music-alternatives.mjs';
 
@@ -26,6 +26,7 @@ function summaries(market,items,{sports,film,feeds,topic,music}){
   if(film)sections.push(`Film analysis uses ${(film.critic_weight*100).toFixed(1)}% critic weighting as the user’s preference for an experimental display index. ${film.preference_index.reason} ${film.note}`);
   const itemRead=items.slice(0,8).map((i,n)=>`${n+1}. ${i.publisher}, ${i.as_of.slice(0,10)}: ${i.title}\n${i.excerpt||'No additional description supplied.'}\nRelevance: ${i.why_relevant}\nImplication: ${i.impact}\nVerify: ${i.limitations.join(' ')}\nSource: ${i.url}`).join('\n\n');
   sections.push(`Source access: ${feeds.map(f=>f.name+' '+f.status+(f.reason?' ('+f.reason+')':'')).join('; ')}. Public access blocks and rate limits are respected. Missing coverage is reported explicitly.`);
+  const x=feeds.find(feed=>feed.name==='X');if(x?.scope==='selected_entities')sections.push(`X retrieval targets the selected names within curated public accounts, excluding replies and reposts. It reads at most one ten-post page per shared 30-minute refresh.${x.coverage?.truncated?' More matching posts were available; this page is incomplete.':''} A source identity is not a validated accuracy record.`);
   sections.push('Forecast treatment: this evidence panel does not alter probability, trade side or allocation. A prospective dated source/outcome archive and held-out evaluation are required before testing predictive claims.');
   return {summary,long_read:sections.join('\n\n')+(itemRead?'\n\nSource-by-source review\n\n'+itemRead:''),news_summary:newsSummary,news_long_read:itemRead||summary};
 }
@@ -34,13 +35,13 @@ export async function contractEvidence(market,{enabled=false,selectedTicker,redd
   const topic=evidenceTopic(market),getNews=dependencies.sportsNews||sportsNews,getX=dependencies.publicXFeed||publicXFeed,getReddit=dependencies.redditEvidence||redditEvidence;
   const entities=evidenceEntities(market,{sports});
   const [publisher,x,reddit,alternative]=await Promise.all([
-    getNews(topic).catch(()=>({status:'unavailable',articles:[]})),includeX?getX({topic,enabled:true}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'not_queried',posts:[]}),
+    getNews(topic).catch(()=>({status:'unavailable',articles:[]})),includeX?getX({topic,entities:evidenceSearchTerms(market,{sports}),enabled:true}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'not_queried',posts:[]}),
     getReddit(market,{enabled:redditEnabled,selectedTicker,sports}).catch(()=>({status:'unavailable',posts:[]})),
     topic==='music'?(music?.alternatives?Promise.resolve(music.alternatives):(dependencies.alternativeMusicSources||alternativeMusicSources)(market,{artist:market.custom_strike?.Artist||(/\bartist\b/i.test(market.title||'')?entities[0]:null),song:/\bsong\b/i.test(market.title||'')?entities[0]:null}).catch(()=>({status:'unavailable'}))):Promise.resolve(null)
   ]);
   const normalized=(news?.articles||[]).map(row=>({...row,publisher:row.publisher||row.domain||'Unverified source',as_of:row.as_of||row.published_at||row.publishedAt||row.seen_at,excerpt:row.description||row.excerpt||'',time_basis:row.published_at||row.publishedAt?'publisher_reported_publication':'provider_first_seen',limitations:['Headline metadata only; full publisher article has not been read.',...(!row.published_at&&!row.publishedAt?['Timestamp is provider first-seen metadata, not verified article publication time.']:[])]}));
   const items=rankEvidence([...normalized,...(publisher.articles||[]),...(x.posts||[]),...(reddit.posts||[])],market,{sports,now:dependencies.now?.()||Date.now()}),film=filmResearch(market,{observations:filmObservations,criticWeight});
-  const feeds=[{name:news?.provider||'Existing news metadata',status:news?.status||'not_queried'},{name:'ESPN news',status:publisher.status,reason:publisher.reason},{name:'X',status:x.status,reason:x.reason},{name:'Reddit',status:reddit.status,reason:reddit.reason,rejected:reddit.rejected,examined:reddit.examined,search_url:reddit.search_url},...(alternative?[{name:'Kworb secondary Spotify chart',status:alternative.status,reason:alternative.reason}]:[])];
+  const feeds=[{name:news?.provider||'Existing news metadata',status:news?.status||'not_queried'},{name:'ESPN news',status:publisher.status,reason:publisher.reason},{name:'X',status:x.status,reason:x.reason,scope:x.scope,query:x.query,coverage:x.coverage},{name:'Reddit',status:reddit.status,reason:reddit.reason,rejected:reddit.rejected,examined:reddit.examined,search_url:reddit.search_url},...(alternative?[{name:'Kworb secondary Spotify chart',status:alternative.status,reason:alternative.reason}]:[])];
   const value={ticker:market.ticker,status:items.length?'available':'no_matched_items',as_of:new Date().toISOString(),items,feeds,film,music_alternatives:alternative,
     source_catalog:SOURCE_CATALOG.filter(s=>s.topics.includes(topic)),ranking_method:{classification:'editorial_heuristic',weights:{entity_relevance:.4,source_tier:.25,recency:.2,specific_update_terms:.15},publisher_diversity:'First two per publisher promoted; remaining items follow.',accuracy_validated:false},
     experimental_sensitivity:{status:'not_calibrated',affects_forecast:false,probability_adjustment:null,reason:'News and social opinions remain inspectable context. No held-out source-to-outcome evaluation supports a probability adjustment.'}};
