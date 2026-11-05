@@ -8,7 +8,7 @@ function Answer({text}) {
     const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);return link?<a key={j} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>:part;
   })}</p>)}</div>;
 }
-export default function Assistant({market,research,onClose}) {
+export default function Assistant({market,research,onClose,model='validated'}) {
   const [messages,setMessages]=useState([]),[input,setInput]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const cancel=useRef(null),tail=useRef(null),panel=useRef(null);usePanelFocus(panel,onClose,{modal:false});
   useEffect(()=>()=>cancel.current?.abort(),[]);
@@ -19,7 +19,7 @@ export default function Assistant({market,research,onClose}) {
     const controller=new AbortController();cancel.current=controller;
     try {
       const response=await fetch('/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
-        body:JSON.stringify({ticker:market.ticker,messages:history.slice(-8)})});
+        body:JSON.stringify({ticker:market.ticker,model,messages:history.slice(-8)})});
       if(!response.ok) {let detail;try{detail=await response.json();}catch{}throw new Error(detail?.error||'The assistant is temporarily unavailable');}
       if(!(response.headers.get('content-type')||'').includes('text/plain'))throw new Error('The assistant returned an unexpected response');
       const reader=response.body.getReader(),decoder=new TextDecoder();let text='';

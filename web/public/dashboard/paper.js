@@ -62,7 +62,8 @@
   if(data?.version!==1||!Array.isArray(data.positions)||!Array.isArray(data.trades))return emptyLedger();
   const positions=data.positions.filter(p=>typeof p.id==='string'&&validTicker(p.ticker)&&['yes','no'].includes(p.side)&&['original_quantity','remaining_quantity','entry_cost','entry_fee','remaining_basis','realized_pnl'].every(k=>Number.isFinite(p[k]))&&p.original_quantity>0&&p.remaining_quantity>=0&&p.remaining_quantity<=p.original_quantity+1e-8&&p.remaining_basis>=-1e-8).slice(-1000);
   const ids=new Set(positions.map(p=>p.id));
-  const trades=data.trades.filter(t=>typeof t.id==='string'&&ids.has(t.position_id)&&validTicker(t.ticker)&&['buy','sell'].includes(t.action)&&Number.isFinite(t.filled)&&t.filled>0&&Number.isFinite(t.cash)&&Number.isFinite(t.fee)).slice(-5000);
+  const trades=data.trades.filter(t=>typeof t.id==='string'&&ids.has(t.position_id)&&validTicker(t.ticker)&&['buy','sell','settle'].includes(t.action)&&Number.isFinite(t.filled)&&t.filled>0&&Number.isFinite(t.cash)&&Number.isFinite(t.fee)&&
+   (t.action!=='settle'||(['yes','no'].includes(t.settlement_result)&&t.fee===0&&typeof t.quote_source==='string'&&Number.isFinite(Date.parse(t.quote_as_of))))).slice(-5000);
   return {version:1,positions,trades};
  }
  function applyOpen(ledger,execution,{id,time=new Date().toISOString(),title='',vertical=''}={}){
@@ -88,6 +89,22 @@
   const exit=estimate(book,position.ticker,position.side,'sell',position.remaining_quantity,options);
   const basis=position.remaining_basis*exit.filled/position.remaining_quantity;
   return {...exit,net_exit_value:exit.cash,marked_basis:round(basis),unrealized_pnl:exit.filled?round(exit.cash-basis):null,complete:exit.unfilled<1e-8};
+ }
+ function applySettlement(ledger,positionId,evidence,{id,time=new Date().toISOString(),now=Date.now()}={}){
+  const p=ledger.positions.find(row=>row.id===positionId),market=evidence?.market;
+  if(!p||!id||ledger.trades.some(t=>t.id===id)||p.remaining_quantity<=0)throw new Error('A unique settlement and open paper position are required.');
+  if(market?.ticker!==p.ticker||!['settled','finalized'].includes(market.status)||!['yes','no'].includes(market.result)||market.market_type&&market.market_type!=='binary')throw new Error('A confirmed matching binary exchange settlement is required.');
+  const age=now-Date.parse(evidence.as_of);
+  if(!Number.isFinite(age)||age < -5000||age>300000)throw new Error('Refresh the exchange settlement before recording it.');
+  let source;try{source=new URL(evidence.source_url);}catch{throw new Error('Exchange settlement provenance is missing.');}
+  if(source.protocol!=='https:'||source.username||source.password||!['api.elections.kalshi.com','external-api.kalshi.com','api.kalshi.com'].includes(source.hostname)||!source.pathname.endsWith('/markets/'+encodeURIComponent(p.ticker)))throw new Error('Settlement must come from the matching public exchange contract.');
+  const price=market.result===p.side?1:0,cash=round(p.remaining_quantity*price),realized=round(cash-p.remaining_basis);
+  const updated={...p,remaining_quantity:0,remaining_basis:0,realized_pnl:round(p.realized_pnl+realized),closed_at:time,
+   settlement_result:market.result,settlement_observed_at:evidence.as_of,settlement_source:source.href};
+  const trade={id,position_id:p.id,ticker:p.ticker,side:p.side,action:'settle',filled:p.remaining_quantity,unfilled:0,vwap:price,
+   notional:cash,fee:0,cash,occurred_at:time,released_basis:p.remaining_basis,realized_pnl:realized,settlement_result:market.result,
+   quote_as_of:evidence.as_of,quote_source:source.href,classification:'SIMULATED · confirmed binary settlement; no bid execution',assumptions:{settlement_fee:0}};
+  return {version:1,positions:ledger.positions.map(row=>row.id===p.id?updated:row),trades:[...ledger.trades,trade].slice(-5000)};
  }
  function csv(rows){
   const keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];
@@ -174,5 +191,5 @@
    return h(dataApp.DataComponent,{id:'km-paper',queryId:'scenarios',kind:'table',title:'Paper trading · positions and execution journal',variant:'card',sourceRows:rows,displayRows:rows,description:'Simulated browser-local transactions from fresh matching public books; fee assumptions and source timestamps are saved with each execution. No real orders.'},body);
   };
  }
- root.KalshiPaper={checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,markPosition,csv,createPanel};
+ root.KalshiPaper={checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,applySettlement,markPosition,csv,createPanel};
 })(globalThis);
