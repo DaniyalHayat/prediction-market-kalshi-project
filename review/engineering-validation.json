@@ -1,0 +1,64 @@
+{
+  "verified_at_utc": "2026-11-05T01:59:25Z",
+  "source_revision": "aadf8948897305c503965ef3bf7552041be32eeb",
+  "branch": "feature/black-evidence-lab-v3",
+  "scope": "Local review branch, including pending root analytics changes present during validation",
+  "production_deployed": false,
+  "cloud_resources_changed": false,
+  "real_accounts_created": false,
+  "overall_status": "passed",
+  "checks": {
+    "npm_test": {
+      "status": "passed",
+      "command": "npm test",
+      "node_tests": {"total": 266, "passed": 264, "failed": 0, "skipped": 2},
+      "typescript_tests": {"total": 8, "passed": 8, "failed": 0, "skipped": 0},
+      "combined": {"total": 274, "passed": 272, "failed": 0, "skipped": 2},
+      "database": "Disposable local PostgreSQL 17 *_test database; no production database",
+      "credential_isolation": "Cloud, account, provider and remote-backend credentials removed from the test process environment",
+      "intentional_skips": ["Opt-in actual MiniLM inference", "Opt-in separate semantic database"],
+      "skip_followup": "Both opt-in paths were independently executed successfully by the evidence agent, including native pgvector and plain-array PostgreSQL fallback; see web/docs/semantic-verification.json"
+    },
+    "typecheck": {"status": "passed", "command": "npm run typecheck", "exit_code": 0},
+    "next_production_build": {
+      "status": "passed",
+      "command": "npm run build",
+      "exit_code": 0,
+      "next_version": "16.4.3",
+      "static_routes": ["/", "/_not-found"],
+      "dynamic_routes": ["/api/[...path]", "/api/assistant", "/api/paper/size"],
+      "local_development_server": "Stopped before production build to avoid shared .next interference",
+      "network_controls": "Next telemetry disabled; semantic inference and background market pipeline disabled for build",
+      "nonblocking_warning": "Next ignored an unrelated package-lock.json outside the repository"
+    },
+    "terraform": {
+      "status": "passed",
+      "version": "1.17.1",
+      "provider": "hashicorp/aws 6.72.0",
+      "format": "passed",
+      "validate": "passed",
+      "mocked_safety_plans": {"passed": 5, "failed": 0},
+      "cloud_api_calls": false,
+      "apply_executed": false
+    },
+    "account_migration": {
+      "status": "passed",
+      "migration": "004_owner_portfolios.sql",
+      "applied_to": "Disposable local PostgreSQL 17 only",
+      "supabase_mirror": "202611040004_owner_portfolios.sql",
+      "mirror_content": "Identical after line-ending normalization",
+      "checks": ["Concurrent first-write CAS", "Concurrent update CAS", "Stale revision conflict", "Owner-scoped SQL", "Cookie tampering and purpose separation", "Session refresh and revocation", "CSRF origin and Fetch Metadata", "No real Auth provider calls"]
+    },
+    "runtime": {
+      "status": "passed",
+      "checks": ["Service-only telemetry snapshot", "Service-only Prometheus text", "Public proxy denies internal diagnostics", "Private cookie forwarding", "Multiple Set-Cookie preservation", "Bounded sampled logging", "Worker-thread SPSC order and overflow", "Actual loopback protobuf/gRPC exchange", "Signed log drain filtering", "Local read-only operator surface"],
+      "provider_duration_scope": "HTTP attempts end at response headers; Supabase Auth durations include the SDK operation; complete request timings include body parsing and handler work",
+      "database_duration_scope": "Explicit diagnostic probes only, not every application query"
+    }
+  },
+  "limits": [
+    "Local tests and synthetic benchmarks do not establish production latency, higher trading accuracy, source truth or profitability.",
+    "Terraform plans are mocked and do not establish account-specific resource availability or operational recovery.",
+    "Account activation, hosted signup settings, external telemetry/drain registration and all production deployment remain pending review."
+  ]
+}
