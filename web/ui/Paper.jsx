@@ -10,7 +10,7 @@ import PaperCash from './PaperCash.jsx';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 import {attachEntryContext} from './paper-state.mjs';
 export default function Paper({market,book,forecast,fees,now=Date.now(),preset,onPortfolio}) {
-  const {engine,ledger,bankroll,adjustCash,commit,storageError}=usePaperLedger();
+  const {engine,ledger,bankroll,adjustCash,commit,storageError,retry,retrying}=usePaperLedger();
   const [budget,setBudget]=useState(25),
     [low,setLow]=useState(''),[point,setPoint]=useState(''),[high,setHigh]=useState(''),[side,setSide]=useState('yes'),[quantity,setQuantity]=useState(10),
     [message,setMessage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[scenarioSource,setScenarioSource]=useState('subjective'),
@@ -84,7 +84,7 @@ export default function Paper({market,book,forecast,fees,now=Date.now(),preset,o
     <div className="field-grid"><label>Paper contracts<input type="number" min="1" max="10000" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label><div className="field-action">{sizing?.contracts>0&&<button className="secondary" onClick={()=>setQuantity(sizing.contracts)}>Use calculated size</button>}</div></div>
     <div className="toolbar"><button className="primary" disabled={!engine||!book||busy||!canEnter||!capital?.available} onClick={open}>{busy?'Checking…':'Record paper buy'}</button><button className="secondary" disabled={!validForecast||busy||!canEnter} onClick={freeze}>Register forecast</button></div>
     <p className="footnote">Fee coefficient {coefficient.toFixed(4)}{verifiedFee?' from series metadata':' is a general assumption'}. Entry is limited to observed asks within 2¢. Available cash includes recorded closes, settlement and fees. Paper money is simulated.</p>
-    {storageError&&<p className="notice error" role="alert">{storageError}</p>}{message&&<p className="notice success" role="status">{message}<button className="text-button" onClick={onPortfolio}>View performance</button></p>}{error&&<p className="notice error" role="alert">{error}</p>}
+    {storageError&&<p className="notice error" role="alert">{storageError}<button className="text-button" disabled={retrying} onClick={retry}>{retrying?'Reconnecting…':'Retry paper account'}</button></p>}{message&&<p className="notice success" role="status">{message}<button className="text-button" onClick={onPortfolio}>View performance</button></p>}{error&&<p className="notice error" role="alert">{error}</p>}
     <div className="section-title"><h3>Paper ledger</h3><button className="text-button" disabled={!ledger} onClick={()=>exportJSON(ledger,'kalshi-paper-ledger.json')}><Download size={14}/>Export</button></div>
     {ledger?.positions.length?<div className="table-scroll"><table><thead><tr><th>Position</th><th>Open contracts</th><th>Open basis</th><th>Realized P/L</th><th/></tr></thead><tbody>{ledger.positions.map(p=><tr key={p.id}><td><strong>{p.side.toUpperCase()}</strong><small>{p.title||p.ticker}</small></td><td>{count(p.remaining_quantity)}</td><td>{dollars(p.remaining_basis)}</td><td>{dollars(p.realized_pnl)}</td><td>{p.remaining_quantity>0&&<button className="text-button" disabled={busy} onClick={()=>close(p)}>Close at bids</button>}</td></tr>)}</tbody></table></div>:<p className="empty">No paper positions yet.</p>}
   </div>;

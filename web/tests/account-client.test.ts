@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {loadAccountSession,accountSnapshot,resolveAccountConflict,assertPaperSession} from '../ui/useAccount.jsx';
 import {PAPER_STORAGE,initializePaperAccount} from '../ui/paper-state.mjs';
 import {ACTIVE_ACCOUNT,accountCacheKey} from '../ui/guest-session.mjs';
+import {readVerifiedPaperLedger} from '../ui/paper-session.mjs';
+import '../public/dashboard/paper.js';
 const memory=new Map<string,string>();
 Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(key:string)=>memory.get(key)??null,setItem:(key:string,value:string)=>memory.set(key,value),removeItem:(key:string)=>memory.delete(key)}});
 Object.defineProperty(globalThis,'window',{configurable:true,value:new EventTarget()});
@@ -46,4 +48,27 @@ test('a late session response cannot replace a newer verified account identity',
   const old=loadAccountSession(true),current=loadAccountSession(true);await current;assert.equal(sessionKind(),'guest');
   const retained=memory.get(PAPER_STORAGE);release(json(owner));await old;
   assert.equal(sessionKind(),'guest');assert.equal(memory.get(ACTIVE_ACCOUNT),'guest:'+guest.guest.id);assert.equal(memory.get(PAPER_STORAGE),retained);assert.equal(calls,2);
+});
+
+test('an explicit retry after initial 503 restores guest paper funds without resetting retained records',async()=>{
+  const engine=(globalThis as any).KalshiPaper;
+  for(const existing of [null,JSON.stringify(ledger(25))]){
+    memory.clear();memory.set(ACTIVE_ACCOUNT,'guest:'+guest.guest.id);if(existing)memory.set(PAPER_STORAGE,existing);
+    let calls=0;globalThis.fetch=async()=>++calls===1?json({error:'Temporarily unavailable'},503):json(guest);
+    assert.equal(await loadAccountSession(true),null);assert.equal(accountSnapshot().status,'error');assert.equal(memory.get(PAPER_STORAGE),existing??undefined);
+    assert.throws(()=>readVerifiedPaperLedger({engine,storage:localStorage,assertSession:assertPaperSession}),/loading/);
+    assert.equal((await loadAccountSession(true) as any).kind,'guest');
+    const recovered=readVerifiedPaperLedger({engine,storage:localStorage,assertSession:assertPaperSession});
+    assert.equal(recovered.starting_balance,20000);assert.equal(calls,2);
+    if(existing)assert.equal(memory.get(PAPER_STORAGE),existing);else assert.equal(JSON.parse(memory.get(PAPER_STORAGE)!).starting_balance,20000);
+    await loadAccountSession();assert.equal(calls,2);
+  }
+});
+
+test('an owner identity outage cannot initialize or switch to a guest paper account',async()=>{
+  memory.clear();const retained=JSON.stringify(ledger(75));memory.set(ACTIVE_ACCOUNT,'owner:'+owner.owner.email);memory.set(PAPER_STORAGE,retained);
+  globalThis.fetch=async()=>json({error:'Identity provider temporarily unavailable'},503);
+  assert.equal(await loadAccountSession(true),null);
+  assert.throws(()=>readVerifiedPaperLedger({engine:(globalThis as any).KalshiPaper,storage:localStorage,assertSession:assertPaperSession}),/loading/);
+  assert.equal(memory.get(ACTIVE_ACCOUNT),'owner:'+owner.owner.email);assert.equal(memory.get(PAPER_STORAGE),retained);
 });
