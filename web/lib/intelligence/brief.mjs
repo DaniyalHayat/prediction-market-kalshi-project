@@ -40,11 +40,17 @@ export function sportsNewsContext(market,category) {
     return {league:'NFL',teams,aliases,query:'"NFL" ('+aliases.map(name=>'"'+name+'"').join(' OR ')+') sourcelang:english'};
   }
   if(ticker.startsWith('KXNBAGAME-')){
-    const team=NBA_NEWS_TEAMS[ticker.split('-').at(-1)];
+    const [,fixture,outcome]=ticker.split('-'),team=NBA_NEWS_TEAMS[outcome];
     if(!team)return {unsupported:true};
-    const nickname=team.endsWith('Trail Blazers')?'Trail Blazers':team.split(' ').at(-1);
-    const aliases=[team,nickname,...(team==='Philadelphia 76ers'?['Sixers']:[])];
-    return {league:'NBA',teams:[team],aliases,query:'"NBA" ('+aliases.map(s=>'"'+s+'"').join(' OR ')+') sourcelang:english'};
+    const codes=fixture?.match(/^\d{2}[A-Z]{3}\d{2}([A-Z]{4,8})$/)?.[1]||'';
+    const pairs=Object.keys(NBA_NEWS_TEAMS).flatMap(code=>{
+      const other=codes.startsWith(code)?NBA_NEWS_TEAMS[codes.slice(code.length)]:null;
+      const first=NBA_NEWS_TEAMS[code];
+      return other&&first!==other&&(first===team||other===team)?[[first,other]]:[];
+    });
+    const teams=pairs.length===1?pairs[0]:[team],aliases=teams.flatMap(name=>[name,
+      name.endsWith('Trail Blazers')?'Trail Blazers':name.split(' ').at(-1),...(name==='Philadelphia 76ers'?['Sixers']:[])]);
+    return {league:'NBA',teams,aliases,query:'"NBA" ('+aliases.map(s=>'"'+s+'"').join(' OR ')+') sourcelang:english'};
   }
   if(ticker.startsWith('KXEPLGAME-')){
     const matchup=clean(market.rules_primary).match(/\bthe ([A-Za-z0-9 &'’.-]{2,90}?) (?:vs\.?|versus|at) ([A-Za-z0-9 &'’.-]{2,90}?) professional EPL soccer game\b/i);
@@ -189,22 +195,29 @@ export async function fetchPreviewHeadlines(market,{fetcher=fetch,now=Date.now,s
   const series=market?.ticker?.split('-')[0],category=CATEGORIES.find(item=>item.series.includes(series));
   const query=newsQuery(market,category);
   if(!query)return {status:'not_applicable',articles:[]};
-  return fetchRssHeadlines(query,{fetcher,now,state,timeoutMs:3000});
+  return filterSportsHeadlines(await fetchRssHeadlines(query,{fetcher,now,state,timeoutMs:3000}),sportsNewsContext(market,category));
 }
 
-export async function fetchHeadlines(query, { fetcher = fetch, now = Date.now, state = newsState } = {}) {
+export async function fetchContractHeadlines(market){
+  const series=market?.ticker?.split('-')[0],category=CATEGORIES.find(item=>item.series.includes(series));
+  const query=newsQuery(market,category);
+  const value=await fetchHeadlines(query,{timeoutMs:2500,rssTimeoutMs:3000});
+  return filterSportsHeadlines(value,sportsNewsContext(market,category));
+}
+
+export async function fetchHeadlines(query, { fetcher = fetch, now = Date.now, state = newsState, timeoutMs=12000, rssTimeoutMs=12000 } = {}) {
   if (!query) return { status: 'not_queried', articles: [], query: null, source_url: null, retrieved_at: null };
   const url = new URL(NEWS_ENDPOINT);
   url.search = new URLSearchParams({ query: query.slice(0, 350), mode: 'artlist', format: 'json',
     maxrecords: '15', timespan: '7d', sort: 'datedesc' }).toString();
   const key = url.href, cached = state.cache.get(key);
-  if (cached && now() - cached.at < 300000) return cached.value;
-  if (state.retryAt > now()) return fetchRssHeadlines(query, { fetcher, now, state, reason: 'GDELT retrieval is paused after a provider rate limit' });
+  if (cached && now() - cached.at < (cached.ttl||300000)) return cached.value;
+  if (state.retryAt > now()) return fetchRssHeadlines(query, { fetcher, now, state, timeoutMs:rssTimeoutMs, reason: 'GDELT retrieval is paused after a provider rate limit' });
   if (state.inflight.has(key)) return state.inflight.get(key);
   const task = (async () => {
     try {
       const response = await fetcher(key, { method: 'GET', headers: { Accept: 'application/json',
-        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(12000), redirect: 'error', cache: 'no-store' });
+        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
       if (response.status === 429) { state.retryAt = now() + 600000; throw new Error('GDELT returned HTTP 429; retries paused'); }
       if (!response.ok) throw new Error('GDELT returned HTTP ' + response.status);
       const bytes = await boundedNewsBytes(response), articles = parseHeadlines(JSON.parse(bytes.toString('utf8')), now());
@@ -217,7 +230,10 @@ export async function fetchHeadlines(query, { fetcher = fetch, now = Date.now, s
       state.cache.set(key, { at: now(), value });
       return value;
     } catch (error) {
-      return fetchRssHeadlines(query, { fetcher, now, state, reason: clean(error.message, 250) });
+      const value=await fetchRssHeadlines(query,{fetcher,now,state,timeoutMs:rssTimeoutMs,reason:clean(error.message,250)});
+      if(state.cache.size>=24)state.cache.delete(state.cache.keys().next().value);
+      state.cache.set(key,{at:now(),ttl:value.status==='unavailable'?30000:60000,value});
+      return value;
     }
   })();
   state.inflight.set(key, task);

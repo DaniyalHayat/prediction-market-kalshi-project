@@ -38,10 +38,33 @@ test('reciprocal-rank fusion promotes independent lexical/semantic agreement wit
   const result=reciprocalRankFusion([{id:'lexical'},{id:'both'}],[{id:'semantic'},{id:'both'}]);assert.equal(result[0].id,'both');assert.equal(result[0].lexical_rank,2);assert.equal(result[0].semantic_rank,2);assert.equal(result[0].confidence,undefined);
 });
 test('evidence route propagates exact selected trade and Reddit opt-in, while retained search performs no source load',async()=>{
-  const calls=[],deps={workspaceResearch:async(t,options)=>{calls.push(['research',t,options]);return {market,news:{articles:[]},extensions:{sports:{league:'nba'},music:{scope:'fixture'}}};},contractEvidence:async(m,options)=>{calls.push(['evidence',m,options]);return evidence;},retainPublicEvidence:async(m,e,options)=>{calls.push(['retain',m,e,options]);return {status:'retained'};}};
-  const result=await workspaceEvidence(ticker,{reddit:true,includeX:false},deps);assert.equal(result.retention.status,'retained');assert.equal(calls[1][2].selectedTicker,ticker);assert.equal(calls[1][2].redditEnabled,true);assert.equal(calls[1][2].includeX,false);assert.equal(calls[1][2].sports.league,'nba');assert.equal(calls[2][3].enabled,true);
+  const calls=[],sources=[{name:'Fixture',url:'https://example.org/rules'}];
+  const deps={marketDetails:async t=>{assert.equal(t,ticker);return {market};},request:async path=>{assert.equal(path,'/series/KXNBAGAME');return {data:{series:{settlement_sources:sources}}};},
+    workspaceResearch:async()=>{throw new Error('Evidence must never run the forecast');},contractEvidence:async(m,options)=>{calls.push(['evidence',m,options]);assert.deepEqual(await options.settlementSources,sources);return evidence;},
+    retainPublicEvidence:async(m,e,options)=>{calls.push(['retain',m,e,options]);return {status:'retained'};}};
+  const result=await workspaceEvidence(ticker,{reddit:true,includeX:false},deps);
+  assert.equal(result.retention.status,'retained');assert.equal(calls[0][2].selectedTicker,ticker);assert.equal(calls[0][2].redditEnabled,true);assert.equal(calls[0][2].includeX,false);
+  assert.equal(calls[1][3].enabled,true);assert.equal(calls[1][3].deferEmbedding,true);
   let search=0,loads=0;await workspaceGET('workspace/evidence/search',new URLSearchParams({ticker,q:'injury report'}),{workspaceEvidence:async()=>{loads++;},searchRetainedEvidence:async(t,q)=>{search++;assert.equal(t,ticker);assert.equal(q,'injury report');return {citations:[]};}});assert.equal(search,1);assert.equal(loads,0);
   await assert.rejects(workspaceGET('workspace/evidence',new URLSearchParams({ticker,reddit:'yes'}),{}),/0 or 1/);
+});
+test('deferred inference serves lexical results immediately and never restores superseded documents',async()=>{
+  const localTicker='FIXTURE-'+randomUUID(),m={...market,ticker:localTicker},e={...evidence,ticker:localTicker};
+  let start,finish;const started=new Promise(resolve=>{start=resolve;});
+  const repository=createEvidenceRepository({now:()=>NOW,embed:async texts=>{
+    if(texts.length>1){start();await new Promise(resolve=>{finish=resolve;});}
+    return fixtureEmbed(texts);
+  }});
+  const indexed=await repository.index(m,e,{enabled:true,selectedTicker:localTicker,deferEmbedding:true});
+  assert.equal(indexed.semantic_status,'queued');
+  await started;
+  const lexical=await repository.search(localTicker,'What happened to the ankle injury?');
+  assert.equal(lexical.retrieval.mode,'lexical_only');assert.equal(lexical.citations[0].url,'https://example.org/injury');
+  await repository.index(m,{...e,items:[e.items[0]]},{enabled:true,selectedTicker:localTicker,deferEmbedding:true});
+  finish();
+  await new Promise(resolve=>setImmediate(resolve));
+  const hybrid=await repository.search(localTicker,'ankle injury');
+  assert.equal(hybrid.retrieval.mode,'hybrid_rrf');assert.ok(hybrid.citations.every(row=>row.url!=='https://example.org/film'));
 });
 test('ordinary full research cannot automatically load paid X feeds or alternative evidence charts',async()=>{
   let posts=0,headlineCalls=0;const deps={marketDetails:async()=>({market}),book:async()=>null,marketFees:async()=>null,marketBrief:async(t,o,d)=>{const news=await d.headlines();headlineCalls++;assert.equal(news.status,'not_queried');return {market,forecast:{probability:null},decision:{side:'insufficient_edge',reasons:['Fixture']},sources:[],errors:[]};},sportsResearch:async()=>null,musicResearch:async(m,o)=>{assert.equal(o.includeAlternatives,false);return null;},chartPosts:async()=>{posts++;return {posts:[]};}};

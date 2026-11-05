@@ -23,7 +23,8 @@ function upstreamFailure(error,phase,response){
 }
 export function retryDelay(headers,status,now=Date.now()){
   const raw=headers.get('retry-after'),numeric=raw===null?NaN:Number(raw),date=Date.parse(raw||''),reset=Number(headers.get('x-rate-limit-reset'))*1000;
-  const candidates=[Number.isFinite(numeric)?numeric*1000:0,Number.isFinite(date)?date-now:0,reset>now?reset-now:0];
+  const redditReset=Number(headers.get('x-ratelimit-reset'))*1000;
+  const candidates=[Number.isFinite(numeric)?numeric*1000:0,Number.isFinite(date)?date-now:0,reset>now?reset-now:0,Number.isFinite(redditReset)?redditReset:0];
   return Math.max(status===429?60000:status===402?3600000:15000,...candidates);
 }
 export function recordProviderStatus(id,value){status.set(id,{id,name:id,...value});}
@@ -63,7 +64,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
       cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,response.status));
     }
     else if(response.status===401||response.status===403)cooldowns.set(parsed.hostname,Date.now()+300000);
-    else if(response.headers.get('x-rate-limit-remaining')==='0')cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,429));
+    else if(response.headers.get('x-rate-limit-remaining')==='0'||response.headers.get('x-ratelimit-remaining')==='0')cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,429));
     let data,raw;
     try{
     if(format==='json')({data,raw}=await readJSON(response,{source:id,maximumBytes}));
