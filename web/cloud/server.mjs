@@ -70,11 +70,15 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     };
     return update('global',1200)&&update(identity,120);
   }
-  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000};
+  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000,'research-reads':3000,'stream-opens':3000};
   const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history']);
   async function quota(weight=1,kind='work'){
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
-    if(storageEnabled()&&!await storage().consume(kind+'#'+new Date(now()).toISOString().slice(0,10),workLimits[kind],weight))throw Object.assign(new Error('Daily '+kind.replace('-',' ')+' allowance reached'),{status:429});
+    const current=now(),day=new Date(current).toISOString().slice(0,10);
+    if(storageEnabled()&&!await storage().consume(kind+'#'+day,workLimits[kind],weight)){
+      const retryAfter=Math.ceil((Date.parse(day+'T00:00:00Z')+86400000-current)/1000);
+      throw Object.assign(new Error('Daily '+kind.replace('-',' ')+' allowance reached'),{status:429,retryAfter});
+    }
   }
   async function sse(req,res,tickers,identity,multiplex=false){
     tickers=[...new Set(tickers.map(validateTicker))];
@@ -87,7 +91,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       const count=(streamByIP.get(identity)||1)-1;if(count)streamByIP.set(identity,count);else streamByIP.delete(identity);};
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
-    try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
+    try{await quota(3,'stream-opens');if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
     catch(error){releaseCount();throw error;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
     const removers=[],latest=new Map();let ticks=0,closed=false,blockedSince=0,checking=false,refilling=false,bytesRemaining=65536;
@@ -223,6 +227,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       }
       if(url.pathname==='/api/workspace/position-review')await quota(5,'paper-scans');
       else if(req.method==='GET'&&paperReadRoutes.has(url.pathname))await quota(1,'paper-reads');
+      else if(req.method==='GET'&&['/api/workspace/research','/api/workspace/evidence'].includes(url.pathname))await quota(5,'research-reads');
       else await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
@@ -231,6 +236,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       res.writeHead(output.status,Object.fromEntries(output.headers));res.end(buffer);
     }catch(error){
       if(res.headersSent)return res.end();
+      if(error.status===429&&Number.isSafeInteger(error.retryAfter)&&error.retryAfter>0)res.setHeader('Retry-After',error.retryAfter);
       const status=error.name==='ConditionalCheckFailedException'?409:error.status||(error instanceof SyntaxError||error instanceof RangeError||error instanceof URIError?400:503);
       const message=error instanceof SyntaxError?'Request body must be valid JSON':error.name==='ConditionalCheckFailedException'?'A forecast for this contract is already registered in this journal':
         status<500?error.message:'The data service is temporarily unavailable. Try again shortly.';
