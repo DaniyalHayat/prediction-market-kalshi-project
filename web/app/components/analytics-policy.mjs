@@ -2,12 +2,24 @@ const categories=new Set(['sports','macro','crypto','travel','weather','science'
 const routes=new Set(['/','/lab.html','/dashboard/index.html']);
 export const ANALYTICS_CONSENT_KEY='predictir:analytics-consent:v1';
 export const deniedConsent={analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'};
+export function analyticsProvider({gtm='',ga=''}={}){
+  return /^GTM-[A-Z0-9]+$/.test(gtm)?{kind:'gtm',id:gtm}:/^G-[A-Z0-9]+$/.test(ga)?{kind:'ga',id:ga}:null;
+}
+const publicTicker=value=>typeof value==='string'&&value.length<=140&&/^KX[A-Z0-9_.]{1,40}-[A-Z0-9_.-]+$/.test(value)&&!value.includes('..');
 
 export function sanitizeAnalyticsEvent(name,input={}) {
   if(!input||typeof input!=='object'||Array.isArray(input))return null;
+  const ticker=input.ticker??input.market_ticker,action=input.action??input.cash_action??input.save_action,mode=input.mode??(input.reading_mode==='long_read'?'long':input.reading_mode);
   if(name==='category_select')return categories.has(input.category)?{name,params:{market_category:input.category}}:null;
-  if(name!=='market_select'||typeof input.ticker!=='string'||input.ticker.length>140||!/^KX[A-Z0-9_.]{1,40}-[A-Z0-9_.-]+$/.test(input.ticker)||input.ticker.includes('..'))return null;
-  return {name,params:{market_ticker:input.ticker,...(categories.has(input.category)?{market_category:input.category}:{})}};
+  if(name==='paper_cash_adjustment')return ['add','decrease'].includes(action)?{name,params:{cash_action:action}}:null;
+  if(['analysis_read_mode','news_read_mode'].includes(name))return ['summary','long'].includes(mode)?{name,params:{reading_mode:mode==='long'?'long_read':'summary',...(publicTicker(ticker)?{market_ticker:ticker}:{})}}:null;
+  if(['paper_entry','paper_close','saved_market'].includes(name))return publicTicker(ticker)?{name,params:{market_ticker:ticker,...(name==='saved_market'&&['save','remove'].includes(action)?{save_action:action}:{})}}:null;
+  if(name!=='market_select'||!publicTicker(ticker))return null;
+  return {name,params:{market_ticker:ticker,...(categories.has(input.category)?{market_category:input.category}:{})}};
+}
+export function emitAnalytics(name,input){
+  if(typeof window==='undefined')return;
+  const event=sanitizeAnalyticsEvent(name,input);if(event)window.dispatchEvent(new CustomEvent('market-lab:analytics',{detail:event}));
 }
 export function analyticsPageContext(address,referrer='') {
   let path='/',pageOrigin='https://predictir.dev',origin='';

@@ -6,8 +6,13 @@ export function paperCapital(ledger,startingBalance) {
     committed+=position.remaining_basis;realized+=position.realized_pnl;
   }
   if(!Number.isFinite(committed)||!Number.isFinite(realized))throw new RangeError('The paper ledger exceeds supported cash amounts');
-  const balance=startingBalance+realized-committed;
+  let cashAdjustments=0;
+  for(const movement of ledger.cash_movements||[]){
+    if(!['add','decrease'].includes(movement.action)||!Number.isFinite(movement.amount)||movement.amount<=0)throw new RangeError('The retained paper ledger contains an invalid cash adjustment');
+    cashAdjustments+=movement.action==='add'?movement.amount:-movement.amount;
+  }
+  const balance=startingBalance+cashAdjustments+realized-committed;
   if(!Number.isFinite(balance)||Math.abs(balance)>1e12)throw new RangeError('The paper ledger exceeds supported cash amounts');
   const available=Math.round(balance*1e10)/1e10;
-  return {startingBalance,committed,realized,available:Math.max(0,available),shortfall:Math.max(0,-available)};
+  return {startingBalance,cashAdjustments,committed,realized,available:Math.max(0,available),shortfall:Math.max(0,-available)};
 }

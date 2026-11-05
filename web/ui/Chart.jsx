@@ -10,7 +10,7 @@ export default function Chart({rows=[],height=210,unit='price',label='Observed p
     if(unique.length<2)return;
     import('uplot').then(({default:UPlot})=>{
       if(disposed||!host.current)return;
-      const colors=getComputedStyle(host.current),stroke=colors.getPropertyValue('--accent').trim()||'#8db8ff',muted=colors.getPropertyValue('--muted').trim()||'#a9b6c8',line=colors.getPropertyValue('--line').trim()||'#2b3647';
+      const colors=getComputedStyle(host.current),stroke=colors.getPropertyValue('--accent').trim()||'#ededed',muted=colors.getPropertyValue('--muted').trim()||'#a1a1a1',line=colors.getPropertyValue('--line').trim()||'#262626';
       const format=value=>unit==='price'?`${(value*100).toFixed(0)}¢`:unit==='usd'?value.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:1}):value.toLocaleString(undefined,{maximumFractionDigits:1});
       plot=new UPlot({width:host.current.clientWidth,height,legend:{show:false},cursor:{drag:{x:false,y:false}},
         scales:{x:{time:true},y:{auto:true}},series:[{}, {stroke,width:2,fill:stroke+'10',value:(_,v)=>v===null?'—':format(v)}],

@@ -64,7 +64,21 @@
   const ids=new Set(positions.map(p=>p.id));
   const trades=data.trades.filter(t=>typeof t.id==='string'&&ids.has(t.position_id)&&validTicker(t.ticker)&&['buy','sell','settle'].includes(t.action)&&Number.isFinite(t.filled)&&t.filled>0&&Number.isFinite(t.cash)&&Number.isFinite(t.fee)&&
    (t.action!=='settle'||(['yes','no'].includes(t.settlement_result)&&t.fee===0&&typeof t.quote_source==='string'&&Number.isFinite(Date.parse(t.quote_as_of))))).slice(-5000);
-  return {version:1,positions,trades};
+  const account={};
+  if(data.starting_balance!==undefined){
+   if(!Number.isFinite(data.starting_balance)||data.starting_balance<=0||data.starting_balance>1e9)throw new Error('The retained paper starting balance is invalid.');
+   account.starting_balance=data.starting_balance;
+  }
+  if(data.cash_movements!==undefined){
+   if(!Array.isArray(data.cash_movements)||data.cash_movements.length>5000)throw new Error('The retained cash adjustment journal is invalid.');
+   const seen=new Set();
+   for(const row of data.cash_movements){
+    if(typeof row.id!=='string'||!row.id||seen.has(row.id)||!['add','decrease'].includes(row.action)||!Number.isFinite(row.amount)||row.amount<=0||row.amount>1e9||Math.abs(row.amount*100-Math.round(row.amount*100))>1e-5||!Number.isFinite(Date.parse(row.occurred_at)))throw new Error('The retained cash adjustment journal is invalid.');
+    seen.add(row.id);
+   }
+   account.cash_movements=data.cash_movements.map(({id,action,amount,occurred_at})=>({id,action,amount,occurred_at}));
+  }
+  return {version:1,positions,trades,...account};
  }
  function applyOpen(ledger,execution,{id,time=new Date().toISOString(),title='',vertical=''}={}){
   if(!id||ledger.positions.some(p=>p.id===id))throw new Error('A unique paper-trade identifier is required.');
@@ -72,7 +86,7 @@
   if(ledger.positions.filter(p=>p.remaining_quantity>1e-8).length>=20)throw new Error('Close an open paper position before adding another; maximum 20 open positions.');
   const position={id,ticker:execution.ticker,title,vertical,side:execution.side,opened_at:time,original_quantity:execution.filled,remaining_quantity:execution.filled,entry_cost:execution.notional,entry_fee:execution.fee,remaining_basis:execution.cash,realized_pnl:0,quote_as_of:execution.quote_as_of,quote_source:execution.quote_source,entry_assumptions:execution.assumptions};
   const trade={...execution,id:`${id}:buy`,position_id:id,occurred_at:time};
-  return {version:1,positions:[...ledger.positions,position].slice(-1000),trades:[...ledger.trades,trade].slice(-5000)};
+  return {...ledger,version:1,positions:[...ledger.positions,position].slice(-1000),trades:[...ledger.trades,trade].slice(-5000)};
  }
  function applyClose(ledger,positionId,execution,{id,time=new Date().toISOString()}={}){
   const p=ledger.positions.find(row=>row.id===positionId);
@@ -82,7 +96,7 @@
   const realized=round(execution.cash-basis),remaining=round(Math.max(0,p.remaining_quantity-execution.filled));
   const updated={...p,remaining_quantity:remaining,remaining_basis:remaining?round(p.remaining_basis-basis):0,realized_pnl:round(p.realized_pnl+realized),...(remaining?{}:{closed_at:time})};
   const trade={...execution,id,position_id:positionId,occurred_at:time,released_basis:round(basis),realized_pnl:realized};
-  return {version:1,positions:ledger.positions.map(row=>row.id===positionId?updated:row),trades:[...ledger.trades,trade].slice(-5000)};
+  return {...ledger,version:1,positions:ledger.positions.map(row=>row.id===positionId?updated:row),trades:[...ledger.trades,trade].slice(-5000)};
  }
  function markPosition(position,book,options={}){
   if(!position.remaining_quantity)return {filled:0,unfilled:0,net_exit_value:0,unrealized_pnl:0,complete:true};
@@ -104,7 +118,7 @@
   const trade={id,position_id:p.id,ticker:p.ticker,side:p.side,action:'settle',filled:p.remaining_quantity,unfilled:0,vwap:price,
    notional:cash,fee:0,cash,occurred_at:time,released_basis:p.remaining_basis,realized_pnl:realized,settlement_result:market.result,
    quote_as_of:evidence.as_of,quote_source:source.href,classification:'SIMULATED · confirmed binary settlement; no bid execution',assumptions:{settlement_fee:0}};
-  return {version:1,positions:ledger.positions.map(row=>row.id===p.id?updated:row),trades:[...ledger.trades,trade].slice(-5000)};
+  return {...ledger,version:1,positions:ledger.positions.map(row=>row.id===p.id?updated:row),trades:[...ledger.trades,trade].slice(-5000)};
  }
  function csv(rows){
   const keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];
