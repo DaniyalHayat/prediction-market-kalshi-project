@@ -1,0 +1,2 @@
+web/research-data/*.json.gz -filter -diff -merge -text
+web/public/research/*.pdf -filter -diff -merge -text
