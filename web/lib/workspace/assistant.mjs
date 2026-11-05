@@ -78,6 +78,7 @@ export async function assistantResponse(request,{createClient,generate=streamTex
       messages,tools,stopWhen:stepCountIs(3),maxOutputTokens:900,maxRetries:0,abortSignal:AbortSignal.any([request.signal,AbortSignal.timeout(55000)]),
       toolCallConcurrency:1,prepareStep:({messages,stepNumber})=>{
         if(Buffer.byteLength(JSON.stringify(messages))>60000)throw new RangeError('The research context limit was reached');
+        if(stepNumber===0&&tools.get_research)return {toolChoice:{type:'tool',toolName:'get_research'}};
         return stepNumber>=2?{toolChoice:'none'}:undefined;
       },onFinish:async()=>{await client?.close();},onError:async()=>{await client?.close();}});
     const encoder=new TextEncoder(),body=new ReadableStream({async start(controller){let sent=false,failed=false,answer='';
