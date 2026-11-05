@@ -52,6 +52,10 @@ run "reviewed_profile_security" {
     condition     = aws_ecs_service.backend[0].desired_count == 1 && aws_ecs_service.backend[0].deployment_maximum_percent == 100 && aws_ecs_service.backend[0].deployment_minimum_healthy_percent == 0
     error_message = "Do not double the bounded app pool during rolling replacement without a separate connection-budget review."
   }
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend[0].container_definitions)[0].readonlyRootFilesystem && jsondecode(aws_ecs_task_definition.backend[0].container_definitions)[0].user == "1000" && jsondecode(aws_ecs_task_definition.backend[0].container_definitions)[0].mountPoints[0].containerPath == "/tmp/market-lab-models"
+    error_message = "Model cache must use its explicit writable volume while the non-root application root stays read-only."
+  }
 }
 
 run "database_bootstrap_precedes_compute" {

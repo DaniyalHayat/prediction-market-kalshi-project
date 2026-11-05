@@ -246,10 +246,14 @@ resource "aws_ecs_task_definition" "backend" {
   cpu                      = "256"
   memory                   = "1024"
   execution_role_arn       = aws_iam_role.execution[0].arn
+  volume {
+    name = "model-cache"
+  }
   container_definitions = jsonencode([{
     name             = "backend", image = var.container_image, essential = true, user = "1000", readonlyRootFilesystem = true,
     portMappings     = [{ containerPort = 8780, protocol = "tcp" }],
-    environment      = [{ name = "PORT", value = "8780" }, { name = "HOST", value = "0.0.0.0" }, { name = "NODE_ENV", value = "production" }, { name = "MARKET_PIPELINE_ENABLED", value = "0" }],
+    environment      = [{ name = "PORT", value = "8780" }, { name = "HOST", value = "0.0.0.0" }, { name = "NODE_ENV", value = "production" }, { name = "MARKET_PIPELINE_ENABLED", value = "0" }, { name = "SEMANTIC_MODEL_CACHE_DIR", value = "/tmp/market-lab-models" }],
+    mountPoints      = [{ sourceVolume = "model-cache", containerPath = "/tmp/market-lab-models", readOnly = false }],
     secrets          = [for key, arn in var.application_secret_arns : { name = key, valueFrom = arn }],
     logConfiguration = { logDriver = "awslogs", options = { "awslogs-group" = aws_cloudwatch_log_group.backend[0].name, "awslogs-region" = var.region, "awslogs-stream-prefix" = "backend", "mode" = "non-blocking", "max-buffer-size" = "4m" } },
     linuxParameters  = { capabilities = { drop = ["ALL"] } },
