@@ -85,17 +85,17 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
     const depthPromise=deps.book(ticker,1).catch(()=>null),feesPromise=deps.marketFees(ticker).catch(()=>null);
     const briefPromise=deps.marketBrief(ticker,{contracts:1},{marketDetails:async()=>detail,book:()=>depthPromise,
       ...((fast||assistant)?{headlines:async()=>({status:'not_queried',articles:[],reason:'Headline retrieval is omitted from compact research.'})}:{})});
-    const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant}).catch(error=>({reason:error.message,error:true}));
+    const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant}).catch(()=>({reason:'Matched sports evidence could not be refreshed. Its source or shared cache is temporarily unavailable.',error:true}));
     const musicPromise=!fast?deps.musicResearch(market,{includeSpotify:!assistant}).catch(error=>({forecast:{probability:null,reason:error.message},error:true})):null;
     const postsPromise=!fast&&!assistant&&musicContract(market)?deps.chartPosts().catch(error=>({status:'unavailable',posts:[],reason:error.message})):null;
     const [brief,depth,fees,sports,music,posts]=await Promise.all([briefPromise,depthPromise,feesPromise,sportsPromise,musicPromise,postsPromise]);
     let forecast=brief.forecast,decision=brief.decision,summary=brief.summary,status=brief.status;
     const errors=[...(brief.errors||[])];
-    if(sports?.error)errors.push({source:'Sports evidence',error:sports.reason});
+    if(sports?.error){errors.push({source:'Sports evidence',error:sports.reason});forecast={probability:null};decision={...decision,side:'insufficient_edge',reasons:[sports.reason]};summary=sports.reason;status='unavailable';}
     const alternative=model==='challenger'&&sports?.challenger?.available?sports.challenger:null;
     if(sports?.forecast||alternative){
       const selected=alternative?{...(sports.forecast||{}),...alternative}:sports.forecast;
-      forecast={...selected,evidence:{tier:selected.eligible?2:1,label:alternative&&!selected.eligible?'Experimental calibrated ensemble':selected.eligible?'Chronological matchup holdout':selected.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
+      forecast={...selected,evidence:{tier:selected.eligible?2:1,label:alternative&&!selected.eligible?(selected.inplay?'Experimental score-clock model':'Experimental calibrated ensemble'):selected.eligible?'Chronological matchup holdout':selected.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
       decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason});
       if(alternative&&!alternative.eligible)decision.reasons.unshift(alternative.promotion_reason||'The experimental model has not passed its promotion gate.');
       status='modeled';summary=`The matched-event historical team model estimates ${(forecast.probability*100).toFixed(1)}% YES. Its displayed range is parameter uncertainty or sensitivity, not a calibrated injury-adjusted outcome interval. ${decision.reasons[0]||'The conservative screen clears assumed entry costs; this remains a research hypothesis.'}`;

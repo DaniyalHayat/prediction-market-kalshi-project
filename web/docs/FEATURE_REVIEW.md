@@ -90,6 +90,8 @@ The existing single Railway backend was moved from SFO to Virginia without addin
 
 Live release checks exercised a $20-to-$30 scenario change, opening the matching paper ticket, a one-contract simulated buy, executable bid marking, an explicit risk-limit response and a close. The observed 18-cent entry and 15-cent net close produced a 3-cent realized paper loss, including modeled fees. Visible opinions and rankings refresh while the page is visible; expired sources, old quotes and failed refreshes become STALE and withhold old numerical projections. Decimal-second NBA clocks are parsed without confusing seconds and minutes; conflicting provider clock fields withhold an estimate. A real completed assistant call reserved $0.025, recorded a conservative $0.001 usage charge and refunded $0.024. Read-only hosted checks confirmed private-schema isolation and runtime grants after migration. These checks are engineering observations, not a trading-performance evaluation.
 
+Rolling-deployment verification also exposed a six-connection runtime-role ceiling. It was raised to twelve for two overlapping instances, each with a four-connection pool and one listener, plus two operational sessions. Two consecutive six-client read-only probes passed without further backend growth; no role privileges, paid plan or pool size changed. Source outages now display a refresh failure instead of missing model coverage or raw internal errors.
+
 ## Recruiter-facing claim wording
 
 - Built a public prediction-market research and paper-trading application with shared WebSocket ingestion, bounded multiplexed portfolio updates, transactional PostgreSQL jobs, RLS, source lineage and immutable compressed evidence archives.

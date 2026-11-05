@@ -102,4 +102,12 @@ test('selected challenger can supply an experimental in-play forecast without in
     marketBrief:async()=>({ticker,market,forecast:{probability:null},decision:{side:'insufficient_edge',reasons:[]},sources:[],errors:[]}),
     sportsResearch:async()=>({forecast:null,challenger,coverage:{partial:false}}),musicResearch:async()=>null,chartPosts:async()=>({posts:[]})});
   assert.equal(packet.forecast.probability,.6);assert.equal(packet.forecast.evidence.tier,1);assert.equal(packet.model_selection.applied,'challenger');assert.equal(packet.opinion.side,'PASS');
+  assert.equal(packet.forecast.evidence.label,'Experimental score-clock model');
+});
+test('a sports source outage cannot be mislabeled as missing model coverage or reveal internal failures',async()=>{
+  const packet=await workspaceResearch(ticker,{model:'challenger'},{marketDetails:async()=>({market}),book:async()=>book,marketFees:async()=>({coefficient:.07}),
+    marketBrief:async()=>({ticker,market,forecast:{probability:null},decision:{side:'insufficient_edge',reasons:['No independent model is mapped.']},sources:[],errors:[]}),
+    sportsResearch:async()=>{throw new Error('private database-role failure sentinel');},musicResearch:async()=>null,chartPosts:async()=>({posts:[]})});
+  assert.equal(packet.status,'unavailable');assert.equal(packet.opinion.side,'PASS');assert.match(packet.opinion.reason,/could not be refreshed/);
+  assert.equal(packet.forecast.probability,null);assert.ok(!JSON.stringify(packet).includes('private database-role'));assert.ok(!packet.opinion.reason.includes('No independent model'));
 });
