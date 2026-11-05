@@ -31,7 +31,7 @@ export default function Analytics() {
   }
   function send(name,params){
     if(!enabled.current||!provider)return;
-    const value={...analyticsPageContext(window.location.href,document.referrer),...params};
+    const value={market_ticker:'',market_category:'',reading_mode:'',cash_action:'',save_action:'',...analyticsPageContext(window.location.href,document.referrer),...params};
     if(provider.kind==='gtm')window.dataLayer.push({event:name,...value});
     else window.gtag('event',name,{...value,send_to:measurementID});
   }
