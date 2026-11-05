@@ -72,6 +72,20 @@ The self-built calculation engine, MCP server, stream fanout, job queue, FTS sea
 
 Google AI Pro can include a claimed Google Developer Program cloud-credit benefit, and eligible ChatGPT Pro 100 subscriptions can activate API credits for a linked organization. These are account benefits, not credentials that the website can automatically borrow from a signed-in consumer chat session. No unverified credit balance is included in this app's operating forecast. Existing app and platform quotas remain active. The report distinguishes installed features, tested local experiments, live verification and future optional provisioning.
 
+The bounded live Gateway comparison made exactly four requests: one scoped tool-routing step and one grounded follow-up per model. Both Gemini 2.5 Flash-Lite and GPT-5 nano passed both tasks. Gemini used 487 input and 123 output tokens, took 2.151 seconds across the two steps and cost $0.00009790; nano with minimal reasoning used 799 input and 179 output tokens, took 2.745 seconds and cost $0.00011155. Gateway-reported costs agree with the recorded token rates. Gemini remains the route because nano was 13.94% costlier and 27.58% slower in this tiny sample. This is not a general quality or p95 comparison and excludes remote MCP transport. `ai-gateway-benchmark.json` and the opt-in benchmark script preserve the exact requests, grading and costs.
+
+## Ranking the requested integration surfaces
+
+| Priority | Surface | Benefit and implementation decision |
+| --- | --- | --- |
+| 1 | Observability | Request traces, redacted structured logs, source-age checks, database diagnostics and usage allowances expose correctness and latency problems immediately. These are implemented in the existing processes first; additional paid retention or analytics products require a measured gap. |
+| 2 | AI Gateway | The existing route supplies the read-only research assistant. A $3 monthly project budget, atomic application reservations and metered refunds bound usage; the actual two-model comparison above informs the current choice. |
+| 3 | Stores | Existing Supabase PostgreSQL and private object storage provide relational state, queues, full-text search and evidence archives. A second managed database/cache must beat the existing indexed/in-process path on the same workload before adding its bill and consistency work. |
+| 4 | Marketplace wrappers | Provider-specific installation and secret provisioning can save integration work. Current Kalshi, ESPN, Spotify, X and MCP adapters already run in code; no additional paid wrapper was purchased. Compare a wrapper's exact capability, latency, rate limits and price against those adapters before adopting it. |
+| 5 | Supabase OAuth integration | This guide builds an integration that other Supabase users authorize against their own projects. It becomes useful for a future multi-tenant product or external-project connector. The current app's user/private-journal boundaries and backend credentials are implemented directly; no broad account-management grant is introduced for this deployment. |
+
+Small predicted improvements remain experiment candidates. The partitioning experiment is an example of testing the hypothesis and keeping its negative result: the indexed heap was faster for that fixture. The row above records the present implementation and the evidence needed for a later replacement, rather than treating a product name as a performance result.
+
 ## Recruiter-facing claim wording
 
 - Built a public prediction-market research and paper-trading application with shared WebSocket ingestion, bounded multiplexed portfolio updates, transactional PostgreSQL jobs, RLS, source lineage and immutable compressed evidence archives.
