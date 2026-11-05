@@ -1,0 +1,12 @@
+{
+  "window_start": "2026-11-05T04:30:00Z",
+  "window_end": "2026-11-05T04:49:16.629Z",
+  "application_commit": "714f14fe461f269af762ab281d4e7a8be73929a0",
+  "vercel": {"deployment": "dpl_7TCVXKLM8wqmK7niEbKRiqSEm9Ey", "state": "READY", "runtime_records": 0, "http_records": 33, "statuses": {"200": 31, "401": 1, "404": 1}, "http_5xx": 0, "has_more": false, "excluded_intervals": []},
+  "railway": {"deployment": "9577d48e-eede-4631-b883-98205e9b93f8", "state": "SUCCESS", "runtime_records": 3, "levels": {"info": 2, "warn": 1}, "warning": {"time": "2026-11-05T04:48:36.026536289Z", "event": "request.finished", "route": "/api/account/profile", "status": 401, "classification": "Intentional unauthenticated probe"}, "http_records": 3, "statuses": {"200": 2, "401": 1}, "http_5xx": 0},
+  "supabase": {"records": 386, "levels": {"INFO": 234, "LOG": 152}, "error_fatal_critical": 0, "scope": "Grouped project logs; source counts include service and gateway records for the same request."},
+  "smoke_checks": {"home": 200, "health": 200, "guest_session": 200, "anonymous_profile": 401, "unknown_api": 404, "robots": 200, "favicon_ico": 200, "favicon_png": 200, "favicon_svg": 200, "icon_signatures_valid": true, "owner_portfolio_reload_retained": true},
+  "ci_run": 41969700139,
+  "tests": {"passed": 361, "failed": 0, "optional_skipped": 2},
+  "scope": "Deployment-scoped Vercel and Railway records plus Supabase project aggregate. Samples include deliberate error-handling probes; no AWS resources changed."
+}

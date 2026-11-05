@@ -1,0 +1,1750 @@
+{
+  "version": "aws-last-hour-review-v2",
+  "status": "completed_with_permission_gaps",
+  "window": {
+    "start_utc": "2026-11-05T03:28:25Z",
+    "end_utc": "2026-11-05T04:28:25Z",
+    "duration_seconds": 3600,
+    "start_epoch_ms": 1793849305000,
+    "end_epoch_ms": 1793852905000
+  },
+  "observed_at_utc": "2026-11-05T04:41:06.009Z",
+  "account": {
+    "identity_verified": true,
+    "account_id_masked": "********7413",
+    "role": "AccountFullAccessRole"
+  },
+  "access": {
+    "profile": "agent-toolkit",
+    "cli_version": "2.39.2",
+    "authentication": "refreshed existing session; independently verified sts:GetCallerIdentity",
+    "official_mcp": "Root invocation returned Unknown tool aws___run_script; AWS observability skill permits the standard CLI fallback.",
+    "raw_log_storage": "Outside Git in the private AWS review directory. No raw application messages or credential values included here."
+  },
+  "coverage": {
+    "enabled_region_inventory_complete": true,
+    "enabled_regions": [
+      "ap-northeast-1",
+      "ap-northeast-2",
+      "ap-northeast-3",
+      "ap-south-1",
+      "ap-southeast-1",
+      "ap-southeast-2",
+      "ca-central-1",
+      "eu-central-1",
+      "eu-north-1",
+      "eu-west-1",
+      "eu-west-2",
+      "eu-west-3",
+      "sa-east-1",
+      "us-east-1",
+      "us-east-2",
+      "us-west-1",
+      "us-west-2"
+    ],
+    "not_opted_in_regions": [
+      "af-south-1",
+      "ap-east-1",
+      "ap-east-2",
+      "ap-south-2",
+      "ap-southeast-3",
+      "ap-southeast-4",
+      "ap-southeast-5",
+      "ap-southeast-6",
+      "ap-southeast-7",
+      "ca-west-1",
+      "eu-central-2",
+      "eu-south-1",
+      "eu-south-2",
+      "il-central-1",
+      "me-central-1",
+      "me-south-1",
+      "mx-central-1"
+    ],
+    "cloudwatch_inventory_authorized_regions": [
+      "us-east-1",
+      "us-east-2"
+    ],
+    "cloudwatch_inventory_denied_regions": [
+      "ap-northeast-1",
+      "ap-northeast-2",
+      "ap-northeast-3",
+      "ap-south-1",
+      "ap-southeast-1",
+      "ap-southeast-2",
+      "ca-central-1",
+      "eu-central-1",
+      "eu-north-1",
+      "eu-west-1",
+      "eu-west-2",
+      "eu-west-3",
+      "sa-east-1",
+      "us-west-1",
+      "us-west-2"
+    ],
+    "log_group_inventory_successful_pages": 2,
+    "accessible_log_groups": 2,
+    "log_stream_pages": 2,
+    "log_event_pages": 3,
+    "accessible_log_events": 4,
+    "accessible_group_pagination_complete": true,
+    "accountwide_coverage_complete": false,
+    "accountwide_error_count": null,
+    "accessible_log_error_like_count": 0,
+    "accessible_log_disconnect_like_count": 0,
+    "cloudtrail_authorized_regions": [
+      "us-east-1",
+      "us-east-2",
+      "us-west-2"
+    ],
+    "accessible_cloudtrail_management_events": 11,
+    "accessible_cloudtrail_error_code_events": 0,
+    "orchestrated_api_attempts": 151,
+    "orchestrated_permission_failures": 126,
+    "paid_log_insights_queries": 0
+  },
+  "regions": [
+    {
+      "region": "ap-northeast-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ap-northeast-2",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ap-northeast-3",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ap-south-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ap-southeast-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ap-southeast-2",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "ca-central-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "eu-central-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "eu-north-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "eu-west-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "eu-west-2",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "eu-west-3",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "sa-east-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "us-east-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": true,
+        "count": 0
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": true,
+        "count": 1,
+        "by_service": {
+          "budgets.amazonaws.com": 1
+        },
+        "by_operation": {
+          "budgets.amazonaws.com:DescribeBudget": 1
+        },
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "us-east-2",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": true,
+        "count": 2
+      },
+      "lambda_event_inventory": {
+        "complete": true,
+        "pages_attempted": 1,
+        "count": 1
+      },
+      "lambda_web_inventory": {
+        "complete": true,
+        "pages_attempted": 1,
+        "count": 1
+      },
+      "tag_inventory": {
+        "complete": true,
+        "pages_attempted": 1,
+        "count": 9
+      },
+      "stack_inventory": {
+        "complete": true,
+        "pages_attempted": 1,
+        "count": 1
+      },
+      "ec2_inventory": {
+        "complete": true,
+        "pages_attempted": 1,
+        "count": 0
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": true,
+        "count": 10,
+        "by_service": {
+          "logs.amazonaws.com": 1,
+          "kms.amazonaws.com": 5,
+          "lambda.amazonaws.com": 1,
+          "sts.amazonaws.com": 3
+        },
+        "by_operation": {
+          "logs.amazonaws.com:CreateLogStream": 1,
+          "kms.amazonaws.com:Decrypt": 5,
+          "lambda.amazonaws.com:UpdateWebFunctionEndpoint": 1,
+          "sts.amazonaws.com:AssumeRole": 3
+        },
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "s3api:get-bucket-logging",
+          "error_code": "request_failed"
+        }
+      ]
+    },
+    {
+      "region": "us-west-1",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": false,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudtrail:lookup-events",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    },
+    {
+      "region": "us-west-2",
+      "log_group_inventory": {
+        "pages": 1,
+        "complete": false,
+        "count": null
+      },
+      "lambda_event_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "lambda_web_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "tag_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "stack_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "ec2_inventory": {
+        "complete": false,
+        "pages_attempted": 1,
+        "count": null
+      },
+      "cloudtrail": {
+        "pages": 1,
+        "complete": true,
+        "count": 0,
+        "by_service": {},
+        "by_operation": {},
+        "errors": [],
+        "scope": "CloudTrail management-event history; data events and unconfigured destinations are outside this API."
+      },
+      "denied_operations": [
+        {
+          "operation": "logs:describe-log-groups",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "resourcegroupstaggingapi:get-resources",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "lambda:list-functions",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "cloudformation:describe-stacks",
+          "error_code": "AccessDenied"
+        },
+        {
+          "operation": "cloudtrail:describe-trails",
+          "error_code": "AccessDeniedException"
+        },
+        {
+          "operation": "ec2:describe-instances",
+          "error_code": "UnauthorizedOperation"
+        },
+        {
+          "operation": "lambda-web:list-web-functions",
+          "error_code": "AccessDeniedException"
+        }
+      ]
+    }
+  ],
+  "log_groups": [
+    {
+      "region": "us-east-2",
+      "name": "/portfolio/portfolio-market-lab/web",
+      "retention_days": 3,
+      "log_class": "STANDARD",
+      "created_at": "2026-11-04T10:03:25.919Z",
+      "stored_bytes": 0,
+      "streams": {
+        "pages": 1,
+        "complete": true,
+        "count": 0,
+        "latest_event_at": null
+      },
+      "events": {
+        "pages": 1,
+        "complete": true,
+        "count": 0,
+        "first_at": null,
+        "last_at": null,
+        "by_category": {},
+        "samples": [],
+        "unique_count": 0
+      },
+      "project_match": true
+    },
+    {
+      "region": "us-east-2",
+      "name": "/portfolio/portfolio-market-lab/worker",
+      "retention_days": 3,
+      "log_class": "STANDARD",
+      "created_at": "2026-11-04T10:03:25.714Z",
+      "stored_bytes": 8799,
+      "streams": {
+        "pages": 1,
+        "complete": true,
+        "count": 23,
+        "latest_event_at": "2026-11-05T04:09:24.581Z"
+      },
+      "events": {
+        "pages": 2,
+        "complete": true,
+        "count": 4,
+        "first_at": "2026-11-05T04:09:23.176Z",
+        "last_at": "2026-11-05T04:09:24.581Z",
+        "by_category": {
+          "other": 4
+        },
+        "samples": [],
+        "unique_count": 4
+      },
+      "project_match": true
+    }
+  ],
+  "legacy_project": {
+    "region": "us-east-2",
+    "stack": "portfolio-market-lab",
+    "stack_status": "UPDATE_COMPLETE",
+    "ownership_basis": "CloudFormation list-stack-resources maps the WebLogs/WorkerLogs groups, Lambda Worker, Lambda Web Function and other resources to the legacy portfolio-market-lab stack; the checked-in web/cloud/stack.yaml defines matching logical resource families.",
+    "resource_inventory": [
+      {
+        "logical_id": "BucketPolicy",
+        "type": "AWS::S3::BucketPolicy",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "DataBucket",
+        "type": "AWS::S3::Bucket",
+        "status": "UPDATE_COMPLETE"
+      },
+      {
+        "logical_id": "Endpoint",
+        "type": "AWS::Lambda::WebFunctionEndpoint",
+        "status": "UPDATE_COMPLETE"
+      },
+      {
+        "logical_id": "ExecutionRole",
+        "type": "AWS::IAM::Role",
+        "status": "UPDATE_COMPLETE"
+      },
+      {
+        "logical_id": "FailureQueue",
+        "type": "AWS::SQS::Queue",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "MarketTable",
+        "type": "AWS::DynamoDB::Table",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "MonthlyBudget",
+        "type": "AWS::Budgets::Budget",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "ScheduleRole",
+        "type": "AWS::IAM::Role",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "SettlementSchedule",
+        "type": "AWS::Scheduler::Schedule",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "WebFunction",
+        "type": "AWS::Lambda::WebFunction",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "WebLogs",
+        "type": "AWS::Logs::LogGroup",
+        "status": "CREATE_COMPLETE"
+      },
+      {
+        "logical_id": "WebRevision",
+        "type": "AWS::Lambda::WebFunctionRevision",
+        "status": "UPDATE_COMPLETE"
+      },
+      {
+        "logical_id": "Worker",
+        "type": "AWS::Lambda::Function",
+        "status": "UPDATE_COMPLETE"
+      },
+      {
+        "logical_id": "WorkerLogs",
+        "type": "AWS::Logs::LogGroup",
+        "status": "CREATE_COMPLETE"
+      }
+    ],
+    "resource_inventory_pages": 1,
+    "resource_inventory_complete": true,
+    "tagged_resource_count": 9,
+    "event_functions": [
+      {
+        "name": "portfolio-market-lab-Worker-hzfwYxJWwsrU",
+        "runtime": "nodejs22.x",
+        "memory_mb": 256,
+        "timeout_seconds": 60,
+        "logging": {
+          "LogFormat": "Text",
+          "LogGroup": "/portfolio/portfolio-market-lab/worker"
+        },
+        "last_modified": "2026-11-04T10:51:01.000+0000"
+      }
+    ],
+    "web_function": {
+      "name": "portfolio-market-lab",
+      "arn": "arn:aws:lambda:us-east-2:********7413:web-function/portfolio-market-lab"
+    },
+    "web_function_state": "Active",
+    "endpoint": {
+      "response_keys": [
+        "functionArn",
+        "endpointArn",
+        "endpointName",
+        "endpointType",
+        "domainName",
+        "authType",
+        "autoDeploymentMode",
+        "revisionWeights",
+        "regions",
+        "scalingConfig",
+        "throttleConfig",
+        "state",
+        "stateReason",
+        "updateStatus",
+        "updateStatusReason",
+        "regionalEndpoints",
+        "createdAt",
+        "updatedAt"
+      ],
+      "endpoint_name": "public",
+      "state": "Active",
+      "throttle_config": {
+        "rateLimit": 100
+      }
+    },
+    "revisions": {
+      "pages": 1,
+      "complete": true,
+      "revisions": [
+        {
+          "revision_id": "rev-uoexb",
+          "state": "Active",
+          "response_keys": [
+            "functionArn",
+            "revisionArn",
+            "revisionId",
+            "buildConfig",
+            "serviceConfig",
+            "state",
+            "stateReason",
+            "createdAt"
+          ],
+          "configuration_keys": [
+            "functionArn",
+            "revisionArn",
+            "revisionId",
+            "buildConfig",
+            "serviceConfig",
+            "state",
+            "stateReason",
+            "createdAt"
+          ],
+          "logging": {
+            "logGroup": "/portfolio/portfolio-market-lab/web",
+            "applicationLogLevel": "WARN",
+            "systemLogLevel": "WARN"
+          },
+          "runtime": null,
+          "timeout_seconds": 900
+        }
+      ]
+    },
+    "worker_metrics": {
+      "complete": true,
+      "pages": 1,
+      "series": [
+        {
+          "id": "m0",
+          "label": "Invocations",
+          "status": "Complete",
+          "timestamps": [
+            "2026-11-05T04:09:00.000Z"
+          ],
+          "values": [
+            1
+          ],
+          "messages": []
+        },
+        {
+          "id": "m1",
+          "label": "Errors",
+          "status": "Complete",
+          "timestamps": [
+            "2026-11-05T04:09:00.000Z"
+          ],
+          "values": [
+            0
+          ],
+          "messages": []
+        },
+        {
+          "id": "m2",
+          "label": "Throttles",
+          "status": "Complete",
+          "timestamps": [
+            "2026-11-05T04:09:00.000Z"
+          ],
+          "values": [
+            0
+          ],
+          "messages": []
+        }
+      ]
+    },
+    "worker_platform_events": [
+      {
+        "at": "2026-11-05T04:09:23.176Z",
+        "kind": "INIT_START",
+        "message_withheld": true
+      },
+      {
+        "at": "2026-11-05T04:09:23.531Z",
+        "kind": "START",
+        "message_withheld": true
+      },
+      {
+        "at": "2026-11-05T04:09:24.581Z",
+        "kind": "END",
+        "message_withheld": true
+      },
+      {
+        "at": "2026-11-05T04:09:24.581Z",
+        "kind": "REPORT",
+        "message_withheld": true,
+        "duration_ms": 1049.42,
+        "billed_duration_ms": 1402,
+        "memory_mb": 256,
+        "max_memory_mb": 93
+      }
+    ],
+    "web_endpoint_request_metrics": {
+      "namespace": "AWS/Lambda/Web",
+      "dimensions": {
+        "FunctionName": "portfolio-market-lab",
+        "EndpointName": "public"
+      },
+      "pages": 1,
+      "complete": true,
+      "series": [
+        {
+          "label": "ExecutedRequests",
+          "status": "Complete",
+          "timestamps": [],
+          "values": []
+        },
+        {
+          "label": "HTTPResponseStatusClass4XX",
+          "status": "Complete",
+          "timestamps": [],
+          "values": []
+        },
+        {
+          "label": "HTTPResponseStatusClass5XX",
+          "status": "Complete",
+          "timestamps": [],
+          "values": []
+        }
+      ],
+      "interpretation": "Sparse metrics: no returned datapoint is not an observed zero or proof of no requests/errors. Home-region request metrics cover the endpoint globally; regional usage/throttle metrics are separate."
+    },
+    "s3_access_logging": {
+      "configuration_read": false,
+      "enabled": null,
+      "reason": "GetBucketLogging returned AccessDenied; no bucket objects were read."
+    },
+    "cloudtrail_config": {
+      "complete": true,
+      "configured_trail_count": 0
+    }
+  },
+  "findings": [
+    {
+      "severity": "information",
+      "finding": "One legacy Lambda worker invocation succeeded in the fixed hour.",
+      "evidence": "Four INIT_START/START/END/REPORT records; CloudWatch Invocations=1, Errors=0, Throttles=0. REPORT duration 1049.42ms; billed 1402ms; max memory 93MB of 256MB."
+    },
+    {
+      "severity": "verification_gap",
+      "finding": "Web function request/error counts remain unestablished.",
+      "evidence": "Configured application/system logging is WARN/WARN; web group has no streams. ExecutedRequests/4XX/5XX queries completed with no datapoints. Sparse missing series are not recorded as observed zero."
+    },
+    {
+      "severity": "verification_gap",
+      "finding": "Accountwide AWS log completeness cannot be established with this session.",
+      "evidence": "15 enabled-region CloudWatch inventories and numerous compute/tag/CloudTrail reads were denied. Denied operations are scope limitations, not last-hour application errors."
+    },
+    {
+      "severity": "information",
+      "finding": "No actionable application failure was found in the logs and metrics that were accessible.",
+      "evidence": "All accessible group event pages were read to exhaustion and yielded four non-error platform records; eleven accessible CloudTrail management events carried no errorCode. No application code or AWS configuration change was warranted by this evidence."
+    }
+  ],
+  "limitations": [
+    "Logs and metrics may arrive late or be dropped; this review is a fixed-window snapshot, not an audit guarantee.",
+    "CloudWatch group discovery does not prove every AWS service has enabled logging. Management-event history does not cover CloudTrail data events.",
+    "Other accounts, non-opted-in regions, denied regions, unconfigured logs and inaccessible S3 log destinations were not inspected.",
+    "EC2, Lambda, Lambda Web Functions, tagged resources and CloudFormation were inventoried where authorized; this is not an exhaustive inventory of every AWS service type.",
+    "No before/after AWS error-reduction percentage is supported by this review.",
+    "Current Vercel/Railway/Supabase app behavior must be assessed using those providers; legacy AWS observations do not substitute for it."
+  ],
+  "changes": {
+    "aws_resources_modified": false,
+    "permissions_broadened": false,
+    "monitoring_or_alarms_created": false,
+    "log_insights_queries_started": false,
+    "notifications_sent": false,
+    "repository_runtime_code_modified": false
+  },
+  "sources": [
+    {
+      "title": "FilterLogEvents",
+      "url": "https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_FilterLogEvents.html"
+    },
+    {
+      "title": "GetLogEvents",
+      "url": "https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_GetLogEvents.html"
+    },
+    {
+      "title": "Lambda Web Function metrics",
+      "url": "https://docs.aws.amazon.com/lambda/latest/dg/web-functions-monitoring-metrics.html"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ Predictir brings contract rules, live market prices, independent forecasts and t
 
 **[Open Predictir](https://predictir.dev)**
 
+[Latest release checks](docs/RELIABILITY_VERIFICATION.md): live market and paper-account checks, one-hour log reviews, provider verification, analytics and hosting settings.
+
 | Technical overview |
 | --- |
 | Next.js, React and TypeScript sizing; a Node.js backend; PostgreSQL on Supabase; exchange WebSocket feeds; and a read-only MCP research assistant. Forecast checks, order-book depth and modeled fees support the paper-trading workflow. |

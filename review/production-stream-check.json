@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-11-05T04:26:11.421Z",
+  "commit": "37f815118dcee9f40b97b521d38f9f957f6b0f15",
+  "scope": "Two actual hosted connections held beyond the former 55-second abort and then cancelled by the client. Planned 750-second rotation is covered by injected-deadline HTTP tests, not a full hosted 750-second wait.",
+  "results": [
+    {
+      "path": "/api/stream?ticker=KXNBAGAME-26NOV05MIAGSW-GSW",
+      "started_at": "2026-11-05T04:24:59.752Z",
+      "status": 200,
+      "content_type": "text/event-stream",
+      "elapsed_ms": 71668,
+      "cancelled_by_probe": true,
+      "frames": 35,
+      "frames_after_55_seconds": 7,
+      "last_frame_ms": 71667,
+      "kinds": {
+        "quote": 28,
+        "heartbeat": 7
+      },
+      "error": null
+    },
+    {
+      "path": "/api/portfolio/stream?tickers=KXNBAGAME-26NOV05MIAGSW-GSW",
+      "started_at": "2026-11-05T04:24:59.782Z",
+      "status": 200,
+      "content_type": "text/event-stream",
+      "elapsed_ms": 70710,
+      "cancelled_by_probe": true,
+      "frames": 35,
+      "frames_after_55_seconds": 6,
+      "last_frame_ms": 63217,
+      "kinds": {
+        "status": 1,
+        "quote": 28,
+        "heartbeat": 6
+      },
+      "error": null
+    }
+  ]
+}

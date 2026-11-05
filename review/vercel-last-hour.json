@@ -1,0 +1,11 @@
+{
+  "project": "kalshi-market-lab",
+  "window_start": "2026-11-05T03:30:00Z",
+  "window_end": "2026-11-05T04:30:00Z",
+  "coverage": {"environments": "production and preview", "runtime_records": 43, "cdn_request_records": 586, "runtime_pages": 1, "request_pages": 1, "page_size": 1000, "has_more": false, "excluded_intervals": []},
+  "runtime": {"errors": 43, "cause": "failed to pipe response with TimeoutError code 23", "routes": {"/api/stream": 42, "/api/portfolio/stream": 1}, "last_error": "2026-11-05T04:13:49.004Z", "fix_commit": "37f815118dcee9f40b97b521d38f9f957f6b0f15", "fixed_deployment": "dpl_BuF2fSemWRRqtVJF7QKYPJXQoePs", "fixed_deployment_runtime_errors": 0},
+  "requests": {"statuses": {"200": 558, "304": 1, "403": 1, "404": 24, "503": 2}, "fixed_deployment": {"requests": 26, "statuses": {"200": 26}}, "historical_503": {"route": "/api/account/profile", "times": ["2026-11-05T04:01:02.397Z", "2026-11-05T04:01:31.289Z"], "cause_assessment": "Checks preceded owner configuration; activation-pending behavior corroborated by code and rollout context, not a retained CDN response body."}, "historical_404": {"session": 5, "favicon": 5, "robots": 1, "unrelated_paths": 13}},
+  "builds": {"deployments_read": 8, "completed": 8, "failures": 0, "warning_categories": ["npm cache-dir environment configuration", "transitive install-script approval entries"]},
+  "live_stream_evidence": "production-stream-check.json",
+  "privacy": "No cookies, credentials, visitor IP addresses, user identifiers or raw provider payloads included."
+}
