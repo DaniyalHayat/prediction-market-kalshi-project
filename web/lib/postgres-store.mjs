@@ -7,6 +7,7 @@ import {structuredLog} from './runtime-observability.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 const canonical = value => JSON.stringify(value,(_,v)=>v && typeof v==='object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);
 const conflict = message => Object.assign(new Error(message), {name:'ConditionalCheckFailedException', status:409});
+const maxCacheInflight = 256;
 
 export function makePostgresStore({connectionString=process.env.DATABASE_URL, pool,
   storageURL=process.env.SUPABASE_URL, storageKey=process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -16,7 +17,7 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   const db = pool || new pg.Pool({connectionString,max:4,min:keepWarm?1:0,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir',
     ...(remote ? {ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}} : {})});
   const storage = storageURL && storageKey ? createClient(storageURL,storageKey,{auth:{persistSession:false,autoRefreshToken:false}}).storage.from(bucket) : null;
-  const listeners=new Set();let closePromise;
+  const listeners=new Set(),cacheInflight=new Map();let closePromise;
   db.on?.('error',()=>structuredLog('database.pool_error',{error_code:'IDLE_CONNECTION_ERROR'}));
   async function transaction(fn) {
     const client=await db.connect();
@@ -131,7 +132,18 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
     return value;
   }
   async function cached(key,seconds,producer) {
-    const pk='cache#'+sha(key),existing=await get(pk); if(existing)return existing.value;
+    const pk='cache#'+sha(key),pending=cacheInflight.get(pk);
+    if(pending)return pending;
+    if(cacheInflight.size>=maxCacheInflight){
+      const existing=await get(pk);if(existing)return existing.value;
+      throw Object.assign(new Error('Too many source refreshes; try again shortly'),{status:429,code:'CACHE_LEASE_BUSY'});
+    }
+    const task=loadCached(pk,seconds,producer);
+    cacheInflight.set(pk,task);
+    try{return await task;}finally{cacheInflight.delete(pk);}
+  }
+  async function loadCached(pk,seconds,producer) {
+    const existing=await get(pk);if(existing)return existing.value;
     const lock=await acquireLease(pk,25);
     if(!lock) {
       for(let i=0;i<10;i++) { await new Promise(r=>setTimeout(r,150)); const hit=await get(pk); if(hit)return hit.value; }
