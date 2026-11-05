@@ -1,0 +1,23 @@
+{
+  "measured_at": "2026-11-05T00:46:14.868Z",
+  "operation": "Seven sequential service-authenticated pooled SELECT 1 samples per region",
+  "database_region": "Supabase us-east-2, Ohio",
+  "before": {
+    "backend_region": "Railway SFO",
+    "samples_ms": [55.97, 55.04, 56.77, 54.77, 54.89, 54.74, 54.91],
+    "mean_ms": 55.29857142857143
+  },
+  "after": {
+    "backend_region": "Railway us-east4-eqdc4a, Virginia",
+    "samples_ms": [19.43, 19.33, 19.22, 19.15, 19.13, 19.33, 19.20],
+    "mean_ms": 19.255714285714284,
+    "deployment_id": "be72debd-d5cc-43fc-b7df-a1d70f89077f",
+    "region_evidence": "Applied environment configuration, successful deployment manifest and one RUNNING instance; diagnostic runtime_region was unset."
+  },
+  "mean_reduction_ms": 36.042857142857144,
+  "relative_reduction": 0.6517864052810341,
+  "replicas": 1,
+  "added_services": 0,
+  "added_volumes": 0,
+  "scope": "Short pooled database round-trip samples, not a whole-app benchmark, p95 latency estimate or proof of causality across all network conditions."
+}

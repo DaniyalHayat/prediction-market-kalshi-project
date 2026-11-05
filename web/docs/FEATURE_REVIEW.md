@@ -86,6 +86,8 @@ The bounded live Gateway comparison made exactly four requests: one scoped tool-
 
 Small predicted improvements remain experiment candidates. The partitioning experiment is an example of testing the hypothesis and keeping its negative result: the indexed heap was faster for that fixture. The row above records the present implementation and the evidence needed for a later replacement, rather than treating a product name as a performance result.
 
+The existing single Railway backend was moved from SFO to Virginia without adding another service or volume. Seven pooled SELECT 1 samples per location measured mean database round-trip time of 55.30 ms before and 19.26 ms after, a 36.04 ms / 65.18% reduction in this short comparison. Applied configuration, the successful deployment manifest and a running instance confirm the destination region. This is a database-path measurement, not a whole-app speed claim. `deployment-latency.json` and `RUNTIME_RESEARCH.md` preserve the evidence and scope.
+
 ## Recruiter-facing claim wording
 
 - Built a public prediction-market research and paper-trading application with shared WebSocket ingestion, bounded multiplexed portfolio updates, transactional PostgreSQL jobs, RLS, source lineage and immutable compressed evidence archives.
