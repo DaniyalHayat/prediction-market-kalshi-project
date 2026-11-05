@@ -68,6 +68,25 @@ test('X reserves shared paid post and lookup costs before reading, caches public
   const denied={...memoryStore(),consume:async()=>false};calls=0;
   const result=await publicXFeed({topic:'nba',enabled:true},{...deps,store:denied});assert.equal(calls,0);assert.equal(result.status,'budget_reached');
 });
+test('Postgres X cursors use fenced producer publication and budget failures cannot poison identity caches',async()=>{
+  const durable=memoryStore(),cache=new Map();let allowed=false,published=0,calls=0;durable.kind='postgres';durable.consume=async()=>allowed;
+  durable.cached=async(key,ttl,producer)=>{if(cache.has(key))return cache.get(key);const task=Promise.resolve().then(()=>producer({publishRecord:async item=>{published++;await durable.save(item);}}));cache.set(key,task);try{return await task;}catch(error){cache.delete(key);throw error;}};
+  const deps={env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}};
+  assert.equal((await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},deps)).status,'budget_reached');assert.equal(calls,0);assert.equal(cache.size,0);
+  cache.set('x-user#ShamsCharania',Promise.resolve({unavailable:true}));
+  allowed=true;assert.equal((await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},deps)).status,'available');assert.equal(calls,2);assert.equal(published,1);assert.equal((await durable.get('x-cursor#ShamsCharania')).newest_id,'111');assert.ok(cache.has('x-user-v2#ShamsCharania'));
+});
+test('a lost Postgres lease cannot publish an X cursor or trigger a provider rate-limit cooldown',async()=>{
+  const durable=memoryStore();durable.kind='postgres';let calls=0;
+  durable.cached=async(key,ttl,producer)=>producer({publishRecord:async()=>{throw Object.assign(new Error('Lost synthetic lease'),{status:429,code:'CACHE_LEASE_LOST'});}});
+  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}});
+  assert.equal(calls,2);assert.equal(value.status,'refreshing');assert.equal(await durable.get('x-cursor#ShamsCharania'),undefined);assert.equal(await durable.get('x-public-cooldown'),undefined);
+});
+test('a busy shared X refresh is not an upstream rate limit and cannot create a global cooldown',async()=>{
+  const durable=memoryStore();let calls=0;durable.cached=async()=>{throw Object.assign(new Error('Synthetic shared refresh contention'),{status:429,code:'CACHE_LEASE_BUSY'});};
+  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{calls++;}});
+  assert.equal(value.status,'refreshing');assert.equal(calls,0);assert.equal(await durable.get('x-public-cooldown'),undefined);
+});
 test('provider waits preserve HTTP-date and X-reset backoff rather than hammering retries',()=>{
   assert.equal(retryDelay(new Headers({'retry-after':'Wed, 05 Nov 2026 02:00:00 GMT'}),429,NOW),3600000);
   assert.equal(retryDelay(new Headers({'x-rate-limit-reset':String((NOW+120000)/1000)}),429,NOW),120000);

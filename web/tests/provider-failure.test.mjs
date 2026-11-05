@@ -20,3 +20,10 @@ test('network failures enter host backoff before another request can leave the a
   await assert.rejects(sourceJSON('Spotify timeout retry','https://api.spotify.com/timeout-retry',{fetcher}),error=>error.status===503&&/cooling down/.test(error.message));
   assert.equal(requests,1);
 });
+test('lost local cache leases propagate only an allowlisted code and do not cool down a healthy provider',async()=>{
+  await assert.rejects(sourceJSON('Local lease fixture','https://accounts.spotify.com/local-lease-fixture',{fetcher:async()=>{throw Object.assign(new Error('PRIVATE_DATABASE_DETAIL'),{status:429,code:'CACHE_LEASE_LOST'});}}),error=>error.status===429&&error.code==='CACHE_LEASE_LOST'&&!error.message.includes('PRIVATE_DATABASE_DETAIL'));
+  await assert.rejects(sourceJSON('Busy lease fixture','https://accounts.spotify.com/busy-lease-fixture',{fetcher:async()=>{throw Object.assign(new Error('PRIVATE_DATABASE_DETAIL'),{status:429,code:'CACHE_LEASE_BUSY'});}}),error=>error.status===429&&error.code==='CACHE_LEASE_BUSY'&&!error.message.includes('PRIVATE_DATABASE_DETAIL'));
+  assert.equal(providerStatus().find(row=>row.id==='Local lease fixture').status,'refreshing');
+  assert.equal(providerStatus().find(row=>row.id==='Busy lease fixture').status,'refreshing');
+  const value=await sourceJSON('Healthy post-lease fixture','https://accounts.spotify.com/healthy-lease-fixture',{fetcher:async()=>Response.json({status:'ok'})});assert.equal(value.data.status,'ok');
+});
