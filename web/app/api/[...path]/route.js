@@ -11,7 +11,7 @@ import {parseExecutionRequest,workspaceExecutionResearch} from '../../../lib/wor
 import {readProxyBody} from '../../../lib/workspace/proxy.mjs';
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 800;
 export async function GET(request, context) {
   const {path} = await context.params, endpoint = path.join("/"), params = new URL(request.url).searchParams;
   const proxied=await proxyBackend(request,path);if(proxied)return proxied;
