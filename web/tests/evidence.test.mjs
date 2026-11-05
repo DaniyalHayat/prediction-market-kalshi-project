@@ -64,6 +64,11 @@ test('provider waits preserve HTTP-date and X-reset backoff rather than hammerin
   assert.equal(retryDelay(new Headers({'retry-after':'Wed, 05 Nov 2026 02:00:00 GMT'}),429,NOW),3600000);
   assert.equal(retryDelay(new Headers({'x-rate-limit-reset':String((NOW+120000)/1000)}),429,NOW),120000);
 });
+test('X persists a longer upstream retry deadline across processes',async()=>{
+  const durable=memoryStore(),until=NOW+7200000;
+  await publicXFeed({topic:'nba',enabled:true,maximumAccounts:1},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{throw Object.assign(new Error('rate limited'),{status:429,retry_at:new Date(until).toISOString()});}});
+  assert.equal((await durable.get('x-public-cooldown')).until,until);
+});
 test('secondary music chart preserves date, territory, measured counts and rejects identity/schema drift',()=>{
   const rows=Array.from({length:50},(_,i)=>`<tr><td>${i+1}</td><td>=</td><td><a href="../artist/artist.html">Artist</a> - <a href="../track/${String(i).padStart(22,'0')}.html">Song ${i}</a></td><td>1</td><td>1</td><td></td><td>1,234</td><td>0</td><td>3,000</td><td>0</td><td>5,000</td></tr>`).join('');
   const html=`Spotify Daily Chart - United States - 2026/11/03<table id="spotifydaily"><th>Streams</th>${rows}</table>`,result=parseKworbUS(html,NOW);

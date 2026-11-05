@@ -2,13 +2,13 @@ import {createHash} from 'node:crypto';
 import {readJSON} from '../transport.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 
-const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map();
+const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map(),failureStreak=new Map();
 const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','oauth.reddit.com','www.reddit.com','kworb.net']);
 const providerUsage=new Map();
 export function retryDelay(headers,status,now=Date.now()){
   const raw=headers.get('retry-after'),numeric=raw===null?NaN:Number(raw),date=Date.parse(raw||''),reset=Number(headers.get('x-rate-limit-reset'))*1000;
   const candidates=[Number.isFinite(numeric)?numeric*1000:0,Number.isFinite(date)?date-now:0,reset>now?reset-now:0];
-  return Math.min(86400000,Math.max(status===429?60000:status===402?3600000:15000,...candidates));
+  return Math.max(status===429?60000:status===402?3600000:15000,...candidates);
 }
 export function recordProviderStatus(id,value){status.set(id,{id,name:id,...value});}
 export function providerStatus(){
@@ -29,7 +29,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
   if(!['json','text'].includes(format))throw new RangeError('Unsupported source format');
   const key=id+'#'+format+'#'+url,hit=cache.get(key);
   if(hit&&hit.until>Date.now())return hit.value;
-  if((cooldowns.get(parsed.hostname)||0)>Date.now())throw Object.assign(new Error(id+' is cooling down after an upstream error'),{status:503});
+  if((cooldowns.get(parsed.hostname)||0)>Date.now())throw Object.assign(new Error(id+' is cooling down after an upstream error'),{status:503,retry_at:new Date(cooldowns.get(parsed.hostname)).toISOString()});
   if(inflight.has(key))return inflight.get(key);
   const produce=async()=>{
     const day=new Date().toISOString().slice(0,10),usage=providerUsage.get(id),count=usage?.day===day?usage.requests:0;
@@ -56,13 +56,16 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
   const task=(async()=>{
     try {
       const value=cloudEnabled()&&fetcher===fetch?await store().cached('provider#'+key,ttl,produce):await produce();
+      failureStreak.delete(parsed.hostname);
       if(cache.size>200)cache.delete(cache.keys().next().value);
       cache.set(key,{until:Date.now()+ttl*1000,value});
       status.set(id,{id,name:id,status:'available',as_of:value.as_of,url:value.source_url,detail:'Retrieval time; the observation date is shown in each dataset.'});
       return value;
     }catch(error){const code=Number(error.status),upstreamStatus=Number.isInteger(code)&&code>=400&&code<=599?code:null;
+      if(!upstreamStatus||upstreamStatus>=500){const failures=Math.min(5,(failureStreak.get(parsed.hostname)||0)+1);failureStreak.set(parsed.hostname,failures);cooldowns.set(parsed.hostname,Math.max(cooldowns.get(parsed.hostname)||0,Date.now()+Math.min(300000,15000*2**(failures-1))));}
+      const retryAt=(cooldowns.get(parsed.hostname)||0)>Date.now()?new Date(cooldowns.get(parsed.hostname)).toISOString():null;
       const detail=upstreamStatus?id+' could not be retrieved (HTTP '+upstreamStatus+').':id+' could not be retrieved. Its source or shared cache is temporarily unavailable.';
-      status.set(id,{id,name:id,status:'unavailable',detail});throw Object.assign(new Error(detail,{cause:error}),{status:upstreamStatus||503});}
+      status.set(id,{id,name:id,status:'unavailable',detail,retry_at:retryAt});throw Object.assign(new Error(detail,{cause:error}),{status:upstreamStatus||503,retry_at:retryAt});}
   })();
   inflight.set(key,task);try{return await task;}finally{inflight.delete(key);}
 }
