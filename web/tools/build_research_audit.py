@@ -130,7 +130,7 @@ def append_markdown(story, path):
             story.append(P(line, "FormulaAudit"))
             index += 1
             continue
-        if not line or line.startswith("# "):
+        if not line or line.startswith("# ") or re.fullmatch(r'<a id="[^"]+"></a>', line):
             index += 1
             continue
         if line.startswith("|"):
