@@ -1,0 +1,58 @@
+# Runtime engineering review
+
+Status: implemented as isolated, tested modules and review tools. No live deployment, infrastructure creation, external telemetry subscription, broker, self-hosted production app or advertising optimizer has been enabled. Existing stack and connection limits remain the baseline.
+
+## Measured structures and scope
+
+`SharedEventRing` is an actual fixed-slot `SharedArrayBuffer` queue using atomic publication and consumption indices. It supports exactly one producer and one consumer, typically two workers. It is not a JavaScript object queue relabeled as lock-free, a multi-producer Disruptor, an exchange execution path or a nanosecond network-latency claim. Each publication copies bytes into a bounded slot; each read copies them out. Full returns `false` without overwriting unread events. The eventual feed integration must stop admission or reconnect/resnapshot on overflow, rather than silently losing sequence continuity. Header metadata guards shape mismatch; uint32 wraparound and concurrent ordered transfer are tested. `size` is a bounded concurrent estimate.
+
+The synthetic local Node 26.12.1 / Windows microbenchmark over 100,000 operations measured a single-thread reference queue at about 6 ns/op, a shared 256-byte offer plus copied poll at about 409 ns/op, and a simple one-price paper match pair at about 958 ns/op in the initial run. These compare different guarantees and include no network, durable storage, scheduling or production load. The shared ring adds overhead in a same-thread benchmark. It is useful only if measured worker isolation offsets this overhead. Rerun `node tools/benchmark_engineering.mjs`; results are machine-dependent.
+
+`PaperLimitOrderBook` is a bounded simulation with integer cent prices and integer contract quantities, price priority, FIFO at a price, maker-price fills, partial fills, GTC/IOC/FOK and owner-authorized cancellation. Self-trade prevention cancels the resting maker; FOK first checks executable external liquidity. Every result is labeled `paper_only`. This engine does not emulate exchange queue position, fees, settlement, hidden liquidity or network fills, and it is intentionally separate from the current quote-backed paper execution.
+
+## Event sourcing, CQRS and brokers
+
+Migration `005_engineering_events.sql` adds append-only domain events, delivery receipts and per-stream projection cursors. `createEventStore({pool})` reuses the current four-connection PostgreSQL pool. It adds no connection pool or LISTEN client. Per-stream advisory transaction locks, expected versions and command IDs make concurrent appends conflict deterministically; reusing a command with different payloads fails. Projections update read models and cursors in the same transaction. An injected projection handler must perform only bounded database work on its supplied transaction client.
+
+`publishStream` is the transactional-outbox seam for optional Kafka/Kinesis adapters. It publishes in stream order, uses a stream key and stable event ID, and records delivery only after acknowledgment. A crash between broker acknowledgment and database commit can redeliver. Consumers must deduplicate event IDs and verify stream versions. The function holds a transaction/pool slot while publishing, so use small batches, strict adapter deadlines and a single scheduled worker. It is not enabled in the request path. At current scale, PostgreSQL replay/project is sufficient; Kafka or Kinesis brings a separate cost and failure domain and remains a reviewed future adapter, not a provisioned service. Global identity values are not treated as cross-transaction commit order.
+
+## Internal protobuf and gRPC
+
+`proto/market_events.proto` defines the unary `marketlab.v1.Ingest/Publish` contract. `grpc-ingest.mjs` implements that small contract using native HTTP/2, protobuf varints/length-delimited fields, a five-byte gRPC frame and status trailers. It preserves uint64 sequence values as decimal strings, rejects malformed input and compressed/streaming frames, and bounds messages to 64 KiB. A real HTTP/2 request/response integration test checks the wire exchange and authentication.
+
+The listener always binds to loopback and requires a separate internal bearer token. It does not publish a public plaintext gRPC service. The handler receives an abort signal and must honor it; client timeout does not undo an already committed event, so durable command/event deduplication remains necessary. This is a minimal unary implementation without reflection, compression, streaming, channel pooling, generated-client interoperability certification or the full gRPC runtime feature set. If the boundary becomes a cross-host production service, replace the small codec with generated stubs and a supported gRPC library, add mTLS and benchmark before enabling it. [gRPC HTTP/2 protocol](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md), [protobuf encoding](https://protobuf.dev/programming-guides/encoding/).
+
+## Telemetry, log filtering and operator surface
+
+`createRuntimeTelemetry` tracks request and provider durations using bounded route/provider allowlists, rolling samples and cumulative Prometheus histogram buckets. Snapshots show p95/p99 for the last 4,096 observations per process by default. They are not fleet percentiles. A provider measurement belongs around each actual outbound attempt, including failure, while a request measurement includes the caller-visible duration; retries must not be mistaken for one network attempt. Aggregate histogram buckets in an external collector before calculating fleet percentiles. Do not average per-process p99s.
+
+`createLogPipeline` accepts operational allowlisted fields, strips raw bodies, URLs, tokens, user identifiers and free-form errors, deterministically samples ordinary records at 2%, and caps 480 ordinary plus 120 warning/error records per minute. Warnings/errors bypass ordinary sampling but still have their own hard cap. Its counters expose sampling and throttling. This is bounded diagnostic evidence, not an exhaustive audit trail. Domain events, journals and required security evidence must not use a sampled diagnostic sink.
+
+`createLogDrainHandler` verifies Vercel's raw-body HMAC-SHA1 signature using a timing-safe comparison, rejects compressed payloads, caps 1 MiB / 200-record batches, drops unstructured message bodies and suppresses exact recent duplicate deliveries with a bounded cache. Its CLI binds only to loopback; no external drain was registered. External TLS ingress, signature-secret rotation and provider-side production/source filters require a separate deployment review. A self-built receiver avoids buying a third-party logging subscription but cannot remove Vercel's drain export charges: current published pricing is $0.50/GB with no included Pro allowance, based on uncompressed JSON. Source-side sampling controls those charges; receiver-side sampling only controls downstream volume. [Vercel drain pricing](https://vercel.com/docs/drains), [signature security](https://vercel.com/docs/drains/security).
+
+`node tools/operator.mjs` serves a separate local operator page at `127.0.0.1:8790`. Set `OPERATOR_SNAPSHOT_PATH` to an explicitly exported JSON snapshot containing `{telemetry, logs}` and `OPERATOR_ACCESS_TOKEN` to a separate high-entropy token of at least 32 characters. The file is limited to 2 MiB, records are sanitized again, report access requires bearer authentication, and the server rejects writes, cross-origin requests and unexpected Host values. Tokens are entered in a password field, used once in memory and cleared. They never appear in URLs or browser storage. There is no trading-UI link or change-execution endpoint.
+
+Incident proposals explain observations and hypotheses, retain safe trace IDs for correlation and say approval is required. They cannot execute changes. Confirm provider latency, query waits and event-loop delay against correlated runtime evidence before approving a fix. Increasing database connections or enabling the shared ring is not an automatic response to a slow request.
+
+## Supabase Connect choices for this application
+
+The Connect tabs are alternative integration instructions, not six additive features to install. Current server SQL uses `pg`, certificate verification, a four-connection pool and one dedicated LISTEN connection. The Supabase JavaScript client is already available for storage and account integration.
+
+| Rank | Connect option | Use here | Cost / decision |
+| --- | --- | --- | --- |
+| 1 | Direct | Persistent backend transactions, journal, event store and LISTEN | Retain the bounded server pool; no extra library or database bill just for selecting this tab |
+| 2 | Framework / client library | Supabase Auth and Storage through supported application code | Reuse the installed client; expose only publishable keys and user-scoped access in the browser |
+| 3 | API Keys | Key lifecycle and role boundaries for Auth/Storage/Data API | Configuration, not a separate query layer; backend secrets never enter public frontend bundles |
+| 4 | Server / build APIs | Existing Node API remains the business/auth/rate-limit boundary | Add no duplicate REST server just because the tab exists; direct browser Data API access requires reviewed RLS |
+| 5 | ORM / third-party library | Consider Drizzle/Prisma only for a demonstrated schema/type-safety need | No subscription required for the library, but migration/compatibility work and connection behavior must be reviewed; do not rewrite tested `pg` transactions now |
+| 6 | MCP / connect agent | Project-scoped read-only operator investigation | Agent tooling, not the production market-data path; no privileged browser key or public assistant access to administrative tools |
+
+Supabase recommends direct connections for persistent backends when IPv6 or an existing IPv4 option is available, session pooling for IPv4-only persistent clients, and transaction pooling for short-lived serverless connections. Do not buy IPv4 connectivity or switch pooling modes without a demonstrated reachability need. LISTEN requires a stable session, so it must not be moved to transaction pooling. [Connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+Publishable keys identify an application; user authentication and RLS determine user access. Secret/service-role keys remain backend-only. MCP access should be limited to the exact project and read-only feature groups for investigations; writes require a separate approved workflow. These changes do not connect a new MCP server or alter project keys. [API key guide](https://supabase.com/docs/guides/getting-started/api-keys), [MCP scope and read-only options](https://supabase.com/docs/guides/ai-tools/mcp).
+
+## Validation and remaining gates
+
+Run the engineering, event-store, operator and log-drain Node tests. Set `MARKET_TEST_DATABASE_URL` only to a disposable PostgreSQL database to execute the integration test. It applies migration 005 and creates immutable fixture history; never point it at production. The actual PG17 fixture verifies durable idempotency, version conflicts, mutation rejection, replay, projection rollback/cursor progress and outbox retry semantics. Terraform validation/mocked plans and Docker build/start are separate checks described in `terraform/README.md`.
+
+Pending decisions are external telemetry destination/retention, actual event-path wiring, broker adapter selection, cloud migration, external drain ingress and production deployment. No purchase or live action is implied by the implemented modules.

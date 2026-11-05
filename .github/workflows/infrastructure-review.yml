@@ -1,0 +1,75 @@
+name: Infrastructure review (no deployment)
+
+on:
+  pull_request:
+    paths: ['terraform/**', 'web/Dockerfile', 'web/lib/engineering/**', 'web/lib/runtime/**', 'web/tests/engineering*', '.github/workflows/infrastructure-review.yml']
+  push:
+    paths: ['terraform/**', 'web/Dockerfile', 'web/lib/engineering/**', 'web/lib/runtime/**', 'web/tests/engineering*', '.github/workflows/infrastructure-review.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.17.1'
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate
+      - name: Exercise mocked safety plans without AWS credentials
+        run: terraform test -no-color
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: marketlab
+          POSTGRES_PASSWORD: ci_fixture_only
+          POSTGRES_DB: engineering_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U marketlab -d engineering_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: web
+      - run: node --test tests/engineering.test.mjs tests/engineering-events.test.mjs tests/operator.test.mjs tests/log-drain.test.mjs
+        working-directory: web
+        env:
+          MARKET_TEST_DATABASE_URL: postgresql://marketlab:ci_fixture_only@127.0.0.1:5432/engineering_test
+      - name: Build the backend image without publishing
+        run: docker build --tag predictir-review:local --file web/Dockerfile web
+      - name: Check image starts without granting application credentials
+        run: |
+          docker run --detach --name predictir-review --env PORT=8780 --publish 127.0.0.1:8780:8780 predictir-review:local
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8780/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - if: always()
+        run: docker rm --force predictir-review || true

@@ -1,0 +1,7 @@
+profile                     = "disabled"
+migration_approved          = false
+external_registry_approved  = false
+enable_compute              = false
+approved_monthly_budget_usd = 0
+region                      = "us-east-1"
+environment                 = "review"

@@ -1,0 +1,62 @@
+name: Publish reviewed backend image (manual, disabled by default)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    if: vars.INFRA_EXTERNAL_ACTIONS_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts && npm test
+        working-directory: web
+      - run: docker build --tag predictir-reviewed:local --file web/Dockerfile web
+      - run: docker save predictir-reviewed:local --output reviewed-backend.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-backend
+          path: reviewed-backend.tar
+          retention-days: 1
+  publish:
+    needs: test-and-build
+    environment: registry-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: reviewed-backend
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_IMAGE_PUBLISH_ROLE_ARN }}
+          role-duration-seconds: 900
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+      - name: Publish the exact tested image with an immutable commit tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          [[ "$ECR_REPOSITORY_URL" =~ ^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9/_-]+$ ]]
+          docker load --input reviewed-backend.tar
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URL%%/*}"
+          docker tag predictir-reviewed:local "$ECR_REPOSITORY_URL:$IMAGE_TAG"
+          docker push "$ECR_REPOSITORY_URL:$IMAGE_TAG"
+          aws ecr describe-images --repository-name "${ECR_REPOSITORY_URL#*/}" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text

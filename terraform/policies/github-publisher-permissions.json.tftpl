@@ -1,0 +1,10 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "RegistryAuthentication", "Effect": "Allow", "Action": "ecr:GetAuthorizationToken", "Resource": "*"},
+    {"Sid": "PushReviewedBackendOnly", "Effect": "Allow", "Action": [
+      "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:DescribeImages"
+    ], "Resource": "arn:aws:ecr:${region}:${account_id}:repository/${repository_name}"}
+  ]
+}

@@ -1,0 +1,67 @@
+name: Deploy approved AWS backend (dormant template)
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        required: true
+        description: 'Reviewed ECR sha256 digest, never a mutable tag'
+      approved_monthly_budget_usd:
+        required: true
+        description: 'Separately approved AWS monthly estimate, at least 60'
+permissions:
+  contents: read
+jobs:
+  deploy:
+    if: vars.INFRA_EXTERNAL_ACTIONS_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    environment: production-aws
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: 'true'
+      TF_VAR_profile: aws-reference
+      TF_VAR_migration_approved: 'true'
+      TF_VAR_external_registry_approved: 'true'
+      TF_VAR_enable_compute: 'true'
+      TF_VAR_approved_monthly_budget_usd: ${{ inputs.approved_monthly_budget_usd }}
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+      TF_VAR_certificate_arn: ${{ vars.AWS_CERTIFICATE_ARN }}
+      TF_VAR_application_secret_arns: ${{ vars.APPLICATION_SECRET_ARNS_JSON }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.17.1'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-duration-seconds: 1800
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+      - name: Validate immutable release reference
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf 'TF_VAR_container_image=%s@%s\n' "$ECR_REPOSITORY_URL" "$IMAGE_DIGEST" >> "$GITHUB_ENV"
+      - name: Require reviewed encrypted remote state configuration
+        env:
+          STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+          STATE_REGION: ${{ vars.TERRAFORM_STATE_REGION }}
+        run: |
+          test -n "$STATE_BUCKET" && test -n "$STATE_REGION"
+          cp backend.tf.example backend.tf
+          terraform init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET" -backend-config="key=predictir/production.tfstate" -backend-config="region=$STATE_REGION" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - run: terraform validate
+      - run: terraform plan -input=false -out=approved.tfplan
+      - run: terraform apply -input=false approved.tfplan
+      - if: always()
+        run: rm -f approved.tfplan
