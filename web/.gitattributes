@@ -149,3 +149,5 @@ public/dashboard/** text eol=lf
 public/dashboard/runtime.js -whitespace
 public/lab* text eol=lf
 public/risk-client.js text eol=lf
+public/favicon.ico -filter -diff -merge -text
+public/favicon.png -filter -diff -merge -text
