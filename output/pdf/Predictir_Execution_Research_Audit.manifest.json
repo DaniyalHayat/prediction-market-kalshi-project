@@ -1,0 +1,74 @@
+{
+  "classification": "local_review_supplement_not_production_verification",
+  "source_revision": "0eca9a91c464ff4acb51e82c3872649ae56784e5",
+  "pages": 35,
+  "reportlab_version": "4.4.9",
+  "pdf_sha256": "2bd65e60d7d5a379de9f6172ce023f1ad0d8a8e9ed8d2722a0d9336012bee566",
+  "input_line_endings": "LF",
+  "inputs": [
+    {
+      "path": "review/execution-research-validation.json",
+      "sha256": "e0bc8d4ce9c3075309f004d3794bb85e9100869d37b81ed12489b0ff7c836fae"
+    },
+    {
+      "path": "review/quant-research-sources.json",
+      "sha256": "a208c2843013f61a3ff9d1d356ce61557a90a6e15bd7116b60d55b7e2c453a37"
+    },
+    {
+      "path": "docs/IMPLEMENTATION_VERIFICATION.md",
+      "sha256": "13267e14009c5480fec4060e6154d7a0269ecb5b220f6c424bbf1237cc25ff09"
+    },
+    {
+      "path": "docs/EXECUTION_RESEARCH.md",
+      "sha256": "fcfda64b965e8d0355c66c490d2071173462c776da395793705a7731b73c9a12"
+    },
+    {
+      "path": "docs/postgres-query-hardening.md",
+      "sha256": "b3192419b2a3b19302f4d859131d75abb84232ac76c9e06a55fda17baa22ecdf"
+    },
+    {
+      "path": "docs/query-optimization-benchmark.md",
+      "sha256": "aa1cb15e3d9b3e621be5f96626b9839f403234aa29c1edc979cdbda30528be4f"
+    },
+    {
+      "path": "docs/quant-research-source-ledger.md",
+      "sha256": "9fdfb859090f3fb488502723af59d78716a2a659822d02f0d2deef4cacece927"
+    },
+    {
+      "path": "web/lib/workspace/execution-research.mjs",
+      "sha256": "8ff13511ac7b377a1595fd42dad44dc977c76f04d0f62137d669072622448d5c"
+    },
+    {
+      "path": "web/lib/workspace/microstructure-model.mjs",
+      "sha256": "db0a8071482368d174334acb3feba0fa9e41b9a3acec42678d877acd8aeb6d48"
+    },
+    {
+      "path": "web/lib/workspace/execution-service.mjs",
+      "sha256": "8a34ccc98e23a1dfecbc65cb4c50888ad541b470127c41895b31febec6d97d79"
+    },
+    {
+      "path": "web/lib/cloud/microstructure-window.mjs",
+      "sha256": "7009da8661eb9bcde7d48660854b8312869a33f547922075fcb172ab1e2ffe03"
+    },
+    {
+      "path": "web/lib/cloud/feed.mjs",
+      "sha256": "b9373b76725ad99f855384963b8fbb766e98d971dff61da4287ff5100edd79a3"
+    },
+    {
+      "path": "web/tools/validate_execution_research.mjs",
+      "sha256": "9514aca43b7160d38594df76489fbfd56477ec744203fd929a60bd651ac7acba"
+    },
+    {
+      "path": "web/tools/build_execution_audit.py",
+      "sha256": "5b2be1693be2d7f6e57a76aad4711cbf6f04133a5df4a43bc6f642acb81ae365"
+    },
+    {
+      "path": "web/tools/build_research_audit.py",
+      "sha256": "52418f30be898aacc3300514e06731364fccb32747226ee685838c1e6e98e5a1"
+    },
+    {
+      "path": "web/tools/report-requirements.txt",
+      "sha256": "054e7483ed0899a13425d3ff89d0ae162290c88989825c77d22174ceb36f33f1"
+    }
+  ]
+}
