@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {ArrowUpRight,Loader2} from 'lucide-react';
-import {cents,dateLabel,dollars} from './api.mjs';
+import {cents,dateLabel,dollars,percent} from './api.mjs';
 
 function newsURL(value){
   try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password;}
@@ -49,6 +49,7 @@ export default function PositionReview({position,reviews,onOpen}){
           {value.alternatives.map(row=><div className="trade-alternative" key={row.ticker+'-'+row.side}>
             <button className="text-button" onClick={()=>onOpen(row,row.budget)}>{row.side} · {row.title||row.ticker}<ArrowUpRight size={13}/></button>
             <small>{dollars(row.cost)} modeled entry · {cents(row.conservative_edge)} lower-bound edge per contract · {dateLabel(row.as_of)}</small>
+            {Number.isFinite(row.settlement_value)&&<small>{cents(row.settlement_value)} expected payout per contract · {percent(row.win_probability)} win chance · {percent(row.tie_probability)} chance of a {cents(row.tie_payout)} payout</small>}
           </div>)}
         </div>}
         {value.action==='SELL'&&!value.alternatives?.length&&<p className="footnote">No alternative cleared the available model and execution checks in this scan.</p>}
