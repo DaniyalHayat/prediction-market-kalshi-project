@@ -119,7 +119,8 @@ export async function workspaceOpinions(raw,{research=workspaceResearch,model='b
   tickers.forEach(validateTicker);
   const opinions=await boundedMap(tickers,2,async ticker=>{
     try {const value=await research(ticker,{fast:true,model:modelChoice(model)});return {ticker,...value.opinion,probability:value.forecast?.probability??null,
-      interval:value.forecast?.interval??null,as_of:value.as_of,model:value.forecast?.model_name||null};}
+      interval:value.forecast?.interval??null,as_of:value.as_of,model:value.forecast?.model_name||null,
+      source_as_of:value.forecast?.source_as_of,max_source_age_seconds:value.forecast?.max_source_age_seconds,inplay:Boolean(value.forecast?.inplay)};}
     catch{return {ticker,side:'PASS',reason:'Current research could not be verified. Open the contract to retry.',supported_allocation:0};}
   });
   return {opinions,as_of:new Date().toISOString(),scope:'Compact deterministic screens. Headlines, paid X reads, Spotify references and availability retrieval are omitted.'};

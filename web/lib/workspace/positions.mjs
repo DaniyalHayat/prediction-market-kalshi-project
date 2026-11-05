@@ -28,9 +28,9 @@ export function evaluatePaperPosition(position,book,research,{now=Date.now(),fee
   const result={...base,fresh:true,status:exit.complete?'live':'partial',executable_quantity:exit.filled,exit_proceeds:exit.cash,exit_fee:exit.fee,
     marked_value:exit.complete?exit.cash:null,unrealized_pnl:exit.complete?exit.cash-basis:null,total_pnl:exit.complete?realized+exit.cash-basis:null};
   if(!exit.complete)return {...result,reason:`Only ${exit.filled} of ${q} contracts have executable bid depth within the slippage limit. Full-position P/L is withheld.`};
-  if(Number.isFinite(maxPositionLoss)&&maxPositionLoss>=0&&basis>maxPositionLoss)return {...result,action:'TRIM',suggested_reduce_fraction:Math.max(0,Math.min(1,1-maxPositionLoss/basis)),reason:'The remaining cost basis exceeds your explicit position-loss limit. Reducing exposure restores that limit independently of a forecast.'};
   const forecast=usableForecast(research,now,position.ticker);
   result.forecast_fresh=forecast.fresh;
+  if(Number.isFinite(maxPositionLoss)&&maxPositionLoss>=0&&basis>maxPositionLoss)return {...result,action:'TRIM',suggested_reduce_fraction:Math.max(0,Math.min(1,1-maxPositionLoss/basis)),reason:'The remaining cost basis exceeds your explicit position-loss limit. Reducing exposure restores that limit independently of a forecast.'};
   if(!forecast.valid)return {...result,reason:forecast.reason};
   const probability=position.side==='yes'?forecast.probability:1-forecast.probability;
   const interval=position.side==='yes'?forecast.interval:[1-forecast.interval[1],1-forecast.interval[0]];
