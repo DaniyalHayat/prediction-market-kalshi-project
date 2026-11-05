@@ -1,0 +1,201 @@
+{
+  "evaluated_at": "2026-11-05T00:07:49.829804+00:00",
+  "classification": "Retrospective public-score model comparison; not a trading-return backtest",
+  "selected": {
+    "model": "ridge_logistic",
+    "weight": 0.25,
+    "beta": [
+      1.050193090754579,
+      0.9626531328604753,
+      -0.022529064783634707
+    ]
+  },
+  "promoted": false,
+  "validation": {
+    "n": 514,
+    "brier": 0.19938547509184767,
+    "log_loss": 0.5860446436842194,
+    "baseline_brier": 0.2025336533599441,
+    "baseline_log_loss": 0.5935887720505555,
+    "brier_skill": 0.015543976104067325,
+    "improvement_95_lower": -0.0011700791568206954,
+    "weekly_blocks": 12,
+    "coverage": 1.0,
+    "unmatched_games": 0,
+    "passed": false,
+    "train_end": "2025-12-03T01:00:00.000Z",
+    "test_start": "2026-02-20T00:30:00.000Z",
+    "test_end": "2026-11-03T03:00:00.000Z",
+    "protocol": "60/10/10/20 strictly chronological train/model-selection/beta-calibration/test; equal timestamps stay together. Lag features include only earlier final scores. Fixed pre-specified candidates; final holdout is not used for model selection. Paired Brier differences use 2,000 seeded whole-week bootstrap replicates."
+  },
+  "baseline": {
+    "n": 514,
+    "brier": 0.2025336533599441,
+    "log_loss": 0.5935887720505555
+  },
+  "paired_weekly_bootstrap": {
+    "weekly_blocks": 12,
+    "replicates": 2000,
+    "mean": 0.0031481782680964562,
+    "lower_95": -0.0011700791568206954,
+    "upper_95": 0.007519612692909083
+  },
+  "candidate_selection_scores": [
+    {
+      "model": "bradley_terry",
+      "weight": 0.0,
+      "n": 257,
+      "brier": 0.2387923143022123,
+      "log_loss": 0.6711910615899536
+    },
+    {
+      "model": "ridge_logistic",
+      "weight": 0.25,
+      "n": 257,
+      "brier": 0.23743693430200394,
+      "log_loss": 0.6680931636900707
+    },
+    {
+      "model": "ridge_logistic",
+      "weight": 0.5,
+      "n": 257,
+      "brier": 0.2377149022178232,
+      "log_loss": 0.6687267923727245
+    },
+    {
+      "model": "ridge_logistic",
+      "weight": 0.75,
+      "n": 257,
+      "brier": 0.23962621804967013,
+      "log_loss": 0.6735386976847051
+    },
+    {
+      "model": "ridge_logistic",
+      "weight": 1.0,
+      "n": 257,
+      "brier": 0.24317088179754462,
+      "log_loss": 0.6834974880672315
+    },
+    {
+      "model": "xgboost_depth2",
+      "weight": 0.25,
+      "n": 257,
+      "brier": 0.23748686764148763,
+      "log_loss": 0.66803696076697
+    },
+    {
+      "model": "xgboost_depth2",
+      "weight": 0.5,
+      "n": 257,
+      "brier": 0.23795765739120042,
+      "log_loss": 0.6689001055472763
+    },
+    {
+      "model": "xgboost_depth2",
+      "weight": 0.75,
+      "n": 257,
+      "brier": 0.24020468321059904,
+      "log_loss": 0.6740572343209884
+    },
+    {
+      "model": "xgboost_depth2",
+      "weight": 1.0,
+      "n": 257,
+      "brier": 0.24422794612193796,
+      "log_loss": 0.684160336251033
+    }
+  ],
+  "candidate_converged": {
+    "ridge_logistic": true,
+    "xgboost_depth2": true,
+    "neural_16_8": false
+  },
+  "candidate_fit_seconds": {
+    "ridge_logistic": 0.004424200014909729,
+    "xgboost_depth2": 1.8958475000108592,
+    "neural_16_8": 0.4893417999846861
+  },
+  "software": {
+    "numpy": "2.3.5",
+    "scipy": "1.18.1",
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.2.0"
+  },
+  "input": {
+    "games": 2569,
+    "games_sha256": "71fc9378433f28f65464da122c8b94752d471dacb34ff71cc52a62f6b73bb23f",
+    "source_count": 90,
+    "coverage": {
+      "schedules_expected": 90,
+      "schedules_returned": 90,
+      "completed_games": 2569,
+      "partial": false
+    },
+    "features": [
+      "elo_logit",
+      "margin_ewma_difference",
+      "last10_winrate_difference",
+      "rest_day_difference",
+      "home_back_to_back",
+      "away_back_to_back",
+      "home_season_gap",
+      "away_season_gap",
+      "minimum_history",
+      "home_margin_ewma",
+      "away_margin_ewma"
+    ],
+    "source_examples": [
+      {
+        "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/schedule?season=2025",
+        "as_of": "2026-11-04T23:59:02.323Z",
+        "sha256": "c3cabc4dd1d78cda3dc9cec87e8ebffec05277390084e423fb8c9ed5b2538939"
+      },
+      {
+        "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/schedule?season=2026",
+        "as_of": "2026-11-04T23:59:02.333Z",
+        "sha256": "92e9731940e17069a80b3b15ffaa7b7917029a2ecbcd2c289b2c537c00441b6e"
+      },
+      {
+        "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/1/schedule?season=2027",
+        "as_of": "2026-11-04T23:59:02.378Z",
+        "sha256": "bf44e89b402a869d69389aefead26f91ad9c77752275574e152f1c3089868105"
+      }
+    ],
+    "splits": {
+      "train": 1541,
+      "selection": 257,
+      "calibration": 257,
+      "test": 514
+    }
+  },
+  "artifact_sha256": "e3eae53fdbe54adba4185808cd6a506dd3e33e3f8e1a36e3101cffb8ea4fe190",
+  "elapsed_seconds": 2.5072386999963783,
+  "promotion_rule": "At least 1% lower final-holdout Brier than the existing 80%-fit frozen Bradley-Terry baseline, non-worse log loss, positive 95% whole-week-bootstrap lower improvement, >=100 cases, >=12 weeks and complete source coverage.",
+  "limitations": [
+    "Game final-score history is not a point-in-time roster or injury archive.",
+    "Historical public data may be corrected; original capture hashes identify inputs.",
+    "Whole-week bootstrap resampling does not eliminate repeated-team dependence across weeks or seasonal regime changes.",
+    "Same-game updates are grouped by scheduled timestamps; actual historical result-publication timestamps are unavailable.",
+    "The new composition uses established algorithms; no claim of a new theorem or HRT-like trading edge.",
+    "Conditional calibration residuals are empirical sensitivity evidence, not guaranteed event-probability intervals.",
+    "Models exclude Kalshi prices, order flow, lineups, bookmaker odds and news. No trading profitability was measured."
+  ],
+  "sources": [
+    {
+      "title": "XGBoost: A Scalable Tree Boosting System",
+      "url": "https://arxiv.org/abs/1603.02754"
+    },
+    {
+      "title": "Beta calibration",
+      "url": "https://proceedings.mlr.press/v54/kull17a.html"
+    },
+    {
+      "title": "On Calibration of Modern Neural Networks",
+      "url": "https://proceedings.mlr.press/v70/guo17a.html"
+    },
+    {
+      "title": "Strictly Proper Scoring Rules, Prediction, and Estimation",
+      "url": "https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf"
+    }
+  ]
+}
