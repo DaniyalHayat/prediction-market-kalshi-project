@@ -5,6 +5,8 @@ import {sportsResearch} from '../lib/workspace/sports.mjs';
 import {matchNFLFixture, nflContractIdentity, parseNFLScoreboard} from '../lib/workspace/nfl-source.mjs';
 import {earlierNFLGames, fitNFL, NFL_RESULT_LAG_MS} from '../lib/workspace/nfl-math.mjs';
 import {evaluatePaperPosition,usableForecast} from '../lib/workspace/positions.mjs';
+import {positionIdeaCandidates} from '../lib/workspace/router.mjs';
+import {tradeCandidates} from '../lib/workspace/recommendations.mjs';
 import archive from '../lib/workspace/models/nfl-results.json' with {type: 'json'};
 import validation from '../lib/workspace/models/nfl-validation.json' with {type: 'json'};
 import holdout from '../research-data/nfl-heldout-predictions-2025.json' with {type: 'json'};
@@ -137,6 +139,39 @@ test('position review withholds NFL actions for altered rules, bad payout data a
   for(const fixtureChange of [{coverage:{partial:true}},{selection:{code:'SEA'}},{event:{...sports.event,state:'in'}},
     {event:{...sports.event,played_at:new Date(now()-1000).toISOString()}}])
     assert.equal(evaluate({},fixtureChange).action,'REVIEW');
+});
+
+test('position replacements rank validated NFL tie-adjusted payouts only when the lower bound beats the fee-inclusive entry',async()=>{
+  const open={...market,category:'sports',status:'active',close_time:fixture.played_at};
+  const sports=await sportsResearch(open,{getter:provider().getter,now});
+  const research={ticker:open.ticker,market:open,forecast:sports.forecast,extensions:{sports}};
+  const {expected_settlement_value:expected,outcomes}=sports.forecast;
+  const depth=(yes,no)=>({ticker:open.ticker,as_of:new Date(now()).toISOString(),
+    raw:{orderbook_fp:{yes_dollars:[[String(yes),'20']],no_dollars:[[String(no),'20']]}}});
+  const alternatives=(book,forecast={},exact=open,extras={})=>positionIdeaCandidates(exact,book,
+    {...research,...extras,forecast:{...sports.forecast,...forecast}},{now:now(),budget:20});
+  assert.deepEqual(tradeCandidates(open,depth(.08,.91),research,{now:now()}),[]);
+  const [yes]=alternatives(depth(.08,.91)),[no]=alternatives(depth(.91,.08));
+  for(const [row,side,value,win] of [[yes,'YES',expected,outcomes.win],[no,'NO',1-expected,outcomes.loss]]){
+    assert.equal(row.side,side);
+    assert.equal(row.eligible,true);
+    assert.equal(row.probability,null);
+    assert.equal(row.probability_yes,null);
+    assert.equal(row.settlement_value,value);
+    assert.equal(row.win_probability,win);
+    assert.equal(row.tie_probability,outcomes.tie);
+    assert.equal(row.tie_payout,.5);
+    assert.ok(row.fee>0&&row.cost<=20&&row.expected_profit>0);
+    assert.equal(row.conservative_edge,row.settlement_value_range[0]-row.cost/row.contracts-.02);
+    assert.ok(row.conservative_edge>0);
+  }
+  assert.deepEqual(alternatives(depth(expected-.01,1-expected-.01)),[]);
+  for(const forecast of [{experimental:true},{model_release_passed:false},{expected_settlement_value:.95},
+    {validation:{...sports.forecast.validation,payout_mse:1}},{source_as_of:'2026-10-01T00:00:00Z'}])
+    assert.deepEqual(alternatives(depth(.08,.91),forecast),[]);
+  assert.deepEqual(alternatives(depth(.08,.91),{},{...open,rules_secondary:'A tie resolves No.'}),[]);
+  assert.deepEqual(alternatives(depth(.08,.91),{},{...open,status:'closed'}),[]);
+  assert.deepEqual(alternatives(depth(.08,.91),{},open,{extensions:{sports:{...sports,coverage:{partial:true}}}}),[]);
 });
 
 test('the archived validation forecasts only from results with the fixed 36-hour availability gap', () => {
