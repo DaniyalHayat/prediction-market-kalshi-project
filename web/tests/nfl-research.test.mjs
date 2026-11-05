@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {sportsResearch} from '../lib/workspace/sports.mjs';
 import {matchNFLFixture, nflContractIdentity, parseNFLScoreboard} from '../lib/workspace/nfl-source.mjs';
 import {earlierNFLGames, fitNFL, NFL_RESULT_LAG_MS} from '../lib/workspace/nfl-math.mjs';
+import {evaluatePaperPosition,usableForecast} from '../lib/workspace/positions.mjs';
 import archive from '../lib/workspace/models/nfl-results.json' with {type: 'json'};
 import validation from '../lib/workspace/models/nfl-validation.json' with {type: 'json'};
 import holdout from '../research-data/nfl-heldout-predictions-2025.json' with {type: 'json'};
@@ -95,6 +96,47 @@ test('uncertain payout, kickoff, and source failure gates preserve honest availa
   assert.ok(fallback.forecast);
   assert.equal(fallback.coverage.partial, true);
   assert.equal(fallback.forecast.model_release_passed, false);
+});
+
+test('position review uses released NFL payout ranges for both sides without changing binary eligibility',async()=>{
+  const open={...market,status:'active',close_time:fixture.played_at};
+  const sports=await sportsResearch(open,{getter:provider().getter,now});
+  const research={ticker:open.ticker,market:open,forecast:sports.forecast,extensions:{sports}};
+  const book={ticker:open.ticker,as_of:new Date(now()).toISOString(),raw:{orderbook_fp:{yes_dollars:[['.08','20']],no_dollars:[['.91','20']]}}};
+  const review=side=>evaluatePaperPosition({ticker:open.ticker,side,remaining_quantity:10,remaining_basis:5},book,research,{now:now()});
+  const yes=review('yes'),no=review('no');
+  assert.equal(usableForecast(research,now(),open.ticker).eligible,false);
+  assert.equal(yes.action,'HOLD');
+  assert.ok(yes.unrealized_pnl<0);
+  assert.equal(no.action,'EXIT');
+  assert.equal(yes.probability,null);
+  assert.equal(no.probability,null);
+  assert.equal(yes.nfl_settlement.win_probability,sports.forecast.outcomes.win);
+  assert.equal(no.nfl_settlement.win_probability,sports.forecast.outcomes.loss);
+  assert.equal(no.nfl_settlement.tie_payout,.5);
+  assert.ok(Math.abs(yes.nfl_settlement.expected_per_contract+no.nfl_settlement.expected_per_contract-1)<1e-10);
+  assert.ok(Math.abs(yes.fair_value_range[0]+no.fair_value_range[1]-10)<1e-10);
+  assert.ok(Math.abs(yes.fair_value_range[1]+no.fair_value_range[0]-10)<1e-10);
+});
+
+test('position review withholds NFL actions for altered rules, bad payout data and a failed gate',async()=>{
+  const open={...market,status:'open',close_time:fixture.played_at};
+  const sports=await sportsResearch(open,{getter:provider().getter,now});
+  const research={ticker:open.ticker,market:open,forecast:sports.forecast,extensions:{sports}};
+  const book={ticker:open.ticker,as_of:new Date(now()).toISOString(),raw:{orderbook_fp:{yes_dollars:[['.08','20']],no_dollars:[['.91','20']]}}};
+  const lot={ticker:open.ticker,side:'yes',remaining_quantity:10,remaining_basis:5};
+  const evaluate=(overrides={},fixtureOverrides={},current=open)=>evaluatePaperPosition(lot,book,
+    {...research,forecast:{...sports.forecast,...overrides},extensions:{sports:{...sports,...fixtureOverrides}}},
+    {market:current,now:now(),experimental:true});
+  assert.match(evaluate({},{},{...open,rules_secondary:open.rules_secondary.replace('$0.50','$0.25')}).reason,/did not verify/);
+  for(const forecast of [{outcomes:{win:.5,loss:.5,tie:.1}},{expected_settlement_value:.95},{settlement_value_interval:[.95,1]},
+    {settlement_value_interval:[-1,1]}])assert.match(evaluate(forecast).reason,/did not reconcile/);
+  for(const forecast of [{model_release_passed:false},{validation:{...sports.forecast.validation,passed:false}},
+    {validation:{...sports.forecast.validation,payout_mse:1}},{experimental:true},{source_as_of:'2026-10-01T00:00:00Z'}])
+    assert.equal(evaluate(forecast).action,'REVIEW');
+  for(const fixtureChange of [{coverage:{partial:true}},{selection:{code:'SEA'}},{event:{...sports.event,state:'in'}},
+    {event:{...sports.event,played_at:new Date(now()-1000).toISOString()}}])
+    assert.equal(evaluate({},fixtureChange).action,'REVIEW');
 });
 
 test('the archived validation forecasts only from results with the fixed 36-hour availability gap', () => {

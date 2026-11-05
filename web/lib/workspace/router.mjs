@@ -19,7 +19,7 @@ import settlementValidation from '../../public/research/settlement-calibration.j
 const researchCache=new Map(),researchInflight=new Map();
 const scanCache=new Map(),scanInflight=new Map();
 const evidenceCache=new Map(),evidenceInflight=new Map();
-let positionIdeasPending;
+let positionIdeasPending,positionIdeasWarmAt=0;
 function modelChoice(model='baseline'){
   if(!['baseline','validated','challenger'].includes(model))throw new RangeError('Choose the validated baseline or experimental challenger');
   return model==='validated'?'baseline':model;
@@ -232,6 +232,20 @@ export async function workspaceRecommendations(category='sports',budget=20,model
       risk_size:{drawdown_floor:.8,drawdown_probability:.1},budget_scope:'Each row is a separate use of this budget; do not add the scenarios as if each had its own extra cash.'}};
 }
 
+function warmPositionIdeaPool(){
+  const now=Date.now();
+  if(now-positionIdeasWarmAt<25*60000)return;
+  positionIdeasWarmAt=now;
+  void (async()=>{
+    for(const {id} of WORKSPACE_CATEGORIES){
+      const sample=await categorySnapshot(id).catch(()=>null);
+      const row=sample?.markets.find(market=>Date.parse(market.close_time)>Date.now()+120000&&
+        (inferResearchFamily(market.ticker)||/^KX(?:NBA|EPL)GAME-/.test(market.ticker)));
+      if(row)await workspaceResearch(row.ticker,{fast:true}).catch(()=>{});
+    }
+  })();
+}
+
 export async function recentPositionIdeas() {
   if(positionIdeasPending)return positionIdeasPending;
   const load=async()=>{
@@ -255,12 +269,15 @@ export async function recentPositionIdeas() {
         recent.set(market.ticker,{market:{...market,category},research});
     }
     const perCategory=new Map();
-    const candidates=[...recent.values()].sort((a,b)=>Number(b.market.volume_24h_fp||b.market.volume_24h||0)-Number(a.market.volume_24h_fp||a.market.volume_24h||0))
-      .filter(({market})=>{
-        const count=perCategory.get(market.category)||0;
-        if(count>=2||Date.parse(market.close_time)<=now||!['active','open'].includes(market.status))return false;
-        perCategory.set(market.category,count+1);return true;
-      }).slice(0,12);
+    for(const row of [...recent.values()].sort((a,b)=>Number(b.market.volume_24h_fp||b.market.volume_24h||0)-Number(a.market.volume_24h_fp||a.market.volume_24h||0))){
+      const {market}=row,group=perCategory.get(market.category)||[];
+      if(group.length<2&&Date.parse(market.close_time)>now&&['active','open'].includes(market.status)){
+        group.push(row);
+        perCategory.set(market.category,group);
+      }
+    }
+    const groups=[...perCategory.values()];
+    const candidates=[...groups.map(group=>group[0]),...groups.flatMap(group=>group.slice(1))].slice(0,12);
     const needDepth=candidates.filter(({market})=>!books.has(market.ticker)).map(({market})=>market.ticker);
     if(needDepth.length)for(const [ticker,depth] of await batchBooks(needDepth).catch(()=>new Map()))books.set(ticker,depth);
     const as_of=new Date().toISOString();
@@ -270,10 +287,13 @@ export async function recentPositionIdeas() {
       side:row.side,category:row.category,as_of:row.quote_as_of,conservative_edge:row.conservative_edge,
       expected_edge:row.point_edge,expected_profit:row.expected_profit,budget:20,contracts:row.contracts,
       cost:row.cost,probability_yes:row.probability_yes,interval_yes:row.interval_yes,model:row.model,source_as_of:row.source_as_of})),
-      checked_categories:[...categories].filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
-      category_count:WORKSPACE_CATEGORIES.length,scanned_contracts:candidates.length,as_of};
+      checked_categories:[...new Set(candidates.filter(({market})=>books.has(market.ticker)).map(({market})=>market.category))]
+        .filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
+      cached_categories:[...categories].filter(id=>WORKSPACE_CATEGORIES.some(row=>row.id===id)),
+      category_count:WORKSPACE_CATEGORIES.length,scanned_contracts:candidates.filter(({market})=>books.has(market.ticker)).length,as_of};
   };
   positionIdeasPending=load();
+  if(!positionIdeasWarmAt||Date.now()-positionIdeasWarmAt>=25*60000)setImmediate(warmPositionIdeaPool).unref();
   try{return await positionIdeasPending;}finally{positionIdeasPending=undefined;}
 }
 
