@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-11-05T01:33:16Z",
+  "classification": "bounded_live_public_read_checks",
+  "deployment": "not_deployed",
+  "checks": [
+    {"source": "Apple Music US most-played songs", "status": "available", "url": "https://rss.marketingtools.apple.com/api/v2/us/music/most-played/100/songs.json", "retrieved_at": "2026-11-05T01:33:16.025Z", "measurement_date": "2026-11-05", "rows": 100, "unit": "ordinal song rank snapshot"},
+    {"source": "Spotify app authentication", "status": 200, "method": "client_credentials", "secrets_recorded": false},
+    {"source": "Spotify public artist catalog", "status": 200, "query": "BTS", "matched_artist": "BTS", "unit": "catalog identity", "settlement_stream_history": false},
+    {"source": "Kworb US Spotify daily song chart", "status": "available", "url": "https://kworb.net/spotify/country/us_daily.html", "retrieved_at": "2026-11-05T01:33:14.398Z", "measurement_date": "2026-11-03", "rows": 200, "sha256": "4cdaee8e4ecac4938b680fe20bfaf38b4bae77dff86d04de15c4882aba89714e", "example": {"artist": "Tate McRae", "song": "Housewife", "rank": 1, "reported_daily_song_streams": 1166544}, "source_tier": "secondary_measurement", "official_settlement_match": false},
+    {"source": "ESPN NBA news", "status": "available", "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=20", "retrieved_at": "2026-11-05T01:33:13.993Z", "rows": 20, "content_scope": "publisher headlines and descriptions only"},
+    {"source": "ESPN NBA completed boxscore", "status": 200, "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401909907", "game_id": "401909907", "parsed_player_rows": 23, "content_scope": "actual minutes and point/rebound/assist/turnover/steal/block fields"},
+    {"source": "Reddit public collection", "status": "robots_blocked", "robots_url": "https://www.reddit.com/robots.txt", "retrieved_at": "2026-11-05T01:33:13.807Z", "matched_rule": "User-agent: *; Disallow: /", "post_listing_requested": false},
+    {"source": "X public posts", "status": "not_live_queried_by_this_verification", "verification": "injected-provider tests only; root separately inspects authenticated developer access"}
+  ],
+  "limitations": ["Source availability and measurements can change.", "No paid X reads, private communications, production writes or payments were used in these checks.", "No predictive accuracy, causal news impact or profitable trading result is established."]
+}

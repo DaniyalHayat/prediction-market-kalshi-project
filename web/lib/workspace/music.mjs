@@ -1,11 +1,13 @@
 import {sourceJSON} from './providers.mjs';
 import {publishDataset,chartHistory} from './warehouse.mjs';
-import {cloudEnabled,store} from '../cloud/store.mjs';
 import {mean,wilson} from '../intelligence/math.mjs';
 import {readJSON} from '../transport.mjs';
+import {publicXFeed} from './social.mjs';
+import {alternativeMusicSources} from './music-alternatives.mjs';
 const appleURL='https://rss.marketingtools.apple.com/api/v2/us/music/most-played/100/songs.json';
-let spotifyToken;
+let spotifyToken,spotifyAuthJob,spotifyAuthRetryAt=0;
 const safeURL=(value,host)=>{try{const u=new URL(value);return u.protocol==='https:'&&(!host||u.hostname===host)?u.href:null;}catch{return null;}};
+const identity=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function parseApple(payload,now=Date.now()) {
   const feed=payload?.feed,stamp=Date.parse(feed?.updated);
   if(!Array.isArray(feed?.results)||feed.country!=='us'||!Number.isFinite(stamp)||stamp>now+300000)throw new Error('Apple US chart identity or timestamp is unavailable');
@@ -40,10 +42,17 @@ export function rankPersistence(rows,horizon=1) {
 async function token() {
   if(spotifyToken?.until>Date.now())return spotifyToken.value;
   const id=process.env.SPOTIFY_CLIENT_ID,secret=process.env.SPOTIFY_CLIENT_SECRET;if(!id||!secret)return null;
-  const response=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{Authorization:'Basic '+Buffer.from(id+':'+secret).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=client_credentials',redirect:'error',signal:AbortSignal.timeout(12000)});
-  const {data}=await readJSON(response,{source:'Spotify authentication',maximumBytes:12000});
-  if(typeof data.access_token!=='string'||!Number.isFinite(data.expires_in))throw new Error('Spotify app authentication is unavailable');
-  spotifyToken={value:data.access_token,until:Date.now()+Math.max(0,data.expires_in-120)*1000};return spotifyToken.value;
+  if(spotifyAuthRetryAt>Date.now())throw new Error('Spotify authentication is cooling down after a provider error. Check backend credentials, app access and account eligibility.');
+  if(spotifyAuthJob)return spotifyAuthJob;
+  spotifyAuthJob=(async()=>{
+    try{
+      const response=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{Authorization:'Basic '+Buffer.from(id+':'+secret).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=client_credentials',redirect:'error',signal:AbortSignal.timeout(12000)});
+      const {data}=await readJSON(response,{source:'Spotify authentication',maximumBytes:12000});
+      if(typeof data.access_token!=='string'||!Number.isFinite(data.expires_in))throw new Error('Invalid authentication schema');
+      spotifyToken={value:data.access_token,until:Date.now()+Math.max(0,data.expires_in-120)*1000};return spotifyToken.value;
+    }catch(error){spotifyAuthRetryAt=Date.now()+300000;throw Object.assign(new Error('Spotify app authentication is unavailable. Verify backend Client ID/Secret, current development-mode eligibility and quota.'),{status:error.status||503});}
+  })();
+  try{return await spotifyAuthJob;}finally{spotifyAuthJob=null;}
 }
 export async function spotifyReferences(query){
   const access=await token();if(!access)return {status:'not_configured',references:[]};
@@ -59,42 +68,21 @@ export function musicIdentity(market){
   const artistContract=/\bartist\b/i.test([market.title,market.rules_primary].join(' '))&&!/\b(?:song|track)\b/i.test(market.title||'');
   return artistContract&&typeof market.yes_sub_title==='string'?{artist:market.yes_sub_title.trim(),kind:'artist'}:{artist:null,kind:'unverified_song_or_other'};
 }
-export async function musicResearch(market,{includeSpotify=true}={}){
+export async function musicResearch(market,{includeSpotify=true,includeAlternatives=true}={}){
   if(!musicContract(market))return null;
   const {artist}=musicIdentity(market);
-  const [apple,spotify]=await Promise.all([appleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&artist?spotifyReferences(artist).catch(error=>({status:'unavailable',references:[],reason:error.message})):
-    {status:'not_queried',references:[],reason:'Artist references require a verified artist identity. A song outcome is not used as an artist-search query.'}]);
-  const matched=artist?apple.tracks?.filter(t=>(t.artist+' '+t.name).toLowerCase().includes(artist.toLowerCase())):[],history=matched?.length===1?await chartHistory('apple-music','us-songs','ordinal_rank_snapshot',matched[0].id):[];
-  return {scope:'Dated source references',apple,spotify,matched_tracks:artist?matched:[],history,
+  const song=!artist&&/\b(?:song|track)\b/i.test(market.title||'')?market.custom_strike?.Song||market.yes_sub_title:null;
+  const [apple,spotify,alternatives]=await Promise.all([appleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&artist?spotifyReferences(artist).catch(error=>({status:'unavailable',references:[],reason:error.message})):
+    {status:'not_queried',references:[],reason:'Artist references require a verified artist identity. A song outcome is not used as an artist-search query.'},includeAlternatives?alternativeMusicSources(market,{artist,song}):null]);
+  const matched=artist?apple.tracks?.filter(t=>identity(t.artist)===identity(artist)):[],history=matched?.length===1?await chartHistory('apple-music','us-songs','ordinal_rank_snapshot',matched[0].id):[];
+  return {scope:'Dated source references',apple,spotify,alternatives,matched_tracks:artist?matched:[],history,
+    diagnostics:{apple:{status:apple.error?'unavailable':'available',endpoint:appleURL,measurement_date:apple.measurement_date||null},spotify:{status:spotify.status,capability:'Artist catalog lookup only; no daily artist-stream chart endpoint is established.'},settlement:{status:'unsupported_measurement',reason:'Available catalog and cross-chart context must not be mislabeled as a settlement-matched stream history.'}},
     comparability:/spotify/i.test(market.rules_primary||market.title)?'This contract resolves on Spotify. Apple song ranks are cross-platform context and cannot establish Spotify artist streams or the contract outcome.':
       'Match the settlement source, territory, chart unit and reporting window. A song snapshot cannot establish total artist streams.',
     forecast:{probability:null,reason:'No settlement-matched, sufficiently long authorized chart-history dataset has been established for this contract. Current ranks and social posts do not become a trade probability.'},
     persistence:history.length?rankPersistence(history):null,
-    sources:apple.source_url?[{kind:'chart_reference',label:'Apple Music US most-played songs',url:apple.source_url,retrieved_at:apple.as_of}]:[]};
+    sources:[...(apple.source_url?[{kind:'chart_reference',label:'Apple Music US most-played songs',url:apple.source_url,retrieved_at:apple.as_of}]:[]),...(alternatives?.sources||[])]};
 }
-const accounts=['talkofthecharts','spotify_data'];
 export async function chartPosts(){
-  if(!process.env.X_BEARER_TOKEN)return {status:'not_configured',posts:[]};
-  if(!cloudEnabled())return {status:'unavailable',posts:[],reason:'A durable quota store is required before paid X reads.'};
-  const s=store(),posts=[];
-  for(const author of accounts){
-    const value=await s.cached('x-public-feed#'+author,1800,async()=>{
-      const user=await s.cached('x-user#'+author,2592000,async()=>{
-        const response=await sourceJSON('X public chart news','https://api.x.com/2/users/by/username/'+author,{ttl:2592000,headers:{Authorization:'Bearer '+process.env.X_BEARER_TOKEN}});
-        if(!/^\d+$/.test(response.data.data?.id||''))throw new Error('The public X account could not be resolved');return response.data.data;
-      });
-      const month=new Date().toISOString().slice(0,7),limit=Math.min(10000,Math.max(10,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1200)));
-      if(!await s.consume('x-posts#'+month,limit,5,45*86400))return {status:'budget_reached',posts:[]};
-      const previous=await s.get('x-cursor#'+author),params=new URLSearchParams({max_results:'5','tweet.fields':'created_at','exclude':'retweets,replies'});
-      if(previous?.newest_id)params.set('since_id',previous.newest_id);
-      const response=await sourceJSON('X public chart news',`https://api.x.com/2/users/${user.id}/tweets?${params}`,{ttl:1,headers:{Authorization:'Bearer '+process.env.X_BEARER_TOKEN},maximumBytes:100000});
-      const rows=(response.data.data||[]).filter(p=>/^\d+$/.test(p.id)&&typeof p.text==='string'&&Number.isFinite(Date.parse(p.created_at))&&Date.parse(p.created_at)<=Date.now()+300000).map(p=>({id:p.id,author,excerpt:p.text.slice(0,500),created_at:p.created_at,url:`https://x.com/${author}/status/${p.id}`}));
-      const merged=[...new Map([...rows,...(previous?.posts||[])].map(p=>[p.id,p])).values()].sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,20);
-      await s.save({pk:'x-cursor#'+author,sk:'value',newest_id:rows[0]?.id||previous?.newest_id,posts:merged},true);
-      return {status:'available',posts:merged,as_of:response.as_of};
-    }).catch(error=>({status:'unavailable',posts:[],reason:error.message}));
-    posts.push({...value,author});
-  }
-  return {status:posts.some(p=>p.status==='available')?'available':posts[0]?.status,posts:posts.flatMap(p=>p.posts).sort((a,b)=>b.created_at.localeCompare(a.created_at)),
-    feeds:posts.map(({posts,...rest})=>rest),note:'Attributed public posts, refreshed at most every 30 minutes. They are unverified context, not direct chart observations or model inputs. Five paid reads are conservatively reserved before each request.'};
+  return publicXFeed({topic:'music',enabled:true});
 }

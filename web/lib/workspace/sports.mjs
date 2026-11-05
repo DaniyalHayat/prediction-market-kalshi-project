@@ -53,6 +53,28 @@ export function parseMinutes(payload) {
     });
   }));
 }
+export function parsePlayerStats(payload){
+  const minutes=new Map(parseMinutes(payload).map(row=>[row.team_id+'#'+row.player_id,row])),rows=[];
+  for(const team of payload.boxscore?.players||[])for(const stat of team.statistics||[])for(const athlete of stat.athletes||[]){
+    const row=minutes.get(String(team.team?.id)+'#'+String(athlete.athlete?.id));if(!row)continue;
+    const numeric=name=>{const index=(stat.names||[]).findIndex(key=>String(key).toUpperCase()===name),value=athlete.stats?.[index];return typeof value==='string'&&/^\d+$/.test(value)?Number(value):null;};
+    rows.push({...row,starter:athlete.starter===true,did_not_play:athlete.didNotPlay===true,position:athlete.athlete?.position?.abbreviation||null,
+      points:numeric('PTS'),rebounds:numeric('REB'),assists:numeric('AST'),turnovers:numeric('TO'),steals:numeric('STL'),blocks:numeric('BLK')});
+  }
+  return [...new Map(rows.map(r=>[r.game_id+'#'+r.team_id+'#'+r.player_id,r])).values()];
+}
+export function playerEvidence(games,rows,teamId,{cutoff=Date.now(),maximumGames=5,threshold=15}={}){
+  const completed=games.filter(g=>g.completed!==false&&Date.parse(g.played_at)<cutoff&&(g.home_id===teamId||g.away_id===teamId)).sort((a,b)=>b.played_at.localeCompare(a.played_at)),recentIds=new Set(completed.slice(0,maximumGames).map(g=>g.id));
+  const players=[...new Set(rows.filter(r=>r.team_id===teamId&&recentIds.has(r.game_id)).map(r=>r.player_id))];
+  return players.map(id=>{
+    const all=rows.filter(r=>r.team_id===teamId&&r.player_id===id),recent=all.filter(r=>recentIds.has(r.game_id)),average=key=>{const values=recent.map(r=>r[key]).filter(Number.isFinite);return values.length?values.reduce((s,v)=>s+v,0)/values.length:null;},comparison=lowMinutesSplit(completed,rows,teamId,id,threshold);
+    return {player_id:id,team_id:teamId,name:recent[0].name,position:recent[0].position||null,games_observed:recent.length,games_expected:recentIds.size,games_played:recent.filter(r=>!r.did_not_play&&r.minutes>0).length,
+      averages:{minutes:average('minutes'),points:average('points'),rebounds:average('rebounds'),assists:average('assists'),turnovers:average('turnovers'),steals:average('steals'),blocks:average('blocks')},
+      game_rows:recent.map(r=>({...r,played_at:completed.find(g=>g.id===r.game_id)?.played_at})),comparison,
+      low_minutes_games:completed.filter(g=>all.some(r=>r.game_id===g.id&&r.minutes<=threshold)).map(g=>({game_id:g.id,played_at:g.played_at,minutes:all.find(r=>r.game_id===g.id).minutes,won:g.home_id===teamId?g.home_score>g.away_score:g.away_score>g.home_score,home_score:g.home_score,away_score:g.away_score})),
+      note:'Last-five team-game window. Missing boxscore rows are excluded, not treated as zero. Boxscore DNP rows have zero observed minutes. Injury, rest, coaching and game-state causes are not identified by minutes.'};
+  }).sort((a,b)=>(b.averages.minutes??-1)-(a.averages.minutes??-1));
+}
 export async function leagueData(league) {
   const cached=cache.get(league);if(cached&&cached.until>Date.now())return cached.value;
   if(jobs.has(league))return jobs.get(league);
@@ -107,12 +129,14 @@ async function availability(league,game,data) {
     name:i.athlete?.displayName||'Unnamed player',player_id:String(i.athlete?.id||''),team_id:String(t.team.id),status:i.status||'Not specified',
     detail:[i.details?.type,i.details?.detail].filter(Boolean).join(' · '),reported_return:i.details?.returnDate||null})));
   const cutoff=Math.min(Date.now(),Date.parse(game.played_at));
-  const selected=reported.slice(0,4),history=data.games.filter(g=>Date.parse(g.played_at)<cutoff&&([game.home_id,game.away_id].includes(g.home_id)||[game.home_id,game.away_id].includes(g.away_id))).slice(-24);
-  const boxes=league==='nba'&&selected.length?await boundedMap(history,3,async g=>{
-    try{return parseMinutes((await sourceJSON('ESPN boxscores',base+config.path+'/summary?event='+g.id,{ttl:604800})).data);}catch{return [];}
+  const selected=reported.slice(0,4),history=data.games.filter(g=>Date.parse(g.played_at)<cutoff&&([game.home_id,game.away_id].includes(g.home_id)||[game.home_id,game.away_id].includes(g.away_id))).slice(selected.length?-24:-10);
+  const boxes=league==='nba'?await boundedMap(history,3,async g=>{
+    try{const response=await sourceJSON('ESPN boxscores',base+config.path+'/summary?event='+g.id,{ttl:604800});return {rows:parsePlayerStats(response.data),source:{kind:'player_boxscore',label:'ESPN completed-game player boxscore',url:response.source_url,retrieved_at:response.as_of,sha256:response.sha256}};}catch{return {rows:[]};}
   }):[];
-  const minutes=boxes.flat();
+  const minutes=boxes.flatMap(b=>b.rows),players=league==='nba'?[game.home_id,game.away_id].flatMap(id=>playerEvidence(data.games,minutes,id,{cutoff})):[];
   return {rows:reported.map(row=>({...row,comparison:selected.some(s=>s.player_id===row.player_id)?lowMinutesSplit(data.games,minutes,row.team_id,row.player_id):null})),
+    player_stats:players,boxscore_coverage:{requested:history.length,returned:boxes.filter(b=>b.source).length,player_rows:minutes.length},boxscore_sources:boxes.flatMap(b=>b.source?[b.source]:[]),
+    lineup_scenarios:players.filter(p=>reported.some(r=>r.player_id===p.player_id)||players.filter(q=>q.team_id===p.team_id).slice(0,3).includes(p)).map(p=>({player_id:p.player_id,name:p.name,team_id:p.team_id,reported_status:reported.find(r=>r.player_id===p.player_id)?.status||'No status reported in this feed',threshold_minutes:p.comparison.threshold_minutes,low:p.comparison.low,regular:p.comparison.regular,observed_low_minutes_games:p.low_minutes_games,probability_adjustment:null,classification:'descriptive_scenario_evidence',limitation:p.comparison.note})),
     source:{kind:'reported_availability',label:'ESPN event availability',url:summary.source_url,retrieved_at:summary.as_of},
     note:'Reported availability is a current feed snapshot, not a time-stamped historical injury archive. Low-minutes comparisons use actual boxscores, exclude missing players, and do not alter the matchup model.'};
 }
@@ -158,8 +182,8 @@ export async function sportsResearch(market,{includeAvailability=true}={}) {
     forecast:{available:false,experimental:true,inplay:true,max_source_age_seconds:30,reason:'Fresh in-play evidence was unavailable: '+error.message}})):null;
   const injuries=includeAvailability?await availability(league,game,data).catch(error=>({rows:[],note:'Availability was not returned: '+error.message})):null;
   const references=[game.home_id,game.away_id].map(id=>data.sources.filter(s=>s.url.includes('/teams/'+id+'/schedule?')).sort((a,b)=>b.url.localeCompare(a.url))[0]).filter(Boolean);
-  return {league,event:game,teams:[{id:game.home_id,name:game.home_name,form:teamForm(prior,game.home_id,cutoff)},
-    {id:game.away_id,name:game.away_name,form:teamForm(prior,game.away_id,cutoff)}],head_to_head:paired,availability:injuries?.rows||[],availability_note:injuries?.note,
+  return {league,event:game,teams:[{id:game.home_id,name:game.home_name},{id:game.away_id,name:game.away_name}].map(team=>({...team,form:teamForm(prior,team.id,cutoff),form_last_five:teamForm(prior,team.id,cutoff,5),last_five_games:prior.filter(g=>g.home_id===team.id||g.away_id===team.id).slice(-5).reverse()})),head_to_head:paired,availability:injuries?.rows||[],availability_note:injuries?.note,
+    player_stats:injuries?.player_stats||[],lineup_scenarios:injuries?.lineup_scenarios||[],boxscore_coverage:injuries?.boxscore_coverage||null,
     coverage:data.coverage,as_of:data.as_of,reason:match.reason||null,bookmaker:game.bookmaker,
     live_score:live?.score||null,
     challenger:live?live.forecast:!data.challenger?null:alternative?{available:true,probability:alternative[match.side],
@@ -177,5 +201,5 @@ export async function sportsResearch(market,{includeAvailability=true}={}) {
       eligible:data.validation.passed&&!data.coverage.partial&&!match.reason},
     model:{name:league==='nba'?'Recency-weighted Bradley–Terry':'Poisson attack/defense',validation:data.validation,input_sources:data.sources.length,training_history_games:data.games.length,
       limitation:'Historical team-strength model; no lineup, injury, betting-odds or opinion-poll adjustment. A positive holdout does not establish profitable trading.'},
-    sources:[...references.map(s=>({kind:'sports_results',label:'ESPN '+leagues[league].name+' team schedule (part of '+data.sources.length+' source schedules)',url:s.url,retrieved_at:s.as_of,sha256:s.sha256})),...(injuries?.source?[injuries.source]:[]),...(live?.source?[live.source]:[])]};
+    sources:[...references.map(s=>({kind:'sports_results',label:'ESPN '+leagues[league].name+' team schedule (part of '+data.sources.length+' source schedules)',url:s.url,retrieved_at:s.as_of,sha256:s.sha256})),...(injuries?.source?[injuries.source]:[]),...(injuries?.boxscore_sources||[]),...(live?.source?[live.source]:[])]};
 }
