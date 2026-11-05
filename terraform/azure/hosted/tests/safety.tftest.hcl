@@ -76,9 +76,46 @@ run "hosted_replay_consumption_and_private_backend" {
       length(azurerm_container_app.front[0].secret) == 0 &&
       length(azurerm_container_app.backend[0].secret) == 0 &&
       azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].path == "/" &&
+      azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
+      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
+      !contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_KEEP_CATALOG_WARM") &&
       !contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_DATABASE_HOST")
     )
     error_message = "Hosted replay must use Consumption, streaming-only logs, and no database, VNet or app secrets."
+  }
+}
+
+run "warm_replicas_require_a_reviewed_estimate" {
+  command = plan
+
+  variables {
+    azure_enabled  = true
+    keep_apps_warm = true
+    spend_approval = {
+      approved_monthly_usd     = 25
+      reviewed_monthly_usd     = 10
+      accepts_metered_overages = false
+      credit_only              = true
+    }
+  }
+
+  expect_failures = [terraform_data.release_approval]
+}
+
+run "warm_replicas_remain_bounded" {
+  command = plan
+
+  variables {
+    azure_enabled  = true
+    keep_apps_warm = true
+  }
+
+  assert {
+    condition = alltrue([
+      for app in [azurerm_container_app.front[0], azurerm_container_app.backend[0]] :
+      app.template[0].min_replicas == 1 && app.template[0].max_replicas == 1
+    ])
+    error_message = "The warm profile must keep exactly one replica per workload."
   }
 }
 

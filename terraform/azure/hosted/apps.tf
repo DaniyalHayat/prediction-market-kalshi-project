@@ -24,7 +24,7 @@ locals {
     PREDICTIR_DATABASE_HOST  = azurerm_postgresql_flexible_server.live[0].fqdn
     MARKET_STREAM_MINUTES    = "2400"
     MARKET_STREAM_BYTE_LIMIT = "1000000000"
-  } : {}, local.live ? local.owner_backend_environment : {})
+  } : {}, local.live && var.keep_apps_warm ? { PREDICTIR_KEEP_CATALOG_WARM = "1" } : {}, local.live ? local.owner_backend_environment : {})
 
   secret_environment = {
     edge        = "MARKET_EDGE_SECRET"
@@ -87,7 +87,7 @@ resource "azurerm_container_app" "backend" {
   }
 
   template {
-    min_replicas = 0
+    min_replicas = var.keep_apps_warm ? 1 : 0
     max_replicas = 1
 
     http_scale_rule {
@@ -129,11 +129,13 @@ resource "azurerm_container_app" "backend" {
       }
 
       readiness_probe {
-        transport        = "HTTP"
-        port             = 8780
-        path             = "/api/health"
-        interval_seconds = 10
-        timeout          = 3
+        transport               = "HTTP"
+        port                    = 8780
+        path                    = "/api/health"
+        interval_seconds        = 3
+        timeout                 = 2
+        failure_count_threshold = 5
+        success_count_threshold = 1
       }
 
       liveness_probe {
@@ -206,7 +208,7 @@ resource "azurerm_container_app" "front" {
   }
 
   template {
-    min_replicas = 0
+    min_replicas = var.keep_apps_warm ? 1 : 0
     max_replicas = 1
 
     http_scale_rule {
@@ -253,11 +255,13 @@ resource "azurerm_container_app" "front" {
       }
 
       readiness_probe {
-        transport        = "HTTP"
-        port             = 3000
-        path             = "/"
-        interval_seconds = 10
-        timeout          = 3
+        transport               = "HTTP"
+        port                    = 3000
+        path                    = "/"
+        interval_seconds        = 3
+        timeout                 = 2
+        failure_count_threshold = 5
+        success_count_threshold = 1
       }
 
       liveness_probe {

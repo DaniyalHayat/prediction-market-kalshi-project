@@ -53,6 +53,9 @@ name_prefix   = "predictirlab"
 # launch_live_apps    = true
 # live_database_ready = true
 
+# Optional continuous front and backend replicas. Review the higher cost first.
+# keep_apps_warm = true
+
 # Optional existing single-tenant Entra owner setup.
 # live_owner = {
 #   tenant_id = "<tenant-guid>"

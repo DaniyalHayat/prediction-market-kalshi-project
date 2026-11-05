@@ -4,6 +4,12 @@ variable "azure_enabled" {
   default     = false
 }
 
+variable "keep_apps_warm" {
+  description = "Keep one frontend and one backend replica running continuously to avoid cold starts. Include their compute in the reviewed spending estimate."
+  type        = bool
+  default     = false
+}
+
 variable "profile" {
   description = "Replay runs the embedded fixture without a database or external provider credentials. Live enables the private PostgreSQL foundation."
   type        = string

@@ -7,6 +7,8 @@ locals {
 
   postgres_monthly_base_usd = var.location == "centralus" ? 18.69 : 16.59
   minimum_approval_usd      = var.profile == "live" ? 25 : 1
+  warm_compute_idle_usd     = 730 * 3600 * (local.live ? 2.25 : 1.5) * 0.000003
+  reviewed_base_usd         = (local.live ? local.postgres_monthly_base_usd : 0) + (local.apps && var.keep_apps_warm ? local.warm_compute_idle_usd : 0)
 
   unresolved_image = "invalid.invalid/release-required@sha256:0000000000000000000000000000000000000000000000000000000000000000"
   images = var.images == null ? {
@@ -45,10 +47,10 @@ resource "terraform_data" "release_approval" {
       condition = var.spend_approval == null ? false : (
         (var.spend_approval.credit_only != var.spend_approval.accepts_metered_overages) &&
         var.spend_approval.approved_monthly_usd >= local.minimum_approval_usd &&
-        var.spend_approval.reviewed_monthly_usd >= (local.live ? local.postgres_monthly_base_usd : 0) &&
+        var.spend_approval.reviewed_monthly_usd >= local.reviewed_base_usd &&
         var.spend_approval.reviewed_monthly_usd <= var.spend_approval.approved_monthly_usd
       )
-      error_message = "The estimate must fit a reviewed release limit of at least $1 for replay or $25 for live and cover the regional database and DNS base. Choose usage-based billing or attest a verified credit-only subscription with its spending limit enabled."
+      error_message = "The estimate must fit a reviewed release limit of at least $1 for replay or $25 for live and cover the database, DNS and idle compute base as applicable. Choose usage-based billing or attest a verified credit-only subscription with its spending limit enabled."
     }
 
     precondition {
