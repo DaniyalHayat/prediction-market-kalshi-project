@@ -1,0 +1,90 @@
+{
+  "classification": "local_review_artifact_not_production_verification",
+  "preliminary": false,
+  "source_base_revision": "e1229668926860f520db5a8fa088c7059fe2f057",
+  "reportlab_version": "4.4.9",
+  "page_count": 48,
+  "pdf_sha256": "b10f700194d8697332db763459014cbd4b7f3ada5516ece9cf7df7d419efa889",
+  "inputs": [
+    {
+      "path": "web/docs/FEATURE_REVIEW.md",
+      "sha256": "48bff4f75ef20fd3bf3ea8a84ecd1b16513511ff4aaf8cf4d34013a7095e2584"
+    },
+    {
+      "path": "web/docs/EVIDENCE_RESEARCH.md",
+      "sha256": "92bf14a9a71597635ebfb9d684162138b853d1228676f8d0912af8c8c5f4ee5b"
+    },
+    {
+      "path": "web/docs/QUANT_CONTEXT_EXPERIMENTS.md",
+      "sha256": "e52e62c0ac0827573007530ca67a7544b483e4dccbc7107c8affc43385a311fa"
+    },
+    {
+      "path": "web/docs/SEMANTIC_EVIDENCE.md",
+      "sha256": "17e1cc4b5c8b355ad384f2bac0a0b00cc3008745ebfd4ab90052797d520c5bdf"
+    },
+    {
+      "path": "docs/account-activation.md",
+      "sha256": "ed5156940927d120d63326a263b65e2db67dbb2363631f3e14213b139557b33a"
+    },
+    {
+      "path": "web/docs/ANALYTICS_SETUP.md",
+      "sha256": "e49ca9fddd5a88be3e41cbb0397b4ab56afdb80dffc071f2942fff9b02df08ec"
+    },
+    {
+      "path": "docs/engineering-runtime.md",
+      "sha256": "8596ebdfde36c9caaca6c2e90c4b58c03da07817d1914b4bca04cff10610e017"
+    },
+    {
+      "path": "docs/request-matrix-v3.md",
+      "sha256": "9b97865c03909fba93214966cd8696dff7ae60bdba8c3c0f4d4d4558371692d5"
+    },
+    {
+      "path": "web/docs/V3_VERIFICATION.md",
+      "sha256": "a2021415a8cef22f8c646d8fb2a42335c3ec1024b793ec78c70c5a1d968fa8c1"
+    },
+    {
+      "path": "web/docs/nba-challenger-validation.json",
+      "sha256": "06ad545b35251c0a6085919c297bddcdc541eda703dbb5b33ab71acf143f74e6"
+    },
+    {
+      "path": "web/docs/nba-inplay-validation.json",
+      "sha256": "f51a72de8f29142be74caa63d5ade2165917e09720e1ed3e2a1fd4f25cacd7cc"
+    },
+    {
+      "path": "web/docs/runtime-benchmark.json",
+      "sha256": "dc402ad2c5c6a8cfd0e29ee08918a85356941934b9b4bf3aae4f803a377c05a1"
+    },
+    {
+      "path": "web/docs/sizing-benchmark.json",
+      "sha256": "6d0e879953736d27eb7195e7517d3db5f35e5a5e1f75143dd5186b2db6da4517"
+    },
+    {
+      "path": "web/docs/nba-inference-benchmark.json",
+      "sha256": "66b46d26ec292cd4c0cbb311d4ee5d6976787136463ebb2402d33ee91591c091"
+    },
+    {
+      "path": "web/docs/semantic-verification.json",
+      "sha256": "15331a31b29a80916618710b5c43f63877c44fe1ffbeaeb1749ee0487f073083"
+    },
+    {
+      "path": "web/docs/evidence-verification.json",
+      "sha256": "9b3c265dbebde9eab75101215d3abaa2e82ec85dd6a0608570404f7297495262"
+    },
+    {
+      "path": "review/browser-validation-v3.json",
+      "sha256": "aa32f2da490bf177e94f4b970f0de991cd263e55c7fc1efaf4234ee212338ee7"
+    },
+    {
+      "path": "review/npm-test-after-account-fixes.txt",
+      "sha256": "a6380bb338ddf4f83d71827bcc054c76c8d20126fc2c26a6d358d93aa9b134bb"
+    },
+    {
+      "path": "review/typecheck-final.txt",
+      "sha256": "65d3ab07af05689af3b39ce121bce028ba0447deb8b4eec4f42e4bee3835ed3a"
+    },
+    {
+      "path": "review/next-build-final.txt",
+      "sha256": "e0042395f2f593f8abed3ac6e2f664a233b892090623d4c46ff412f6b85e5bdc"
+    }
+  ]
+}
