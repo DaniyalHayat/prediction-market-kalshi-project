@@ -1,0 +1,805 @@
+{
+  "version": "quant-scenario-validation-v1",
+  "reproducible_command": "node tools/validate_quant_scenarios.mjs",
+  "empirical_promotion": false,
+  "context": {
+    "provenance": "seeded_synthetic_latent_context",
+    "warmup_points_per_run": 120,
+    "chronological_evaluation_points_per_run": 240,
+    "fixed_parameters": true,
+    "cases": [
+      {
+        "fixture": "persistent_regimes",
+        "mse": {
+          "raw": 0.10901904433777312,
+          "zero_reference": 0.260981770833333,
+          "hmm": 0.05562271712285312,
+          "kalman": 0.07341757757673585,
+          "equal_blend": 0.060136287633391024
+        },
+        "runs": [
+          {
+            "seed": 127,
+            "mse": {
+              "raw": 0.11986042092617018,
+              "zero_reference": 0.23589583333333308,
+              "hmm": 0.05442820204095085,
+              "kalman": 0.05711313016169927,
+              "equal_blend": 0.0528220860182468
+            }
+          },
+          {
+            "seed": 271,
+            "mse": {
+              "raw": 0.10947314350850869,
+              "zero_reference": 0.29398958333333297,
+              "hmm": 0.05456010991651814,
+              "kalman": 0.06956891298126236,
+              "equal_blend": 0.058189362704472496
+            }
+          },
+          {
+            "seed": 761,
+            "mse": {
+              "raw": 0.09203303126343328,
+              "zero_reference": 0.28518749999999965,
+              "hmm": 0.04253794740657755,
+              "kalman": 0.06498447221543095,
+              "equal_blend": 0.049898660562847724
+            }
+          },
+          {
+            "seed": 981,
+            "mse": {
+              "raw": 0.11621840085623533,
+              "zero_reference": 0.272864583333333,
+              "hmm": 0.059703713550228486,
+              "kalman": 0.08700564976202604,
+              "equal_blend": 0.06697226777362421
+            }
+          },
+          {
+            "seed": 2026,
+            "mse": {
+              "raw": 0.09534258813946597,
+              "zero_reference": 0.25702083333333303,
+              "hmm": 0.03997676212847764,
+              "kalman": 0.06412955805146744,
+              "equal_blend": 0.04738525551906723
+            }
+          },
+          {
+            "seed": 2513,
+            "mse": {
+              "raw": 0.10812471928030158,
+              "zero_reference": 0.24645833333333306,
+              "hmm": 0.05664840819353216,
+              "kalman": 0.08319291652917819,
+              "equal_blend": 0.06508034335232943
+            }
+          },
+          {
+            "seed": 7433,
+            "mse": {
+              "raw": 0.11019008520109315,
+              "zero_reference": 0.23589583333333308,
+              "hmm": 0.06937813573771658,
+              "kalman": 0.07959400000852486,
+              "equal_blend": 0.07112671628861413
+            }
+          },
+          {
+            "seed": 9487,
+            "mse": {
+              "raw": 0.12090996552697682,
+              "zero_reference": 0.2605416666666664,
+              "hmm": 0.06774845800882354,
+              "kalman": 0.08175198090429774,
+              "equal_blend": 0.06961560884792618
+            }
+          }
+        ]
+      },
+      {
+        "fixture": "rapid_reversals",
+        "mse": {
+          "raw": 0.10388604311528012,
+          "zero_reference": 0.27990624999999975,
+          "hmm": 0.09068597874223211,
+          "kalman": 0.15811247849699855,
+          "equal_blend": 0.11565096599882685
+        },
+        "runs": [
+          {
+            "seed": 127,
+            "mse": {
+              "raw": 0.1013566398927824,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.08685174236334874,
+              "kalman": 0.1546373346772343,
+              "equal_blend": 0.11234150103559114
+            }
+          },
+          {
+            "seed": 271,
+            "mse": {
+              "raw": 0.11121482371449634,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.09397472178661882,
+              "kalman": 0.16603361719831694,
+              "equal_blend": 0.11982619996153636
+            }
+          },
+          {
+            "seed": 761,
+            "mse": {
+              "raw": 0.09558031126774376,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.09486549180876734,
+              "kalman": 0.16100168245509547,
+              "equal_blend": 0.11937257680562281
+            }
+          },
+          {
+            "seed": 981,
+            "mse": {
+              "raw": 0.11618289810931033,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.08911766947899866,
+              "kalman": 0.15256673852947156,
+              "equal_blend": 0.11194086808097058
+            }
+          },
+          {
+            "seed": 2026,
+            "mse": {
+              "raw": 0.08811260132859579,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.07997027215017262,
+              "kalman": 0.15082532248628347,
+              "equal_blend": 0.10642825821043242
+            }
+          },
+          {
+            "seed": 2513,
+            "mse": {
+              "raw": 0.10595067493243542,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.08834315152000287,
+              "kalman": 0.15630460312873426,
+              "equal_blend": 0.1139734205189148
+            }
+          },
+          {
+            "seed": 7433,
+            "mse": {
+              "raw": 0.0993277767420048,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.08696987027224487,
+              "kalman": 0.1595184296003612,
+              "equal_blend": 0.11415495423650539
+            }
+          },
+          {
+            "seed": 9487,
+            "mse": {
+              "raw": 0.1133626189348722,
+              "zero_reference": 0.2799062499999997,
+              "hmm": 0.10539491055770295,
+              "kalman": 0.16401209990049115,
+              "equal_blend": 0.12716994914104124
+            }
+          }
+        ]
+      },
+      {
+        "fixture": "independent_noise",
+        "mse": {
+          "raw": 0.38078004188801695,
+          "zero_reference": 0.2766054687499997,
+          "hmm": 0.3020045521350791,
+          "kalman": 0.29773735799276646,
+          "equal_blend": 0.2984372482374616
+        },
+        "runs": [
+          {
+            "seed": 127,
+            "mse": {
+              "raw": 0.36736835903434956,
+              "zero_reference": 0.267583333333333,
+              "hmm": 0.3002638712122592,
+              "kalman": 0.29719605683590256,
+              "equal_blend": 0.29737299257520305
+            }
+          },
+          {
+            "seed": 271,
+            "mse": {
+              "raw": 0.37180676600544693,
+              "zero_reference": 0.27638541666666633,
+              "hmm": 0.29668177867955686,
+              "kalman": 0.2943972514149698,
+              "equal_blend": 0.29421706145992294
+            }
+          },
+          {
+            "seed": 761,
+            "mse": {
+              "raw": 0.37240182560752694,
+              "zero_reference": 0.2517395833333331,
+              "hmm": 0.28263202245748537,
+              "kalman": 0.27407111305343723,
+              "equal_blend": 0.27640631357854567
+            }
+          },
+          {
+            "seed": 981,
+            "mse": {
+              "raw": 0.37844313686059644,
+              "zero_reference": 0.27110416666666637,
+              "hmm": 0.3048768060001905,
+              "kalman": 0.2993567757400662,
+              "equal_blend": 0.30043674554475314
+            }
+          },
+          {
+            "seed": 2026,
+            "mse": {
+              "raw": 0.35284290816800573,
+              "zero_reference": 0.2746249999999997,
+              "hmm": 0.2885110978264252,
+              "kalman": 0.28852727208386664,
+              "equal_blend": 0.2873197469985734
+            }
+          },
+          {
+            "seed": 2513,
+            "mse": {
+              "raw": 0.4322094208985425,
+              "zero_reference": 0.2922291666666663,
+              "hmm": 0.3322051218247415,
+              "kalman": 0.31604149348809063,
+              "equal_blend": 0.32265766469211277
+            }
+          },
+          {
+            "seed": 7433,
+            "mse": {
+              "raw": 0.37871391581283764,
+              "zero_reference": 0.27814583333333304,
+              "hmm": 0.2960150798754021,
+              "kalman": 0.29419568515676303,
+              "equal_blend": 0.2938779078994343
+            }
+          },
+          {
+            "seed": 9487,
+            "mse": {
+              "raw": 0.3924540027168303,
+              "zero_reference": 0.30103124999999964,
+              "hmm": 0.31485063920457235,
+              "kalman": 0.31811321616903554,
+              "equal_blend": 0.31520955315114735
+            }
+          }
+        ]
+      }
+    ],
+    "scope": "Same-time latent score reconstruction in each later segment. The persistent case uses planted Markov regimes, the rapid case reverses more often, and the independent case disconnects observations from the target. The zero reference distinguishes smoothing toward zero from extracting signal."
+  },
+  "score": {
+    "provenance": "observed_historical_nba_quarter_replay",
+    "archive_sha256": "33350b5d9be1d3576e21575345eb3ddf839da15cc7dbec951d51b4c9b946d502",
+    "prior_games_archive_sha256": "9f7686b72a422dc221b426cf6ec8757038cebf9569b0ca070782c244be18622d",
+    "verified_pregame_reconstructions": 60,
+    "capture_as_of": "2026-11-05T00:13:27.291Z",
+    "calibration_games": 40,
+    "calibration_end": "2026-02-13T00:30:00.000Z",
+    "heldout_games": 20,
+    "heldout_start": "2026-02-20T00:30:00.000Z",
+    "heldout_states": 60,
+    "heldout_regulation_ties": 1,
+    "regulation_scale": 13.357891141013338,
+    "monte_carlo_draws_per_state": 8192,
+    "monte_carlo_seed_start": 91273,
+    "score_target": "Home leads after four regulation periods. Tied regulation scores count as no lead.",
+    "scores": {
+      "pregame_reference": {
+        "brier": 0.191973703381917,
+        "log_loss": 0.5681594929597069
+      },
+      "brownian_analytic": {
+        "brier": 0.1635466236191624,
+        "log_loss": 0.4558340431062327
+      },
+      "brownian_mc": {
+        "brier": 0.16438125297427178,
+        "log_loss": 0.4582565557318779
+      }
+    },
+    "quarter_scores": [
+      {
+        "quarter": 1,
+        "pregame_reference": {
+          "brier": 0.1919737033819169,
+          "log_loss": 0.5681594929597066
+        },
+        "brownian_analytic": {
+          "brier": 0.1939604581494839,
+          "log_loss": 0.542342886312086
+        },
+        "brownian_mc": {
+          "brier": 0.19515141919255258,
+          "log_loss": 0.5458711660270369
+        }
+      },
+      {
+        "quarter": 2,
+        "pregame_reference": {
+          "brier": 0.1919737033819169,
+          "log_loss": 0.5681594929597066
+        },
+        "brownian_analytic": {
+          "brier": 0.20173078553429907,
+          "log_loss": 0.5703129777379736
+        },
+        "brownian_mc": {
+          "brier": 0.20340000987052917,
+          "log_loss": 0.5757017249250359
+        }
+      },
+      {
+        "quarter": 3,
+        "pregame_reference": {
+          "brier": 0.1919737033819169,
+          "log_loss": 0.5681594929597066
+        },
+        "brownian_analytic": {
+          "brier": 0.09494862717370431,
+          "log_loss": 0.2548462652686386
+        },
+        "brownian_mc": {
+          "brier": 0.09459232985973358,
+          "log_loss": 0.25319677624356074
+        }
+      }
+    ],
+    "paired_brier_improvement": 0.02842707976275453,
+    "game_cluster_interval_95": [
+      -0.05074483990028308,
+      0.09964860307207697
+    ],
+    "maximum_mc_probability_error": 0.010738413434701555,
+    "scope": "The 40 earlier calibration games fit the regulation score scale. The 20 later games contribute three quarter-end states each. Final-game pregame priors serve as fixed references on this regulation-lead target. The same states score the analytic model and its Monte Carlo approximation. The archived prior cutoff is eight hours before each game."
+  },
+  "stopping": {
+    "provenance": "seeded_synthetic_bounded_martingale",
+    "fresh_paths_per_case": 12000,
+    "common_seed": 538129,
+    "cases": [
+      {
+        "parameters": {
+          "initial_probability": 0.5,
+          "risk_aversion": 0,
+          "exit_cost_per_contract": 0.03
+        },
+        "first_action": "CONTINUE",
+        "baseline": {
+          "expected_proceeds": 10,
+          "certainty_equivalent": 10,
+          "proceeds_variance": 100,
+          "early_exit_probability": 0
+        },
+        "policy": {
+          "expected_proceeds": 10,
+          "certainty_equivalent": 10,
+          "proceeds_variance": 100,
+          "early_exit_probability": 0,
+          "settlement_probability": 1,
+          "expected_steps_held": 3.5,
+          "exit_mass_by_step": []
+        },
+        "comparison": {
+          "certainty_equivalent_change": 0,
+          "expected_proceeds_change": 0,
+          "expected_gross_stopped_mark": 10,
+          "gross_martingale_residual": 0,
+          "expected_execution_discount": 0
+        },
+        "simulated": {
+          "paired_cash_change": 0,
+          "paired_cash_monte_carlo_interval_95": [
+            0,
+            0
+          ],
+          "average_gross_stopped_mark": 10.001666666666667,
+          "early_exit_fraction": 0
+        }
+      },
+      {
+        "parameters": {
+          "initial_probability": 0.5,
+          "risk_aversion": 0.01,
+          "exit_cost_per_contract": 0.03
+        },
+        "first_action": "CONTINUE",
+        "baseline": {
+          "expected_proceeds": 10,
+          "certainty_equivalent": 9.500831117835347,
+          "proceeds_variance": 100,
+          "early_exit_probability": 0
+        },
+        "policy": {
+          "expected_proceeds": 10,
+          "certainty_equivalent": 9.500831117835348,
+          "proceeds_variance": 100,
+          "early_exit_probability": 0,
+          "settlement_probability": 1,
+          "expected_steps_held": 3.5,
+          "exit_mass_by_step": []
+        },
+        "comparison": {
+          "certainty_equivalent_change": 1.7763568394002505e-15,
+          "expected_proceeds_change": 0,
+          "expected_gross_stopped_mark": 10,
+          "gross_martingale_residual": 0,
+          "expected_execution_discount": 0
+        },
+        "simulated": {
+          "paired_cash_change": 0,
+          "paired_cash_monte_carlo_interval_95": [
+            0,
+            0
+          ],
+          "average_gross_stopped_mark": 10.001666666666667,
+          "early_exit_fraction": 0
+        }
+      },
+      {
+        "parameters": {
+          "initial_probability": 0.5,
+          "risk_aversion": 0.08,
+          "exit_cost_per_contract": 0.03
+        },
+        "first_action": "EXIT",
+        "baseline": {
+          "expected_proceeds": 10,
+          "certainty_equivalent": 6.365580495895082,
+          "proceeds_variance": 100,
+          "early_exit_probability": 0
+        },
+        "policy": {
+          "expected_proceeds": 9.399999999999999,
+          "certainty_equivalent": 9.399999999999999,
+          "proceeds_variance": 0,
+          "early_exit_probability": 1,
+          "settlement_probability": 0,
+          "expected_steps_held": 0,
+          "exit_mass_by_step": [
+            {
+              "step": 0,
+              "probability": 1
+            }
+          ]
+        },
+        "comparison": {
+          "certainty_equivalent_change": 3.0344195041049167,
+          "expected_proceeds_change": -0.6000000000000014,
+          "expected_gross_stopped_mark": 10,
+          "gross_martingale_residual": 0,
+          "expected_execution_discount": 0.6000000000000014
+        },
+        "simulated": {
+          "paired_cash_change": -0.5866666666667686,
+          "paired_cash_monte_carlo_interval_95": [
+            -0.7655892097426452,
+            -0.40774412359089196
+          ],
+          "average_gross_stopped_mark": 10,
+          "early_exit_fraction": 1
+        }
+      },
+      {
+        "parameters": {
+          "initial_probability": 0.25,
+          "risk_aversion": 0.015,
+          "exit_cost_per_contract": 0.03
+        },
+        "first_action": "CONTINUE",
+        "baseline": {
+          "expected_proceeds": 5,
+          "certainty_equivalent": 4.465999869199409,
+          "proceeds_variance": 75,
+          "early_exit_probability": 0
+        },
+        "policy": {
+          "expected_proceeds": 4.699999999999999,
+          "certainty_equivalent": 4.534462059402879,
+          "proceeds_variance": 22.089999999999993,
+          "early_exit_probability": 0.5,
+          "settlement_probability": 0.5,
+          "expected_steps_held": 1,
+          "exit_mass_by_step": [
+            {
+              "step": 1,
+              "probability": 0.5
+            }
+          ]
+        },
+        "comparison": {
+          "certainty_equivalent_change": 0.06846219020346922,
+          "expected_proceeds_change": -0.3000000000000007,
+          "expected_gross_stopped_mark": 5,
+          "gross_martingale_residual": 0,
+          "expected_execution_discount": 0.3000000000000007
+        },
+        "simulated": {
+          "paired_cash_change": -0.3284166666666367,
+          "paired_cash_monte_carlo_interval_95": [
+            -0.4549109583301119,
+            -0.20192237500316151
+          ],
+          "average_gross_stopped_mark": 4.9875,
+          "early_exit_fraction": 0.49875
+        }
+      }
+    ],
+    "drawdown_bound_check": {
+      "experimental": true,
+      "validation_status": "not_outcome_validated",
+      "affects_forecast": false,
+      "probability_adjustment": null,
+      "available": true,
+      "classification": "mathematical_bound_conditional_on_assumptions",
+      "horizon_steps": 8,
+      "drawdown": 6,
+      "variance_proxy_budget": 8,
+      "maximum_loss_from_initial_upper_bound": 0.10539922456186433,
+      "peak_to_trough_drawdown_upper_bound": 0.2316125799204964,
+      "deterministic_maximum_loss": 8,
+      "formula": "Initial loss: exp(-a²/(2 Σ cᵢ²)). Peak-to-trough: min(1, Σⱼ exp(-a²/(2 Σᵢ>ⱼ cᵢ²))) over suffixes with enough total magnitude to reach a.",
+      "assumptions": [
+        "E[ΔSᵢ | past] = 0 at every step; the same information filtration applies.",
+        "|ΔSᵢ| ≤ cᵢ almost surely for each supplied deterministic bound.",
+        "The horizon, increment units and threshold refer to the same process."
+      ],
+      "note": "Exponential-supermartingale maximal bound, with a union bound over each possible peak time for drawdown. No independence assumption is required, but conditional zero drift and bounded increments are essential. Fees, leverage, unbounded gaps and adaptive exposures can violate them. This is not an estimated loss probability, trading guarantee or permission to double stakes after losses."
+    },
+    "scope": "The exact policy is fixed before the fresh paths. Each simulated action uses only the current state and remaining horizon. The same path and settlement draw score policy and hold, with assumed exit costs and no historical fill claim."
+  },
+  "toggles": {
+    "provenance": "synthetic_integration_fixture",
+    "results": [
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": false,
+          "brownian_mc": false,
+          "optional_stopping": false
+        },
+        "context_score": 0.2787980804437316,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": false,
+          "brownian_mc": false,
+          "optional_stopping": false
+        },
+        "context_score": 0.04353507107500577,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": true,
+          "brownian_mc": false,
+          "optional_stopping": false
+        },
+        "context_score": -0.13144240570063084,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": true,
+          "brownian_mc": false,
+          "optional_stopping": false
+        },
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": false,
+          "brownian_mc": true,
+          "optional_stopping": false
+        },
+        "context_score": 0.2787980804437316,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": false,
+          "brownian_mc": true,
+          "optional_stopping": false
+        },
+        "context_score": 0.04353507107500577,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": true,
+          "brownian_mc": true,
+          "optional_stopping": false
+        },
+        "context_score": -0.13144240570063084,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": true,
+          "brownian_mc": true,
+          "optional_stopping": false
+        },
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": false,
+          "brownian_mc": false,
+          "optional_stopping": true
+        },
+        "context_score": 0.2787980804437316,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": false,
+          "brownian_mc": false,
+          "optional_stopping": true
+        },
+        "context_score": 0.04353507107500577,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": true,
+          "brownian_mc": false,
+          "optional_stopping": true
+        },
+        "context_score": -0.13144240570063084,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": true,
+          "brownian_mc": false,
+          "optional_stopping": true
+        },
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": false,
+          "brownian_mc": true,
+          "optional_stopping": true
+        },
+        "context_score": 0.2787980804437316,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": false,
+          "brownian_mc": true,
+          "optional_stopping": true
+        },
+        "context_score": 0.04353507107500577,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": false,
+          "kalman": true,
+          "brownian_mc": true,
+          "optional_stopping": true
+        },
+        "context_score": -0.13144240570063084,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 9.399999999999999
+      },
+      {
+        "controls": {
+          "hmm": true,
+          "kalman": true,
+          "brownian_mc": true,
+          "optional_stopping": true
+        },
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 9.399999999999999
+      }
+    ],
+    "cumulative": [
+      {
+        "stage": "baseline",
+        "applied": true,
+        "context_score": 0.2787980804437316,
+        "score_probability": 0.52,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "stage": "hmm",
+        "applied": true,
+        "context_score": 0.04353507107500577,
+        "score_probability": 0.52,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "stage": "kalman",
+        "applied": true,
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.52,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "stage": "brownian_analytic",
+        "applied": true,
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.9438243997395127,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "stage": "brownian_mc",
+        "applied": true,
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 6.365580495895082
+      },
+      {
+        "stage": "optional_stopping",
+        "applied": true,
+        "context_score": -0.04395366731281254,
+        "score_probability": 0.944091796875,
+        "stopping_certainty_equivalent": 9.399999999999999
+      }
+    ],
+    "affects_forecast": false,
+    "scope": "All 16 toggle combinations share one fixture. Cumulative rows preserve three different units and do not aggregate them into one performance score."
+  },
+  "limits": [
+    "There is no frozen, labeled historical context archive for a settlement-forecast ablation.",
+    "The NBA replay uses 20 held-out games and three quarter-end states per game. The game-cluster interval is descriptive and repeated teams can remain dependent.",
+    "Monte Carlo adds simulation noise to the analytic result. Sampling intervals omit model and data uncertainty.",
+    "The stopping replay is an assumed bounded process with modeled future exit costs. Empirical validation requires timestamped executable books and a frozen policy.",
+    "The combined fixture checks actual toggle effects. The empirical score result, synthetic context metrics and simulated utility have different targets.",
+    "This run uses local inputs and no provider requests."
+  ]
+}

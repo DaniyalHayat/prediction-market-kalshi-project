@@ -1,16 +1,23 @@
+export function normalizePaperOrder({id, owner, side, price, quantity, timeInForce = 'GTC'}) {
+  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(id) || typeof owner !== 'string' || !owner || owner.length > 80 || !['buy', 'sell'].includes(side) || !Number.isSafeInteger(price) || price < 1 || price > 99 || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000 || !['GTC', 'IOC', 'FOK'].includes(timeInForce)) throw new RangeError('Invalid paper limit order');
+  return {id, owner, side, price, quantity, timeInForce};
+}
+
 export class PaperLimitOrderBook {
   constructor({maximumOrders = 10000} = {}) {
     if (!Number.isInteger(maximumOrders) || maximumOrders < 1 || maximumOrders > 100000) throw new RangeError('Invalid paper order capacity');
     this.orders = new Map(); this.levels = {buy: new Map(), sell: new Map()}; this.sequence = 0; this.maximumOrders = maximumOrders;
   }
-  submit({id, owner, side, price, quantity, timeInForce = 'GTC'}) {
-    if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(id) || typeof owner !== 'string' || !owner || owner.length > 80 || !['buy', 'sell'].includes(side) || !Number.isSafeInteger(price) || price < 1 || price > 99 || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000 || !['GTC', 'IOC', 'FOK'].includes(timeInForce)) throw new RangeError('Invalid paper limit order');
-    if (this.orders.has(id)) throw new Error('Duplicate active order');
-    if (timeInForce === 'GTC' && this.orders.size >= this.maximumOrders) throw new Error('Paper order capacity reached');
+  submit(order) {
+    const {id, owner, side, price, quantity, timeInForce} = normalizePaperOrder(order);
+    if (this.orders.has(id)) throw Object.assign(new Error('Duplicate active order'), {code: 'DUPLICATE_ACTIVE_ORDER'});
+    if (timeInForce === 'GTC' && this.orders.size >= this.maximumOrders) throw Object.assign(new Error('Paper order capacity reached'), {code: 'PAPER_ORDER_CAPACITY'});
     const opposite = side === 'buy' ? 'sell' : 'buy', prices = [...this.levels[opposite].keys()].sort((a, b) => side === 'buy' ? a - b : b - a);
     const crosses = value => side === 'buy' ? value <= price : value >= price;
-    const available = prices.filter(crosses).reduce((total, value) => total + this.levels[opposite].get(value).filter(order => order.owner !== owner).reduce((sum, order) => sum + order.remaining, 0), 0);
-    if (timeInForce === 'FOK' && available < quantity) return {id, status: 'cancelled', remaining: quantity, fills: [], paper_only: true};
+    if (timeInForce === 'FOK') {
+      const available = prices.filter(crosses).reduce((total, value) => total + this.levels[opposite].get(value).filter(order => order.owner !== owner).reduce((sum, order) => sum + order.remaining, 0), 0);
+      if (available < quantity) return {id, status: 'cancelled', remaining: quantity, fills: [], paper_only: true};
+    }
     const taker = {id, owner, side, price, remaining: quantity, sequence: ++this.sequence}, fills = [];
     for (const value of prices) {
       if (!crosses(value) || !taker.remaining) break;

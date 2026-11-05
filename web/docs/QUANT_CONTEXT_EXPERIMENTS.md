@@ -1,6 +1,6 @@
-# Isolated context and risk-math experiments
+# Quantitative scenarios and validation
 
-These functions are implemented in `lib/workspace/quant-context.mjs` and deliberately have no import into the evidence, forecast or sizing pipeline. Every result is experimental, states that it has not been outcome-validated, sets `affects_forecast: false`, and supplies no probability adjustment. Numeric examples below are synthetic mathematical checks, not market backtests or reported trading returns.
+`evaluateQuantScenario` assembles the context filters, score diffusion and stopping policy for the research view. Each calculation keeps its own inputs, units and evidence. The response marks scenario outputs experimental and sets `affects_forecast: false`. An observed score archive supports the NBA replay. Seeded fixtures support the context and stopping checks.
 
 ## Context smoothing
 
@@ -8,7 +8,7 @@ These functions are implemented in `lib/workspace/quant-context.mjs` and deliber
 
 `hmmContext` applies a causal forward filter to three assumed Gaussian-emission regimes: negative, neutral and positive context. Priors, transition probabilities and emission parameters are exposed. It requires regularly spaced observations and normalized transition rows. These are fixed experimental parameters, not trained sentiment labels or market-state probabilities. The forward recursion is described in [Rabiner (1989)](https://web.ece.ucsb.edu/Faculty/Rabiner/ece259/Reprints/tutorial%20on%20hmm%20and%20applications.pdf).
 
-Neither function extracts sentiment from headlines or certifies a source as factual. A smoother can make a false or duplicated signal appear stable. A future experiment needs a dated, deduplicated source archive, annotated observations, a predeclared target and chronological held-out testing. Source identity, engagement and editorial rank must not be silently treated as observation precision.
+The scenario accepts timestamped numeric scores with explicit provenance. When both filters are selected, it averages their causal estimates on the same input. The equal blend is fixed in advance. Empirical context evaluation requires a dated, deduplicated archive, annotated observations and a predeclared target.
 
 ## Score-margin diffusion
 
@@ -24,10 +24,26 @@ For a **synthetic** case with margin 5, 720 seconds left, drift 0.5 points/minut
 
 Let `S_0 = 0`, `E[ΔS_i | past] = 0`, `|ΔS_i| <= c_i`, `V = sum(c_i^2)` and threshold `a > 0`. Applying the maximal exponential bound to `-S` yields `P(min_{k<=n} S_k <= -a) <= exp(-a^2/(2V))`. For each possible peak time `j`, apply the same argument to the remaining increments. A union bound gives the implemented peak-to-trough upper bound `min(1, sum_j exp(-a^2/(2 sum_{i>j} c_i^2))))`. A threshold greater than `sum(c_i)` is impossible under the supplied deterministic bounds. The result can be loose or equal to one, which is reported honestly.
 
-An independent exhaustive check enumerates all 256 equally likely paths of an eight-step symmetric +/-1 random walk. At threshold 6, 10 paths cross an initial loss of 6 and 12 paths experience a peak-to-trough drawdown of 6. The bounds are respectively 0.1053992246 and 0.2726474761, above the exact probabilities 10/256 and 12/256. This distinguishes drawdown from initial loss and checks the math on a process satisfying the assumptions.
+An independent exhaustive check enumerates all 256 equally likely paths of an eight-step symmetric +/-1 random walk. At threshold 6, 10 paths cross an initial loss of 6 and 12 paths experience a peak-to-trough drawdown of 6. The bounds are respectively 0.1053992246 and 0.2316125799, above the exact probabilities 10/256 and 12/256. The suffix sum includes only suffixes with enough deterministic magnitude to reach the threshold.
 
-Fees introduce drift; leverage, gaps or adaptive stakes can violate the supplied increment bounds. These functions do not infer safety from a backtest, guarantee a trading loss limit, or implement the gambling practice of doubling stakes after losses.
+## Finite stopping policy
+
+`optionalStoppingScenario` values a hypothetical position in a bounded fair-value lattice. At each interior node, the up weight is chosen to make the conditional mean of the next mark equal to the current mark. Boundary nodes settle at the binary payoff. At the final step, settlement pays one dollar with the terminal node's supplied probability.
+
+Backward induction compares immediate net proceeds with the certainty equivalent of continuation. It uses exponential utility with a risk-neutral limit and values the next states using their transition weights. Future liquidation uses an explicitly supplied per-contract cost. A supplied current net exit quote applies only at the first node. An explicit null disables immediate exit. Forward propagation calculates the expected gross stopped mark, net proceeds, variance and exit probabilities. The finite martingale identity applies to the gross stopped mark. [MIT notes on martingales and stopping times](https://math.mit.edu/~sheffield/600/Lecture35.pdf)
+
+In the path-dependent fixture with a 0.25 starting probability, 20 contracts and a three-cent exit cost, the policy continues initially and exits early on half the paths. Expected gross stopped value is $5.00. Net expected proceeds are $4.70, compared with $5.00 from holding. The certainty equivalent rises from $4.466 to $4.534 at the specified risk preference. In the risk-neutral fixture the policy holds and pays no assumed exit costs.
 
 ## Verification
 
-Run `node --test tests/quant-context.test.mjs`. The six tests check exact Gaussian posterior updates, causal prefix behavior, timestamp constraints, HMM normalization and sign symmetry, seeded diffusion moments/monotonicity, preservation of regulation ties and exhaustive finite-path bound coverage. This is mathematical implementation verification. Promotion to any forecasting role requires a separate empirical protocol and user-reviewed scope.
+Run `node --test tests/quant-context.test.mjs tests/quant-scenario.test.mjs tests/nba-inplay.test.mjs` from `web`. The tests cover exact filtering updates, causal prefixes, input gates, seeded diffusion, regulation ties, finite-path drawdown bounds and a brute-force stopping oracle.
+
+Run `node tools/validate_quant_scenarios.mjs` to reproduce `public/research/quant-scenario-validation.json` from local inputs. The report contains all 16 toggle combinations, the cumulative stages and separate validation for each quantity.
+
+| Experiment | Baseline and outcomes | Evidence |
+| --- | --- | --- |
+| Context smoothing | Persistent regimes yield MSE 0.1090 raw, 0.0556 HMM, 0.0734 Kalman and 0.0601 blended. The blend trails raw scores under rapid reversals. A zero reference wins when inputs and latent targets are independent. | Eight fixed seeds per scenario, with 120 warmup and 240 evaluation points per run. The persistent regimes plant the type of dependence the HMM is designed to recover. |
+| NBA score-clock replay | Regulation-lead Brier scores are 0.1920 for the pregame reference, 0.1635 for analytic Brownian and 0.1644 for seeded Monte Carlo. The game-cluster 95% interval for the analytic gain spans −0.0507 to 0.0996. | Forty earlier calibration games and twenty later held-out games. The runner verifies all sixty pregame priors against earlier archived results. It uses scores through the fourth period as its target and retains the tied regulation game. |
+| Optional stopping | Exact lattice values and 12,000 new seeded paths per case compare the policy with holding. The risk-averse policy can improve certainty equivalent while incurring exit costs and reducing mean cash. | Four assumed-price cases with common paths across the two decisions. Future displayed bids and fills remain unobserved in this experiment. |
+
+The NBA game-cluster interval describes a small retrospective sample and repeated-team dependence can persist. The held-out target is regulation lead. The fixed pregame reference originally estimates final game win, which can diverge in overtime. Monte Carlo samples the same continuous model as the analytic calculation. The separate prospective paper test in `forward-research.md` covers observed future books and fee-aware hypothetical executions.
