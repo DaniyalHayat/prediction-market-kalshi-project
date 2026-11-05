@@ -4,6 +4,7 @@ import {settleDue} from '../lib/cloud/journal.mjs';
 import {workspaceGET} from '../lib/workspace/router.mjs';
 import {appleChart} from '../lib/workspace/music.mjs';
 import {structuredLog} from '../lib/runtime-observability.mjs';
+import {sourceFailureDetails} from '../lib/workspace/providers.mjs';
 export async function enqueuePipeline(s=store(),now=Date.now()){
   const hour=Math.floor(now/3600000),quarter=Math.floor(now/900000);
   const jobs=[...['sports','macro','crypto','travel','weather','science','climate','culture'].map(category=>({key:`catalog#${category}#${hour}`,kind:'catalog',input:{category}})),
@@ -23,10 +24,11 @@ export async function runPipelineJob(s=store(),handlers={}){
     const completed=await s.db.query("UPDATE market_lab.jobs SET state='complete',finished_at=now(),locked_until=NULL WHERE key=$1 AND owner=$2 AND state='running' AND locked_until>now() RETURNING key",[job.key,owner]);
     return {kind:job.kind,status:completed.rowCount?'complete':'lease_lost'};
   }catch(error){
+    const failure=sourceFailureDetails(error);
     const changed=await s.db.query(`UPDATE market_lab.jobs SET state=CASE WHEN attempts>=4 THEN 'failed' ELSE 'pending' END,
       available_at=now()+least(3600,power(2,attempts)*60)*interval '1 second',locked_until=NULL,error_code=$3
-      WHERE key=$1 AND owner=$2 AND state='running' AND locked_until>now() RETURNING state`,[job.key,owner,String(error.status||error.code||'SOURCE_UNAVAILABLE').slice(0,80)]);
-    return {kind:job.kind,status:!changed.rowCount?'lease_lost':changed.rows[0].state==='failed'?'failed':'retry_scheduled'};
+      WHERE key=$1 AND owner=$2 AND state='running' AND locked_until>now() RETURNING state`,[job.key,owner,failure.error_code]);
+    return {kind:job.kind,status:!changed.rowCount?'lease_lost':changed.rows[0].state==='failed'?'failed':'retry_scheduled',...(changed.rowCount?{...failure,attempts:job.attempts}:{})};
   }
 }
 export function startPipeline(){
@@ -36,7 +38,7 @@ export function startPipeline(){
     if(running||stopped)return;running=true;processed=0;
     try{
       const s=store();await enqueuePipeline(s);
-      for(;processed<4&&!stopped;processed++){const result=await runPipelineJob(s);if(!result)break;structuredLog('pipeline.job',{kind:result.kind,result:result.status});}
+      for(;processed<4&&!stopped;processed++){const result=await runPipelineJob(s);if(!result)break;structuredLog('pipeline.job',{kind:result.kind,result:result.status,error_code:result.error_code,status:result.upstream_status,attempts:result.attempts});}
     }catch{structuredLog('pipeline.error',{error_code:'STORAGE_UNAVAILABLE'});}
     finally{running=false;for(const resolve of drainWaiters.splice(0))resolve();if(processed===4&&!stopped)setImmediate(tick);}
   };

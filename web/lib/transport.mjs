@@ -6,7 +6,7 @@ export class DataResponseError extends Error {
 
 export async function readJSON(response, {source = 'Data service', maximumBytes = 12_000_000} = {}) {
   const declared = Number(response.headers.get('content-length') || 0);
-  if (declared > maximumBytes) throw new DataResponseError(`${source} returned too much data`);
+  if (declared > maximumBytes) { await response.body?.cancel(); throw new DataResponseError(`${source} returned too much data`, {code: 'RESPONSE_TOO_LARGE'}); }
   const reader = response.body?.getReader();
   const chunks = []; let size = 0;
   if (reader) {
@@ -14,7 +14,7 @@ export async function readJSON(response, {source = 'Data service', maximumBytes 
       while (true) {
         const {value, done} = await reader.read(); if (done) break;
         size += value.byteLength;
-        if (size > maximumBytes) { await reader.cancel(); throw new DataResponseError(`${source} returned too much data`); }
+        if (size > maximumBytes) { await reader.cancel(); throw new DataResponseError(`${source} returned too much data`, {code: 'RESPONSE_TOO_LARGE'}); }
         chunks.push(value);
       }
     } finally { reader.releaseLock(); }

@@ -35,17 +35,31 @@ test('durable pipeline PostgreSQL queue behavior',{skip:!url,timeout:30000},asyn
     });
     await t.test('handler rollback leaves no partial data, schedules bounded retries, then stops after four failures',async()=>{
       await store.db.query(`INSERT INTO ${table}(key,kind) VALUES('failing','rollback')`);
-      const marker=randomUUID(),error=Object.assign(new Error('private exception body must not be persisted'),{code:'TEST_SOURCE_ERROR'}),delays=[];
+      const marker=randomUUID(),error=Object.assign(new Error('private exception body must not be persisted'),{code:'UPSTREAM_NETWORK_ERROR'}),delays=[];
       const handler=async()=>store.transaction(async c=>{await c.query("INSERT INTO market_lab.operational_events(kind,details) VALUES('pipeline-test',$1)",[{marker}]);throw error;});
       for(let attempt=1;attempt<=4;attempt++){
         const result=await runPipelineJob(s,{rollback:handler});assert.equal(result.status,attempt===4?'failed':'retry_scheduled');
         const row=(await store.db.query(`SELECT *,extract(epoch FROM available_at-now()) AS delay FROM ${table} WHERE key='failing'`)).rows[0];
-        assert.equal(row.attempts,attempt);assert.equal(row.error_code,'TEST_SOURCE_ERROR');assert.equal(row.locked_until,null);assert.equal(row.finished_at,null);assert.ok(Number(row.delay)>30&&Number(row.delay)<=3600);delays.push(Number(row.delay));
+        assert.equal(row.attempts,attempt);assert.equal(row.error_code,'UPSTREAM_NETWORK_ERROR');assert.equal(row.locked_until,null);assert.equal(row.finished_at,null);assert.ok(Number(row.delay)>30&&Number(row.delay)<=3600);delays.push(Number(row.delay));
         assert.equal(await runPipelineJob(s,{rollback:handler}),null);
         await store.db.query(`UPDATE ${table} SET available_at=now()-interval '1 second' WHERE key='failing'`);
       }
       assert.ok(delays.every((v,i)=>!i||v>delays[i-1]));assert.equal(await runPipelineJob(s,{rollback:handler}),null);
       assert.equal((await store.db.query("SELECT count(*)::int AS n FROM market_lab.operational_events WHERE details->>'marker'=$1",[marker])).rows[0].n,0);
+      await store.db.query(`TRUNCATE ${table}`);
+    });
+    await t.test('sanitized provider causes survive durable retries before eventual completion',async()=>{
+      await store.db.query(`INSERT INTO ${table}(key,kind) VALUES('provider-recovery','recovery')`);
+      let attempt=0;const handler=async()=>{attempt++;if(attempt===1)throw Object.assign(new Error('PRIVATE_TIMEOUT_BODY'),{status:503,code:'UPSTREAM_TIMEOUT'});if(attempt===2)throw Object.assign(new Error('PRIVATE_503_BODY'),{status:503,upstream_status:503,code:'UPSTREAM_HTTP_503'});};
+      const first=await runPipelineJob(s,{recovery:handler});assert.equal(first.status,'retry_scheduled');assert.equal(first.error_code,'UPSTREAM_TIMEOUT');assert.equal(first.upstream_status,undefined);assert.equal(first.attempts,1);
+      await store.db.query(`UPDATE ${table} SET available_at=now()-interval '1 second' WHERE key='provider-recovery'`);
+      const second=await runPipelineJob(s,{recovery:handler});assert.equal(second.status,'retry_scheduled');assert.equal(second.error_code,'UPSTREAM_HTTP_503');assert.equal(second.upstream_status,503);assert.equal(second.attempts,2);
+      await store.db.query(`UPDATE ${table} SET available_at=now()-interval '1 second' WHERE key='provider-recovery'`);
+      assert.equal((await runPipelineJob(s,{recovery:handler})).status,'complete');
+      const row=(await store.db.query(`SELECT state,attempts,error_code,finished_at,locked_until FROM ${table} WHERE key='provider-recovery'`)).rows[0];assert.equal(row.state,'complete');assert.equal(row.attempts,3);assert.equal(row.error_code,'UPSTREAM_HTTP_503');assert.ok(row.finished_at);assert.equal(row.locked_until,null);assert.ok(!JSON.stringify(row).includes('PRIVATE_'));
+      await store.db.query(`TRUNCATE ${table}`);
+      await store.db.query(`INSERT INTO ${table}(key,kind) VALUES('unknown-error','unknown_error')`);
+      const unknown=await runPipelineJob(s,{unknown_error:async()=>{throw Object.assign(new Error('PRIVATE_MESSAGE'),{code:'PRIVATE_CREDENTIAL_SENTINEL'});}});assert.equal(unknown.error_code,'SOURCE_UNAVAILABLE');assert.equal((await store.db.query(`SELECT error_code FROM ${table} WHERE key='unknown-error'`)).rows[0].error_code,'SOURCE_UNAVAILABLE');
       await store.db.query(`TRUNCATE ${table}`);
     });
     await t.test('expired or replaced workers cannot complete or reschedule the new owner’s job',async()=>{

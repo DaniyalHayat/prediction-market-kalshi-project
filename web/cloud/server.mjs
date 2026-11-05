@@ -150,7 +150,7 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         if(!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
         const raw=await readBody(req,20000),input=JSON.parse(raw||'{}');
         if(url.pathname==='/internal/diagnostics'){
-          if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'HTTP fetch-to-response-headers per attempt; Supabase Auth SDK call duration. Request duration includes response body work.'});
+          if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'Public source retrieval includes body reads and decoding. Other HTTP adapter timings may stop at response headers. Supabase Auth measures SDK calls.'});
           if(input.operation==='runtime_metrics'){res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4; charset=utf-8','Cache-Control':'no-store'});return res.end(telemetry.prometheus());}
           if(!storageEnabled()||storage().kind!=='postgres')return json(res,{error:'The relational store is not configured'},503);
           if(input.operation==='usage_allowances'){
