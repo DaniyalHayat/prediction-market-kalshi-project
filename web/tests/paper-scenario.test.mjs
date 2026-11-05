@@ -45,7 +45,12 @@ test('the quote model validates time and separates selection, calibration, and r
   assert.equal(signal.replay.replay_n,24);
   assert.ok(signal.prediction>signal.last_midpoint&&signal.replay.model_rmse<signal.replay.persistence_rmse);
   assert.equal(marketSignal({rows},now+180001).status,'unavailable');
-  assert.equal(marketSignal({rows:rows.map((row,i)=>({...row,time:new Date(now-120000*(120-i)).toISOString()}))},now).status,'unavailable');
+  const short=marketSignal({rows:rows.slice(-11)},now);
+  assert.equal(short.status,'available');
+  assert.equal(short.updates,10);
+  assert.equal(short.interval,null);
+  assert.ok(short.prediction>short.last_midpoint);
+  assert.equal(marketSignal({rows:rows.slice(-3)},now).status,'unavailable');
 });
 
 test('assistant explains a priced setup and links attributed evidence without an outcome probability',()=>{

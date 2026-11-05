@@ -21,7 +21,18 @@ export function marketSignal(history,now=Date.now()){
     records.push({price,prior,candidate:clamp(prior+drift)});
     drift=.2*Math.max(-.1,Math.min(.1,price-prior))+.8*drift;
   }
-  if(records.length<60)return unavailable('At least 60 adjacent minute quotes are needed to separate calibration and replay.');
+  if(records.length<60){
+    const recent=[];
+    for(let i=1;i<points.length;i++){
+      const [time,price]=points[i],[previous,prior]=points[i-1],minutes=(time-previous)/intervalMs;
+      if(time>=latest[0]-3600000&&minutes>=1&&minutes<=15)recent.push((price-prior)/minutes);
+    }
+    if(recent.length<3)return unavailable('Three recent quote changes are needed for a short-history estimate.');
+    const sorted=recent.sort((a,b)=>a-b),move=quantile(sorted,.5),shrink=recent.length/(recent.length+12),prediction=clamp(latest[1]+move*shrink);
+    return {status:'available',model:'Short-history median drift',horizon_seconds:60,prediction,interval:null,last_midpoint:latest[1],
+      observed_at:new Date(latest[0]).toISOString(),source_url:history.source_url,observations:points.length,updates:recent.length,
+      scope:'Recent midpoint changes are scaled per minute. Median drift is shrunk toward zero when there are few observations.'};
+  }
   const selectionEnd=Math.floor(records.length*.5),calibrationEnd=Math.floor(records.length*.8);
   const selection=records.slice(0,selectionEnd),calibration=records.slice(selectionEnd,calibrationEnd),test=records.slice(calibrationEnd);
   const improved=loss(selection,'candidate')<loss(selection,'prior'),key=improved?'candidate':'prior';

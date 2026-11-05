@@ -90,9 +90,11 @@ test('bounded recommendation scan limits unique events and preserves whole-budge
   const result=await workspaceRecommendations('sports',20,'baseline',{
     markets:async()=>({markets:rows,errors:[],partial:true}),
     research:async ticker=>{reads++;return {...research,market:rows.find(row=>row.ticker===ticker),forecast:{...research.forecast,source_as_of:sourceDate}};},
-    book:async ticker=>({...book,ticker,as_of:sourceDate}),fees:async()=>({coefficient:.07})});
-  assert.equal(reads,12);assert.equal(result.coverage.scanned_events,12);assert.equal(result.candidates.length,12);
-  assert.equal(new Set(result.candidates.map(row=>row.event_ticker)).size,12);assert.ok(result.candidates.every(row=>row.cost<=20));
+    batchBooks:async tickers=>new Map(tickers.map(ticker=>[ticker,{...book,ticker,as_of:sourceDate}]))});
+  assert.equal(reads,3);assert.equal(result.coverage.scanned_events,12);assert.equal(result.coverage.books_returned,12);
+  assert.equal(result.candidates.length,3);assert.equal(result.paper_scenarios.length,9);
+  assert.equal(new Set([...result.candidates,...result.paper_scenarios].map(row=>row.event_ticker)).size,12);
+  assert.ok([...result.candidates,...result.paper_scenarios].every(row=>row.cost<=20));
   await assert.rejects(workspaceRecommendations('sports',0),/budget/);
 });
 test('selected challenger can supply an experimental in-play forecast without inventing a pregame baseline',async()=>{
