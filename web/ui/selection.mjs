@@ -6,6 +6,11 @@ export function contractTitle(market) {
   const outcome = market.yes_sub_title || market.subtitle;
   return outcome && !title.toLocaleLowerCase().includes(outcome.toLocaleLowerCase()) ? `${title} · ${outcome}` : title;
 }
+export function refreshMarketRows(current,incoming){
+  const latest=new Map(incoming.map(row=>[row.ticker,row])),result=[];
+  for(const row of current){if(latest.has(row.ticker)){result.push(latest.get(row.ticker));latest.delete(row.ticker);}}
+  return [...result,...latest.values()];
+}
 
 export function selectionReducer(state, action) {
   if (action.type === 'clear') return {...initialSelection,generation:state.generation+1};
@@ -23,6 +28,10 @@ export function selectionReducer(state, action) {
     if (!Number.isFinite(next) || Number.isFinite(current) && next < current) return state;
     return {...state, book: action.value};
   }
-  if (action.type === 'research') return action.value.ticker === state.ticker ? {...state, research: action.value} : state;
+  if (action.type === 'research') {
+    if(action.value.ticker!==state.ticker)return state;
+    const market=action.value.market?.ticker===state.ticker?{...state.market,...action.value.market,category:action.value.market.category||state.market?.category}:state.market;
+    return {...state,research:action.value,market};
+  }
   return state;
 }
