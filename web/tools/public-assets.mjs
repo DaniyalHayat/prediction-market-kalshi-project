@@ -7,8 +7,13 @@ const retiredNames = new Set(['index.html', 'runtime.js', 'data-app-build.json',
 
 async function retiredDashboardAssets(publicDirectory) {
   const dashboard = join(publicDirectory, 'dashboard');
-  const info = await lstat(dashboard, {throwIfNoEntry: false});
-  if (!info) return [];
+  let info;
+  try {
+    info = await lstat(dashboard);
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
   if (!info.isDirectory()) throw new Error('Expected a dashboard asset directory: ' + dashboard);
   const names = await readdir(dashboard);
   return names
