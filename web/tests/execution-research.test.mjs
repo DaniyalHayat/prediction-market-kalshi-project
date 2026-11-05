@@ -23,6 +23,7 @@ test('OFI matches independent price-change and same-price queue arithmetic and r
   assert.equal(contiguousBookHistory([event(0),event(2)]).rows.length,1);
   assert.equal(contiguousBookHistory([event(0),event(1,.48,100,.52,100,1,'b')]).rows.length,1);
   const tied=contiguousBookHistory([event(0),event(1,.48,120,.52,80,0)]);assert.equal(tied.rows.length,2);assert.equal(tied.timestamp_ties,1);assert.equal(tied.rows[1].ofi,40);
+  assert.equal(contiguousBookHistory([event(0,.48,1e308,.52,1e308)]).rows.length,0);
 });
 
 test('Hawkes recursive likelihood and compensator equal an independent quadratic implementation including pre-window history',()=>{
@@ -55,6 +56,19 @@ test('quote-arrival clustering changes the explicit risk scenario only when enab
   const rows=signalHistory({clustered:true}),on=quoteArrivalResearch(rows),off=quoteArrivalResearch(rows,{enabled:false});
   assert.equal(on.available,true);assert.equal(on.evaluation.passed,true);assert.ok(on.branching_ratio>=0&&on.branching_ratio<1);assert.notEqual(on.risk_multiplier,1);assert.equal(off.risk_multiplier,1);
   const tied=rows.map((row,i)=>i===1?{...row,time_seconds:rows[0].time_seconds}:row);assert.equal(quoteArrivalResearch(tied).validation_status,'tied_receive_timestamps');
+  const upperBound=executionResearch({...fixture(),book_history:rows,controls:{volatility:1}});assert.ok(upperBound.assumptions.effective_volatility>1);assert.ok(upperBound.schedule.rows.every(row=>Number.isFinite(row.contracts)));
+});
+
+test('first held-out arrival time cannot alter Hawkes fitted parameters or the training Poisson rate',()=>{
+  const rows=signalHistory({clustered:true}),split=Math.floor((rows.length-1)*.7),firstHeldout=split+1,mutated=rows.map((row,i)=>i===firstHeldout?{...row,time_seconds:rows[firstHeldout-1].time_seconds+.001}:row),before=quoteArrivalResearch(rows),after=quoteArrivalResearch(mutated);
+  assert.deepEqual(before.parameters,after.parameters);assert.equal(before.poisson_rate_per_second,after.poisson_rate_per_second);assert.equal(before.evaluation.training_end_time,after.evaluation.training_end_time);
+  assert.notEqual(before.evaluation.holdout_log_likelihood_gain,after.evaluation.holdout_log_likelihood_gain);
+});
+
+test('observed connected idle time decays the current arrival intensity without refitting on future observations',()=>{
+  const rows=signalHistory({clustered:true}),latest=rows.at(-1).time_seconds,active=quoteArrivalResearch(rows,{observation_end_seconds:latest}),idle=quoteArrivalResearch(rows,{observation_end_seconds:latest+90});
+  assert.deepEqual(active.parameters,idle.parameters);assert.ok(idle.intensity_per_second<active.intensity_per_second);assert.equal(idle.observed_idle_seconds,90);assert.equal(idle.intensity_reference,'end_of_observed_connected_window');
+  assert.throws(()=>quoteArrivalResearch(rows,{observation_end_seconds:latest-1}),RangeError);
 });
 
 test('all eight categories and both sides preserve the independent probability while controls change actual scenario calculations',()=>{
