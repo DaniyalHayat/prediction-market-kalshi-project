@@ -155,6 +155,36 @@ async function azureReadback(request,{ticker,messages,model,executionControls,pa
   const reserve=(kind,deadline)=>fetcher(new URL('/internal/assistant/reserve-azure',backend),{
     method:'POST',headers,body:JSON.stringify({fingerprint,kind}),signal:deadline,timeoutMs:4500,maximumBytes:4096,redirect:'error',cache:'no-store',
   });
+  const question=scopedQuestion(messages),tools=planResearchReadback(question,{panel,detail});
+  const authorize=async ({signal:deadline})=>(await reserve('foundry',deadline))?.allowed===true;
+  const respond=async (packets,transport,timings=[])=>{
+    const {answer,mode}=await azureResearchAnswer({question,ticker,panel,detail,executionControls,packets,tools,
+      explain:{contract:explainContract,math:explainResearchMath,execution:explainExecutionMath},authorize,signal,env,foundryFetcher});
+    signal.throwIfAborted();
+    return new Response(answer,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+      'X-Research-Model':mode,'X-Research-Transport':transport,...(timings.length?{'Server-Timing':timings.join(', ')}:{})}});
+  };
+  if(!createClient){
+    let batch;
+    try{
+      batch=await fetcher(new URL('/internal/assistant/read-azure',backend),{
+        method:'POST',headers,body:JSON.stringify({ticker,model,panel,detail,execution_controls:executionControls,messages:[{role:'user',content:question}]}),
+        signal,timeoutMs:24000,maximumBytes:100000,redirect:'error',cache:'no-store',
+      });
+    }catch(error){
+      if(error?.status!==404||error.message!=='Unknown service path')throw error;
+    }
+    if(batch!==undefined){
+      if(!Array.isArray(batch.results)||batch.results.length>tools.length)throw new Error('Invalid research batch');
+      const packets=new Map(),timings=[];
+      for(const row of batch.results){
+        if(!tools.includes(row?.name)||packets.has(row.name))throw new Error('Invalid research tool');
+        packets.set(row.name,azureResearchPacket(row.name,row.result,ticker));
+        if(Number.isSafeInteger(row.duration_ms)&&row.duration_ms>=0&&row.duration_ms<=18000)timings.push(row.name+';dur='+row.duration_ms);
+      }
+      return respond(packets,'MCP In-Process',timings);
+    }
+  }
   const allowance=await reserve('research',signal);
   if(allowance?.allowed===false)return azureFailure(azureAllowanceMessage,429);
   if(allowance?.allowed!==true)return azureFailure('The research assistant allowance is temporarily unavailable.',503);
@@ -170,7 +200,6 @@ async function azureReadback(request,{ticker,messages,model,executionControls,pa
       });
       await client.connect(transport,{signal,timeout:6000});
     }
-    const question=scopedQuestion(messages),tools=planResearchReadback(question,{panel,detail});
     const checks=await Promise.allSettled(tools.map(async name=>{
       const value=await client.callTool({name,arguments:azureToolArguments(name,ticker,question,panel)},undefined,{signal,timeout:17000});
       return azureResearchPacket(name,value,ticker);
@@ -178,12 +207,7 @@ async function azureReadback(request,{ticker,messages,model,executionControls,pa
     signal.throwIfAborted();
     const packets=new Map(tools.map((name,index)=>[name,checks[index].status==='fulfilled'?checks[index].value:null]));
     if(![...packets.values()].some(Boolean)&&checks.some(check=>check.status==='rejected'&&(check.reason?.status===429||check.reason?.code===429)))return azureFailure(azureAllowanceMessage,429);
-    const authorize=async ({signal:deadline})=>(await reserve('foundry',deadline))?.allowed===true;
-    const {answer,mode}=await azureResearchAnswer({question,ticker,panel,detail,executionControls,packets,tools,
-      explain:{contract:explainContract,math:explainResearchMath,execution:explainExecutionMath},authorize,signal,env,foundryFetcher});
-    signal.throwIfAborted();
-    return new Response(answer,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
-      'X-Research-Model':mode,'X-Research-Transport':'MCP Streamable HTTP'}});
+    return await respond(packets,'MCP Streamable HTTP');
   }finally{await Promise.resolve().then(()=>client?.close()).catch(()=>{});}
 }
 
@@ -220,18 +244,31 @@ export async function assistantResponse(request,{createClient,generate=streamTex
     const fingerprint=createHash('sha256').update(secret+new Date().toISOString().slice(0,10)+ip).digest('hex');
     const headers={Authorization:'Bearer '+secret,'Content-Type':'application/json'};
     const question=messages.at(-1).content.trim();
-    const contractIntent=/^(?:explain the research view|why did (?:you|u) (?:pick|choose|recommend)|what would change this view|which source matters for settlement)/i.test(question);
+    const contractIntent=/^(?:explain the research view|why this research view|why did (?:you|u) (?:pick|choose|recommend)|what would change this view|which source matters for settlement)/i.test(question);
     const executionIntent=/^explain the execution lab result\b/i.test(question);
     const guided=Boolean(panel||detail==='full');
     const reserve=()=>fetcher(new URL('/internal/assistant/reserve',backend),{method:'POST',headers,body:JSON.stringify({fingerprint}),signal:AbortSignal.timeout(12000)});
     const reservation=guided||contractIntent||executionIntent?null:await reserve();
     client=createClient?await createClient(ticker,researchModel,executionControls):new Client({name:'predictir-web',version:'4.0.0'});
-    if(!createClient)await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',backend),{requestInit:{headers:{Authorization:'Bearer '+secret,'X-Market-Ticker':ticker,'X-Market-Model':researchModel,...(executionControls?{'X-Market-Execution':JSON.stringify(executionControls)}:{})}}}));
+    if(!createClient)await client.connect(new StreamableHTTPClientTransport(new URL('/mcp',backend),{requestInit:{headers:{Authorization:'Bearer '+secret,'X-Market-Ticker':ticker,'X-Market-Model':researchModel,...(executionControls?{'X-Market-Execution':JSON.stringify(executionControls)}:{})}}}),{signal:request.signal,timeout:6000});
+    if(guided){
+      const question=scopedQuestion(messages),planned=planResearchReadback(question,{panel,detail});
+      const packets=new Map(await Promise.all(planned.map(async name=>{
+        const result=await client.callTool({name,arguments:azureToolArguments(name,ticker,question,panel)},undefined,{signal:request.signal,timeout:17000}).catch(()=>null);
+        return [name,azureResearchPacket(name,result,ticker)];
+      })));
+      request.signal.throwIfAborted();
+      const {answer}=await azureResearchAnswer({question,ticker,panel,detail,executionControls,packets,tools:planned,
+        explain:{contract:explainContract,math:explainResearchMath,execution:explainExecutionMath},signal:request.signal,env:{}});
+      await client.close();
+      return new Response(answer,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+        'X-Research-Model':'deterministic-guided','X-Research-Transport':'MCP Streamable HTTP'}});
+    }
     const listed=await client.listTools(),allowed=new Set(['get_contract','get_research','get_price_history','get_source_status','search_retained_evidence','analyze_execution_lab']),sources=new Map();let calls=0;
     const tools=Object.fromEntries(listed.tools.filter(t=>allowed.has(t.name)).map(t=>[t.name,tool({description:t.description,inputSchema:jsonSchema(t.inputSchema),execute:async input=>{
       if(++calls>3)return {status:'limit',reason:'Three research reads per answer are allowed'};
       if(input.ticker&&input.ticker!==ticker)return {status:'unavailable',reason:'Use the selected contract'};
-      const result=await client.callTool({name:t.name,arguments:input},undefined,guided?{signal:request.signal,timeout:17000}:undefined);
+      const result=await client.callTool({name:t.name,arguments:input});
       const text=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')||'No source response';
       if(Buffer.byteLength(text)>14000)return {status:'unavailable',reason:'The source packet exceeded the context limit'};
       try{const packet=JSON.parse(text);
@@ -243,18 +280,6 @@ export async function assistantResponse(request,{createClient,generate=streamTex
       const uncited=[...sources.values()].filter(row=>!answer.includes(row.url));
       return new Response(answer+(uncited.length?'\n\n'+sourceLinks(uncited):''),{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Research-Model':name,'X-Research-Transport':'MCP Streamable HTTP'}});
     };
-    if(guided){
-      const question=scopedQuestion(messages),planned=planResearchReadback(question,{panel,detail});
-      const packets=new Map(await Promise.all(planned.map(async name=>{
-        const packet=await tools[name]?.execute(azureToolArguments(name,ticker,question,panel)).catch(()=>null);
-        return [name,name==='get_source_status'||packet?.ticker===ticker?packet:null];
-      })));
-      const {answer}=await azureResearchAnswer({question,ticker,panel,detail,executionControls,packets,tools:planned,
-        explain:{contract:explainContract,math:explainResearchMath,execution:explainExecutionMath},signal:request.signal,env:{}});
-      await client.close();
-      return new Response(answer,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
-        'X-Research-Model':'deterministic-guided','X-Research-Transport':'MCP Streamable HTTP'}});
-    }
     if(contractIntent||executionIntent){
       const lookup=executionIntent?tools.analyze_execution_lab:tools.get_research;
       const packet=lookup?await lookup.execute({ticker}):null;

@@ -1,9 +1,10 @@
 import {request,marketDetails,book,batchBooks,validateTicker,number,validQuote} from '../live.mjs';
+import {setTimeout as delay} from 'node:timers/promises';
 import {marketFees} from '../cloud/resolve.mjs';
 import {marketBrief} from '../intelligence/brief.mjs';
 import {executionEstimate} from '../intelligence/math.mjs';
-import {workspaceCatalog,workspaceMarkets,inferCategory,inferResearchFamily} from './catalog.mjs';
-import {retainMarketHistory,warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
+import {workspaceCatalog,categorySnapshot,inferCategory,inferResearchFamily} from './catalog.mjs';
+import {warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
 import {sportsResearch} from './sports.mjs';
 import {musicResearch} from './music.mjs';
 import {contractEvidence} from './evidence.mjs';
@@ -137,17 +138,25 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
 export async function workspaceEvidence(ticker,{reddit=false,includeX=false,model='baseline',preview=false}={},dependencies={}){
   validateTicker(ticker);model=modelChoice(model);
   if(typeof reddit!=='boolean'||typeof includeX!=='boolean')throw new RangeError('Evidence source toggles must be booleans');
-  const deps={workspaceResearch,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX),Number(preview)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
+  const deps={marketDetails,request,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX),Number(preview)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&evidenceInflight.has(key))return evidenceInflight.get(key);
   const task=(async()=>{
-    const research=await deps.workspaceResearch(ticker,{model,fast:preview,evidence:!preview}),market=research.market;
+    const {market}=await deps.marketDetails(ticker);
     if(market?.ticker!==ticker)throw new Error('Evidence identity does not match the selected contract');
-    const value=await deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,news:research.news,sports:research.extensions?.sports,music:research.extensions?.music,
-      settlementSources:research.rules?.settlement_sources,...(preview?{headlineMode:'official'}:{})});
-    if(preview)return value;
-    const retention=await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker}).catch(()=>({status:'unavailable',reason:'Evidence remains readable; retained semantic indexing is temporarily unavailable.'}));
-    const result={...value,retention};if(useCache){if(evidenceCache.size>=100)evidenceCache.delete(evidenceCache.keys().next().value);evidenceCache.set(key,{until:Date.now()+60000,value:result});}return result;
+    const series=[market.series_ticker,market.series,market.event_ticker?.split('-')[0],ticker.split('-')[0]]
+      .find(value=>typeof value==='string'&&/^[A-Za-z0-9_.-]{1,140}$/.test(value)&&!value.includes('..'));
+    const settlementSources=Promise.race([deps.request('/series/'+encodeURIComponent(series))
+      .then(result=>result.data?.series?.settlement_sources||[]).catch(()=>[]),delay(1000,[],{ref:false})]);
+    const recent=['full','assistant','fast'].map(mode=>researchCache.get([ticker,model,mode,0].join('#')))
+      .find(entry=>entry?.until>Date.now())?.value;
+    const value=await deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,
+      sports:recent?.extensions?.sports,music:recent?.extensions?.music,settlementSources,headlineMode:preview?'official':'full'});
+    const retention=preview?null:await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker,deferEmbedding:true})
+      .catch(()=>({status:'unavailable',reason:'Evidence remains readable; retained search is temporarily unavailable.'}));
+    const result=retention?{...value,retention}:value;
+    if(useCache){if(evidenceCache.size>=100)evidenceCache.delete(evidenceCache.keys().next().value);evidenceCache.set(key,{until:Date.now()+60000,value:result});}
+    return result;
   })();
   if(useCache)evidenceInflight.set(key,task);try{return await task;}finally{if(useCache)evidenceInflight.delete(key);}
 }
@@ -168,7 +177,7 @@ export async function workspaceOpinions(raw,{research=workspaceResearch,model='b
 export async function workspaceRecommendations(category='sports',budget=20,model='baseline',dependencies={}) {
   model=modelChoice(model);
   if(!Number.isFinite(budget)||budget<1||budget>10000)throw new RangeError('Choose a paper budget from $1 to $10,000');
-  const deps={markets:workspaceMarkets,research:workspaceResearch,book,batchBooks,...dependencies};
+  const deps={markets:categorySnapshot,research:workspaceResearch,book,batchBooks,...dependencies};
   const useCache=!Object.keys(dependencies).length,key=category+'#'+model;
   const scan=async()=>{
     const list=await deps.markets(category),seen=new Set(),ordered=[...list.markets].sort((a,b)=>{
@@ -224,11 +233,7 @@ export async function workspaceRecommendations(category='sports',budget=20,model
 export async function workspaceGET(endpoint,params,dependencies={}) {
   const deps={workspaceEvidence,searchRetainedEvidence,...dependencies};
   if(endpoint==='workspace/catalog')return workspaceCatalog();
-  if(endpoint==='workspace/markets') {
-    const value=await workspaceMarkets(params.get('category')||'sports');
-    try{value.persistence=await retainMarketHistory(value);}catch{value.persistence={persisted:false,reason:'History publication is delayed'};}
-    return value;
-  }
+  if(endpoint==='workspace/markets')return categorySnapshot(params.get('category')||'sports');
   if(endpoint==='workspace/context') {
     const ticker=validateTicker(params.get('ticker'));
     const [detail,profile,fees]=await Promise.all([marketDetails(ticker),request('/series/'+ticker.split('-')[0]).catch(()=>null),marketFees(ticker).catch(()=>null)]);

@@ -37,6 +37,7 @@ const link=({url,label})=>'['+(clean(label,120)||new URL(url).hostname)+']('+lin
 export function azureToolArguments(name,ticker,question,panel){
   if(name==='get_source_status')return {};
   if(name==='get_price_history')return {ticker,hours:/\b(?:week|7\s+days?|168\s+hours?)\b/i.test(question)?'168':'24'};
+  if(name==='get_research')return {ticker,include_reporting:panel==='evidence'||/\b(?:news|headlines?|reports?|reporting|injur(?:y|ies)|articles?)\b/i.test(question)};
   if(name==='search_retained_evidence'){
     const query=panel==='evidence'&&/^explain the retained public reporting for /i.test(question)?
       (/^KX(?:NFL|NBA|EPL)/i.test(ticker)?'injury OR questionable OR availability OR lineup OR practice OR starter':
@@ -126,12 +127,19 @@ function fullModelNotes(research,now){
   const reason=clean(forecast?.reason,450);
   const evidence=clean(forecast?.evidence?.label,130);
   if(evidence)checks.push('The evidence classification is '+evidence+'.');
+  if(forecast?.evidence?.tier===1&&[0,1].includes(forecast.probability)){
+    checks.push('This model produced an endpoint value. Read it as a sign that the modeled range sits far from the trigger under these inputs. The available validation leaves room for surprises outside that range.');
+  }
   if(reason)checks.push(reason);
   const validation=forecast?.validation;
   if(validation?.passed===true)checks.push('The historical holdout passed its configured release check.');
   if(validation?.passed===false)checks.push('The historical holdout did not pass its configured release check.');
   if(Number.isSafeInteger(validation?.n)&&validation.n>0&&Number.isFinite(validation.brier)&&Number.isFinite(validation.baseline_brier)){
-    checks.push(`Across ${quantity(validation.n)} held-out observations, the model Brier score was ${validation.brier.toFixed(4)} versus ${validation.baseline_brier.toFixed(4)} for its stated baseline. Lower is better.`);
+    checks.push(`Across ${quantity(validation.n)} held-out observations, the model Brier score was ${validation.brier.toFixed(4)} versus ${validation.baseline_brier.toFixed(4)} for its stated baseline. Think of this as a report card for probabilities. Confident misses hurt the score most, and lower is better.`);
+  }
+  for(const warning of rows(forecast?.warnings).slice(0,3)){
+    const note=clean(warning,320);
+    if(note)checks.push(note);
   }
   if(cents(forecast?.outcomes?.tie)&&cents(forecast?.expected_settlement_value)&&fresh(forecast.source_as_of,now,86400000)){
     checks.push(`The model assigns ${(forecast.outcomes.tie*100).toFixed(1)}% to a tie. With the 50¢ tie payout, modeled YES settlement value averages ${cents(forecast.expected_settlement_value)} per contract.`);
@@ -158,6 +166,30 @@ function fullModelNotes(research,now){
     checks.push('What would change the read? Recheck after an independent update shifts the conservative range or the quoted entry becomes cheaper. Both checks still need to pass.');
   }
   return checks;
+}
+
+function settlementExample(research,ticker,now){
+  const forecast=research.forecast;
+  const source=clean(forecast?.source_name,140),url=publicSource(forecast?.source_url);
+  const sourceLimit=Number.isFinite(forecast?.max_source_age_seconds)?Math.max(10,Math.min(86400,forecast.max_source_age_seconds))*1000:86400000;
+  if(!fresh(forecast?.source_as_of,now,sourceLimit))return null;
+  const parts=[];
+  if(source){
+    const publication=rows(research.rules?.settlement_sources).find(item=>publicSource(item?.url));
+    const settlementURL=publicSource(publication?.url);
+    const settlement=settlementURL?link({url:settlementURL,label:publication.name||'the official settlement source'}):null;
+    parts.push(`The estimate draws on ${url?link({url,label:source}):source}.`);
+    if(settlement&&settlementURL!==url)parts.push(`For the actual payout, check ${settlement}. The rules decide which observation counts. The model input can be useful without matching that observation exactly.`);
+  }
+  const spot=forecast.inputs?.spot,floor=forecast.floor_strike,cap=forecast.cap_strike;
+  if(forecast.ticker===ticker&&forecast.strike_type==='between'&&[spot,floor,cap].every(Number.isFinite)&&spot>0&&floor>0&&cap>=floor){
+    const boundary=spot<floor?floor:spot>cap?cap:null;
+    if(boundary!==null)parts.push(`The model’s reference price of ${quantity(spot)} was ${(Math.abs(boundary-spot)/spot*100).toFixed(2)}% away from the nearest edge of the YES range. That distance helps explain the estimate. The official measurement can move before settlement.`);
+  }
+  const scenario=rows(research.paper_scenarios).find(row=>row?.ticker===ticker&&['YES','NO'].includes(row.side)&&fresh(row.quote_as_of,now,90000)&&
+    Number.isFinite(row.contracts)&&row.contracts>0&&dollars(row.profit_if_win)&&dollars(row.loss_if_lose));
+  if(scenario)parts.push(`On the ${scenario.side} paper example, a full payout would leave you up ${dollars(scenario.profit_if_win)} and a zero payout would leave you down ${dollars(scenario.loss_if_lose)} from the starting paper budget. Those are the two ends of the payout calculation. Whether either is likely depends on the evidence above.`);
+  return parts.join(' ');
 }
 
 function executionDetails(packet,now){
@@ -195,7 +227,7 @@ function evidenceRows(packet,ticker,now){
   const unique=new Set();
   return rows(packet?.citations).flatMap(row=>{
     const url=publicSource(row?.url);
-    const label=clean(row?.title||row?.publisher,140),text=clean(row?.text,440);
+    const label=clean(row?.title||row?.publisher,140),text=clean(row?.text,760);
     if(!url||unique.has(url)||row?.ticker!==ticker||!label||!text||!date(row.expires_at)||Date.parse(row.expires_at)<=now||
       !date(row.retrieved_at)||Date.parse(row.retrieved_at)>now+300000)return [];
     unique.add(url);
@@ -206,11 +238,13 @@ function evidenceRows(packet,ticker,now){
 function attributedReports(research,full){
   const seen=new Set();
   return rows(research?.evidence).flatMap(item=>{
-    const url=publicSource(item?.url),label=clean(item?.title,140),excerpt=clean(item?.excerpt,full?300:180);
+    const url=publicSource(item?.url),label=clean(item?.title,140),excerpt=clean(item?.excerpt,full?450:240);
     if(!url||!label||seen.has(url))return [];
     seen.add(url);
+    const stamp=date(item.published_at)||date(item.retrieved_at);
+    const at=stamp?' ('+(date(item.published_at)?'published':'retrieved')+' '+stamp+')':'';
     return [(item.match_scope==='matched'?'Matched report':item.match_scope==='related'?'Related context':'Attributed report')+
-      '. '+link({url,label})+(excerpt?' '+excerpt:'')];
+      '. '+link({url,label})+at+(excerpt?' '+excerpt:'')];
   }).slice(0,full?3:2);
 }
 
@@ -222,20 +256,28 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
   if(guided&&title)parts.push(title+' ('+ticker+')');
   const side=current&&['YES','NO','PASS'].includes(research.opinion?.side)?research.opinion.side:null;
   const verdict=side?'Research screen: '+side+'. '+(side==='PASS'?'Supported allocation: 0 contracts. ':'')+clean(research.opinion.reason,450):null;
-  if(guided&&verdict)parts.push(verdict);
-  if(wants('get_contract'))parts.push(contractFacts(contract,research,full));
+  if(guided&&verdict){
+    parts.push('## The short answer',verdict);
+    if(side==='PASS'&&(!panel||['analysis','paper'].includes(panel))){
+      const reason=String(research.opinion.reason||'');
+      if(/holdout|validation|promotion/.test(reason.toLowerCase()))parts.push('In plain English, the estimate needs a better track record on past data the model never trained on. Until then, use the estimate to see how the paper trade behaves under different assumptions.');
+      else if(/depth|book|liquidity/.test(reason.toLowerCase()))parts.push('The headline price covers the first available contracts. Your paper fill depends on how many contracts are actually available at that price and at the next levels.');
+      else parts.push('Think of it as two separate questions. What do the rules pay for? And is that payoff worth more than the price, including fees? A market can look cheap and still fall short once you run the numbers.');
+    }
+  }
+  if(wants('get_contract'))parts.push('## What the contract pays for',contractFacts(contract,research,full));
   if(wants('get_contract')&&(panel==='paper'||full&&panel!=='rules'||/\b(?:order book|bid|ask price|current quote|live quote|all-in entry|break-even)\b/i.test(question))){
     parts.push(quoteFacts(contract,now));
   }
   if(wants('analyze_execution_lab')){
     const execution=packets.get('analyze_execution_lab');
     const matches=!executionControls||execution?.controls&&Object.entries(executionControls).every(([name,value])=>execution.controls[name]===value);
-    parts.push(matches?explain.execution(execution,ticker,now):
+    parts.push('## The fill you can test',matches?explain.execution(execution,ticker,now):
       'The execution packet did not match the submitted settings. Rerun the current settings in Execution lab to refresh it.');
     if(full&&matches)parts.push(...executionDetails(execution,now));
   }
-  if(wants('get_price_history'))parts.push(historyFacts(packets.get('get_price_history'),full));
-  if(wants('get_source_status'))parts.push(coverageFacts(packets.get('get_source_status'),full));
+  if(wants('get_price_history'))parts.push('## What the tape shows',historyFacts(packets.get('get_price_history'),full));
+  if(wants('get_source_status'))parts.push('## Where the data came from',coverageFacts(packets.get('get_source_status'),full));
   if(!current){
     parts.push('Fresh independent research is unavailable for the selected contract. Its current recommendation and probability have not been verified.');
   }else{
@@ -253,19 +295,21 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
     const math=/\b(?:range|probabilit(?:y|ies)|confidence|costs?|fees?|allocation|position size)\b/i.test(question);
     if(math||full&&(!panel||['analysis','paper'].includes(panel))){
       const result=explain.math(guided?{...packet,opinion:null}:packet,ticker,now);
-      parts.push(result);
+      parts.push('## From the estimate to the entry price',result);
     }else if(!wants('analyze_execution_lab')&&!wants('get_source_status')&&(!panel||panel==='analysis')){
       const result=explain.contract({...packet,paper_scenarios:guided?[]:packet.paper_scenarios,rules:wants('get_contract')?null:packet.rules},ticker,now);
       parts.push(guided&&title?result.split('\n\n').slice(1).join('\n\n'):result);
     }
     if(panel==='paper'||panel==='analysis'||full&&!panel){
       const comparison=paperFacts(research,ticker,now,full);
-      if(comparison.length)parts.push(...comparison);
+      if(comparison.length)parts.push('## What the paper trade looks like',...comparison);
       else if(panel==='paper')parts.push('No fresh paper fill was returned for either side at the reference budget.');
     }
     if(full&&(!panel||['analysis','paper','evidence'].includes(panel))){
       const notes=fullModelNotes(research,now);
-      if(notes.length)parts.push('Model checks and what could change the view',...notes);
+      if(notes.length)parts.push('## Model checks and what could change the view',...notes);
+      const scenario=settlementExample(research,ticker,now);
+      if(scenario)parts.push(scenario);
     }
     if(!guided&&verdict&&!parts.some(part=>part.includes('Research screen: '+side)))parts.push(verdict);
   }
@@ -276,9 +320,10 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
   if(wants('search_retained_evidence')){
     const retained=packets.get('search_retained_evidence'),evidence=evidenceRows(retained,ticker,now);
     if(evidence.length){
-      const ranked=await rankAzureEvidence({question,snippets:evidence.map(row=>row.label+' '+row.text),authorize,signal},{env,fetcher:foundryFetcher});
+      const ranked=await rankAzureEvidence({question,snippets:evidence.map(row=>row.label+' '+row.text),
+        preserveRetrievalOrder:['hybrid_rrf','lexical_only'].includes(retained.retrieval?.mode),authorize,signal},{env,fetcher:foundryFetcher});
       if(ranked.mode==='azure-foundry')mode=ranked.mode;
-      parts.push(full?'Retained public evidence for this contract. Search ranks show relevance to the question. Each result keeps its publication or retrieval date.':
+      parts.push('## The evidence trail',full?'Retained public evidence for this contract. Search ranks show relevance to the question. Each result keeps its publication or retrieval date. A report only changes the interpretation if it speaks to this contract’s named outcome, source, and time window.':
         'Retained public evidence for this contract. Retrieval order indicates relevance.');
       for(const index of ranked.order){
         const row=evidence[index];
@@ -287,7 +332,7 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
     }else{
       const reports=current?attributedReports(research,full):[];
       if(reports.length){
-        parts.push('The retained search returned no usable excerpts. The research check returned these public report links. Open the sources to check publication dates.',...reports);
+        parts.push('## The evidence trail','The retained search returned no usable excerpts. The research check returned these public report links. Open the sources to check publication dates.',...reports);
       }else if(retained)parts.push('No matching retained public evidence was available. Use Load contract news to collect evidence before asking again.');
       else parts.push('The retained evidence search did not complete. Use Load contract news or try the search again.');
     }

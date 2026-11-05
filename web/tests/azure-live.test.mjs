@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import test from 'node:test';
 import {once} from 'node:events';
 import {getCACertificates} from 'node:tls';
@@ -6,7 +7,8 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {validateAzureLive, verifyAzureDatabase, verifyAzurePrivateDNS} from '../cloud/azure-live.mjs';
 import {createMarketServer} from '../cloud/server.mjs';
-import {handleMCP} from '../lib/workspace/mcp.mjs';
+import {handleMCP, localResearchReadback} from '../lib/workspace/mcp.mjs';
+import {assistantResponse} from '../lib/workspace/assistant.mjs';
 import {AZURE_STREAM_LIFETIME_MS, validateAzureFrontend} from '../lib/workspace/azure-mode.mjs';
 
 const origin = 'https://fixture.front.eastus2.azurecontainerapps.io';
@@ -130,4 +132,60 @@ test('Azure live app paths require edge authorization and MCP remains a separate
   assert.equal(rejected.isError, true);
   assert.equal(counters.tools, 1);
   assert.equal(counters.removals, 1);
+});
+
+test('Azure guided readback performs one private HTTP hop with scoped MCP reads and two quota writes', async t => {
+  const previous = {PREDICTIR_MODE: process.env.PREDICTIR_MODE, APP_ORIGIN: process.env.APP_ORIGIN};
+  Object.assign(process.env, {PREDICTIR_MODE: 'live', APP_ORIGIN: origin});
+  t.after(() => { for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
+  const ticker = 'KX-AZURE-FIXTURE', ip = '203.0.113.5';
+  const asOf = '2026-11-05T18:00:00Z', day = asOf.slice(0, 10);
+  const quota = [], visits = [];
+  let reporting = 0, allowed = true;
+  const dependencies = {
+    marketDetails: async value => {
+      assert.equal(value, ticker);
+      return {market: {ticker, title: 'Fixture market', yes_sub_title: 'Event occurs', rules_primary: 'An official result determines payout.'}, as_of: new Date().toISOString()};
+    },
+    book: async () => ({raw: {}, metrics: {book_ask: .42}, as_of: new Date().toISOString()}),
+    workspaceResearch: async (value, options) => {
+      assert.equal(value, ticker);
+      assert.equal(options.model, 'challenger');
+      return {ticker, market: {ticker}, title: 'Fixture market', as_of: new Date().toISOString(), opinion: {side: 'PASS', reason: 'Current source coverage is incomplete.'}};
+    },
+    contractEvidence: async () => { reporting++; return {}; },
+  };
+  const server = createMarketServer({production: true, edgeSecret: edge, serviceSecret: assistant, logger: () => {},
+    now: () => Date.parse(asOf), storageEnabled: () => true, storage: () => ({consume: async (...values) => {
+      quota.push(values);
+      return values[0].startsWith('work#') || allowed;
+    }}),
+    researchReadback: options => localResearchReadback({...options, dependencies}),
+  });
+  server.on('request', request => visits.push(request.url));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
+  const local = 'http://127.0.0.1:' + server.address().port;
+  const path = '/internal/assistant/read-azure', env = {...front, MARKET_BACKEND_URL: local, PREDICTIR_AZURE_LOCAL: '1'};
+  const payload = {ticker, model: 'challenger', panel: 'rules', detail: 'brief', messages: [{role: 'user', content: 'Which rule decides the payout?'}]};
+  const request = () => new Request(origin+'/api/assistant', {method: 'POST', headers: {
+    'Content-Type': 'application/json', Origin: origin, 'X-Forwarded-For': ip,
+  }, body: JSON.stringify(payload)});
+  const response = await assistantResponse(request(), {env, countryLookup: async () => 'US'});
+  const answer = await response.text();
+  assert.equal(response.status, 200, answer);
+  assert.match(answer, /An official result determines payout/);
+  assert.equal(response.headers.get('x-research-transport'), 'MCP In-Process');
+  assert.match(response.headers.get('server-timing'), /get_contract;dur=\d+/);
+  assert.deepEqual(visits, [path]);
+  const key = createHash('sha256').update(assistant+'\0'+ip).digest('hex');
+  assert.deepEqual(quota, [['work#'+day, 6000, 9], ['azure-assistant#'+day+'#'+key, 30, 1, 172800]]);
+  assert.equal(reporting, 0);
+  assert.equal((await fetch(local+path, {method: 'POST', headers: {Authorization: 'Bearer '+assistant, 'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)})).status, 403);
+  allowed = false;
+  const rejected = await assistantResponse(request(), {env, countryLookup: async () => 'US'});
+  assert.equal(rejected.status, 429);
+  assert.equal(reporting, 0);
 });

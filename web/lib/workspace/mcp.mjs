@@ -1,5 +1,7 @@
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';
+import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {z} from 'zod';
 import {marketDetails,book,validateTicker} from '../live.mjs';
 import {workspaceResearch,contractHistory} from './router.mjs';
@@ -10,6 +12,7 @@ import {workspaceExecutionResearch,executionToolPacket} from './execution-servic
 import {normalizeExecutionControls} from './execution-research.mjs';
 import {contractEvidence} from './evidence.mjs';
 import {paperActionError,paperTools} from './paper-actions.mjs';
+import {azureToolArguments,planResearchReadback} from './azure-research.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
@@ -59,30 +62,30 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
       catch(error){return {isError:true,content:[{type:'text',text:JSON.stringify({status:'unavailable',reason:error.message})}]};}
     });
   register('get_contract','Read the selected public contract rules, exact outcome identity and current public order book. No account or order access.',{ticker},async({ticker})=>{
-    const [detail,depth]=await Promise.all([deps.marketDetails(ticker),deps.book(ticker,1)]);
+    const [detail,depth]=await Promise.all([deps.marketDetails(ticker),deps.book(ticker,1).catch(()=>null)]);
     const m=detail.market;
-    const levels=side=>(depth.raw?.orderbook_fp?.[side]||[]).map(([price,quantity])=>({bid_price_usd_per_contract:Number(price),quantity_contracts:Number(quantity)}))
+    const levels=side=>(depth?.raw?.orderbook_fp?.[side]||[]).map(([price,quantity])=>({bid_price_usd_per_contract:Number(price),quantity_contracts:Number(quantity)}))
       .filter(row=>Number.isFinite(row.bid_price_usd_per_contract)&&row.bid_price_usd_per_contract>=0&&row.bid_price_usd_per_contract<=1&&Number.isFinite(row.quantity_contracts)&&row.quantity_contracts>0)
       .sort((a,b)=>b.bid_price_usd_per_contract-a.bid_price_usd_per_contract).slice(0,12);
     return {ticker,market:{ticker:m.ticker,event_ticker:m.event_ticker,title:m.title,yes_sub_title:m.yes_sub_title,status:m.status,
       result:m.result,close_time:m.close_time,expected_expiration_time:m.expected_expiration_time},
       rules:{primary:String(m.rules_primary||'').slice(0,5000),secondary:String(m.rules_secondary||'').slice(0,2000)},as_of:detail.as_of,
-      quotes:{unit:'USD per contract with a $1 binary settlement payout',yes_ask_usd:depth.metrics?.book_ask??null,
-        no_ask_usd:Number.isFinite(depth.metrics?.book_bid)?Math.round((1-depth.metrics.book_bid)*1e8)/1e8:null,
+      quotes:{unit:'USD per contract with a $1 binary settlement payout',yes_ask_usd:depth?.metrics?.book_ask??null,
+        no_ask_usd:Number.isFinite(depth?.metrics?.book_bid)?Math.round((1-depth.metrics.book_bid)*1e8)/1e8:null,
         costs_note:'Visible asks exclude entry fees, slippage and quantity-dependent depth. Quote percentages are not independent model probabilities.'},
-      account_balances_available:false,book:{as_of:depth.as_of,yes_bid_levels:levels('yes_dollars'),no_bid_levels:levels('no_dollars'),
+      account_balances_available:false,book:{as_of:depth?.as_of,yes_bid_levels:levels('yes_dollars'),no_bid_levels:levels('no_dollars'),
         note:'Displayed quantities are public bid liquidity in contracts. Buying YES uses opposite NO bids at 1 minus bid price, and conversely for buying NO.'},
-      sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]};
+      sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},...(depth?[{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]:[])]};
   });
-  register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker},async({ticker})=>{
+  register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker,include_reporting:z.boolean().default(true)},async({ticker,include_reporting})=>{
     const research=await deps.workspaceResearch(ticker,{assistant:true,model:modelScope}),packet=publicResearch(research);
-    if(research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
+    if(!include_reporting||research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
     const evidence=await deps.contractEvidence(research.market,{enabled:true,selectedTicker:ticker,redditEnabled:false,includeX:false,headlineMode:'official',
       sports:research.extensions?.sports,settlementSources:research.rules?.settlement_sources}).catch(()=>null);
     const matches=[...(evidence?.items||[]),...(evidence?.related_items||[])].filter(row=>row.url&&row.title).slice(0,3);
     const links=(evidence?.source_links||[]).filter(row=>row.url).slice(0,2);
     return {...packet,evidence:matches.map(row=>({title:String(row.title).slice(0,180),url:row.url,publisher:row.publisher,
-      excerpt:String(row.excerpt||'').slice(0,300),match_scope:row.match_scope})),
+      excerpt:String(row.excerpt||'').slice(0,450),match_scope:row.match_scope,published_at:row.published_at,retrieved_at:row.retrieved_at||row.as_of})),
       sources:[...links,...matches.map(row=>({label:row.publisher||'Attributed reporting',url:row.url})),...packet.sources].slice(0,8)};
   });
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{
@@ -111,6 +114,26 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
     }
   }
   return server;
+}
+
+export async function localResearchReadback({ticker,model,executionControls,panel,detail,question,signal,dependencies}) {
+  const server=createResearchServer({tickerScope:ticker,modelScope:model,executionScope:executionControls,dependencies});
+  const client=new Client({name:'predictir-azure-research',version:'4.0.0'});
+  const [clientTransport,serverTransport]=InMemoryTransport.createLinkedPair();
+  const deadline=AbortSignal.any([signal,AbortSignal.timeout(18000)]);
+  try{
+    await server.connect(serverTransport);
+    await client.connect(clientTransport,{signal:deadline,timeout:1000});
+    const tools=planResearchReadback(question,{panel,detail});
+    const results=await Promise.allSettled(tools.map(async name=>{
+      const start=performance.now();
+      const result=await client.callTool({name,arguments:azureToolArguments(name,ticker,question,panel)},undefined,{signal:deadline,timeout:17000});
+      return {name,result,duration_ms:Math.round(performance.now()-start)};
+    }));
+    return results.flatMap(result=>result.status==='fulfilled'?[result.value]:[]);
+  }finally{
+    await client.close();
+  }
 }
 export async function handleMCP(req,res,body,options={}){
   if(req.method!=='POST'){res.writeHead(405,{'Content-Type':'application/json'});return res.end(JSON.stringify({jsonrpc:'2.0',error:{code:-32000,message:'Use Streamable HTTP POST'},id:null}));}

@@ -6,9 +6,6 @@ import {Activity,ArrowLeft,ArrowUpRight,Bitcoin,BookOpen,Check,ChevronDown,Cloud
 import {api,API_BASE,cents,count,dollars,percent,dateLabel} from './api.mjs';
 import {initialSelection,selectionReducer,contractTitle,refreshMarketRows} from './selection.mjs';
 import Chart from './Chart.jsx';
-import Paper from './Paper.jsx';
-import Journal from './Journal.jsx';
-import Assistant from './Assistant.jsx';
 import Modal from './Modal.jsx';
 import useOpinions from './useOpinions.jsx';
 import Appearance from './Appearance.jsx';
@@ -17,13 +14,17 @@ import {mergeResearchRefresh,researchRefreshDelay} from './research-state.mjs';
 import {researchScreenOpinion,screenFreshness} from './screen-freshness.mjs';
 import ContractNews,{ReadMode,ReadText} from './ContractNews.jsx';
 import useAccount,{toggleSavedMarket} from './useAccount.jsx';
-import Account from './Account.jsx';
 import {CONTRACT_TABS,moveContractTab} from './contract-tabs.mjs';
 import {assistantContext} from './assistant-context.mjs';
 import './execution-lab.css';
 const Portfolio=dynamic(()=>import('./Portfolio.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading portfolio…</div>});
 const Recommendations=dynamic(()=>import('./Recommendations.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading research screen…</div>});
 const ExecutionLab=dynamic(()=>import('./ExecutionLab.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading execution lab…</div>});
+const Paper=dynamic(()=>import('./Paper.jsx'));
+const Journal=dynamic(()=>import('./Journal.jsx'));
+const Assistant=dynamic(()=>import('./Assistant.jsx'),{loading:()=> <aside className="assistant-panel" role="status">Opening the research assistant…</aside>});
+const Account=dynamic(()=>import('./Account.jsx'));
+const marketPageSize=48;
 
 const categories=[['sports','Sports',Trophy],['macro','Economy',Landmark],['crypto','Crypto',Bitcoin],['travel','Travel',Plane],
   ['weather','Weather',CloudSun],['science','Tech & science',FlaskConical],['climate','Climate',Leaf],['culture','Culture',Music2]];
@@ -158,7 +159,7 @@ function MarketAttribution({value}) {
 export default function App({paperWorkspace=false}={}) {
   const account=useAccount();
   const [category,setCategory]=useState('sports'),[markets,setMarkets]=useState([]),[query,setQuery]=useState(''),[listLabel,setListLabel]=useState('Sports'),
-    [listLoading,setListLoading]=useState(true),[listError,setListError]=useState(''),[coverage,setCoverage]=useState(null),
+    [listLoading,setListLoading]=useState(true),[listError,setListError]=useState(''),[coverage,setCoverage]=useState(null),[rowLimit,setRowLimit]=useState(marketPageSize),
     [selection,dispatch]=useReducer(selectionReducer,initialSelection),[history,setHistory]=useState(null),[tab,setTab]=useState('overview'),
     [researchLoading,setResearchLoading]=useState(false),[streamStatus,setStreamStatus]=useState('Connecting'),[paused,setPaused]=useState(false),
     [assistant,setAssistant]=useState(false),[journal,setJournal]=useState(false),[sources,setSources]=useState(false),[sourceStatus,setSourceStatus]=useState(null),[attribution,setAttribution]=useState(null),
@@ -172,16 +173,17 @@ export default function App({paperWorkspace=false}={}) {
   const select=useCallback((market,{openDetail=true}={})=>{listIntent.current++;dispatch({type:'select',market});setAssistant(false);setHistory(null);setTab('overview');setPaused(false);setMobileDetail(openDetail);},[]);
   const openMarket=useCallback(market=>{setView('markets');setPaperPreset(null);select(market);},[select]);
   const selectResearch=useCallback(market=>{openMarket(market);setTab('research');},[openMarket]);
-  function changeCategory(id){setMobileDetail(false);if(view==='portfolio')setView('markets');if(id===category)return;lookupRequest.current?.abort();listIntent.current++;dispatch({type:'clear'});setHistory(null);setCoverage(null);setResearchLoading(false);setAssistant(false);setPaperPreset(null);setCategory(id);}
+  function changeCategory(id){setMobileDetail(false);if(view==='portfolio')setView('markets');if(id===category)return;lookupRequest.current?.abort();listIntent.current++;dispatch({type:'clear'});setHistory(null);setCoverage(null);setResearchLoading(false);setAssistant(false);setPaperPreset(null);setMarkets([]);setQuery('');setRowLimit(marketPageSize);setCategory(id);}
   function updatePreferences(value){const next=appearance(value);if(next.model!==preferences.model)setAssistant(false);setPreferences(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));setPreferenceError(false);}catch{setPreferenceError(true);}}
   useEffect(()=>{try{setPreferences(appearance(localStorage.getItem(PREFERENCE_KEY)));}catch{setPreferenceError(true);}},[]);
   useEffect(()=>{document.documentElement.dataset.theme=preferences.theme;},[preferences.theme]);
   useEffect(()=>{const id=setInterval(()=>{if(!document.hidden&&activeView.current!=='ranked')setClock(Date.now());},1000);const key=e=>{if(e.key==='Escape'){setAssistant(false);setJournal(false);setSources(false);setAppearanceOpen(false);setArchiveOpen(false);}if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)&&!document.querySelector('.overlay,.assistant-panel')){e.preventDefault();setView('markets');setMobileDetail(false);requestAnimationFrame(()=>search.current?.focus());}};document.addEventListener('keydown',key);return()=>{clearInterval(id);document.removeEventListener('keydown',key);lookupRequest.current?.abort();};},[]);
   useEffect(()=>{
-    const controller=new AbortController(),intent=listIntent.current;setListLoading(true);setListError('');setMarkets([]);setQuery('');setListLabel(categories.find(c=>c[0]===category)[1]);
+    const controller=new AbortController(),intent=listIntent.current,keepSelection=Boolean(selection.ticker&&listLabel!=='Opened from link');
+    setListLoading(true);setListError('');setListLabel(categories.find(c=>c[0]===category)[1]);
     api('/api/workspace/markets?category='+category,{signal:controller.signal,timeoutMs:20000}).then(value=>{
       if(controller.signal.aborted||intent!==listIntent.current)return;
-      setMarkets(value.markets);setCoverage(value);if(value.markets.length)select(value.markets[0],{openDetail:false});
+      setMarkets(value.markets);setCoverage(value);if(value.markets.length&&!keepSelection)select(value.markets[0],{openDetail:false});
     }).catch(e=>{if(e.name!=='AbortError'&&!controller.signal.aborted)setListError(e.message);}).finally(()=>{if(!controller.signal.aborted)setListLoading(false);});
     return()=>controller.abort();
   },[category,listRevision]);
@@ -189,11 +191,11 @@ export default function App({paperWorkspace=false}={}) {
     if(view!=='markets'||listLoading||listLabel==='Opened from link')return;
     const controller=new AbortController();let busy=false;
     const refresh=async()=>{if(document.hidden||busy)return;busy=true;const intent=listIntent.current;
-      try{const value=await api('/api/workspace/markets?category='+category,{signal:controller.signal,timeoutMs:20000});if(!controller.signal.aborted&&intent===listIntent.current){setMarkets(current=>refreshMarketRows(current,value.markets));setCoverage(value);}}
+      try{const value=await api('/api/workspace/markets?category='+category,{signal:controller.signal,timeoutMs:20000});if(!controller.signal.aborted&&intent===listIntent.current){setMarkets(current=>refreshMarketRows(current,value.markets));setCoverage(value);setListError('');if(!selection.ticker&&value.markets.length)select(value.markets[0],{openDetail:false});}}
       catch{}finally{busy=false;}};
-    const timer=setInterval(refresh,60000);document.addEventListener('visibilitychange',refresh);
+    const timer=setInterval(refresh,coverage?.stale?8000:listError?30000:60000);document.addEventListener('visibilitychange',refresh);
     return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',refresh);};
-  },[category,view,listLoading,listLabel]);
+  },[category,view,listLoading,listLabel,coverage?.stale,listError,selection.ticker,select]);
   useEffect(()=>{
     if(!selection.ticker||view!=='markets')return;
     const {ticker,generation}=selection,controller=new AbortController();setResearchLoading(true);setStreamStatus('Loading quote');
@@ -241,7 +243,8 @@ export default function App({paperWorkspace=false}={}) {
       setMarkets(value.contracts);setListLabel('Opened from link');setCoverage(null);if(value.contracts.length)select(value.contracts[0]);else setListError('No matching open contracts were returned.');
     }catch(e){if(e.name!=='AbortError'&&intent===listIntent.current)setListError(e.message);}finally{if(!controller.signal.aborted&&lookupRequest.current===controller)setListLoading(false);}}
   const filtered=useMemo(()=>{const q=query.toLowerCase().trim();if(!q||/^https:\/\//.test(q))return markets;return markets.filter(m=>(contractTitle(m)+' '+m.ticker).toLowerCase().includes(q));},[markets,query]);
-  const opinions=useOpinions(listRoot,filtered,preferences.model,view==='markets');
+  const displayed=useMemo(()=>filtered.slice(0,rowLimit),[filtered,rowLimit]);
+  const opinions=useOpinions(listRoot,displayed,preferences.model,view==='markets'&&Boolean(selection.book||selection.research));
   const market=selection.market,book=selection.book,fp=book?.raw?.orderbook_fp;
   const selectedResearch=selection.research?.ticker===market?.ticker&&selection.research?.view_model===preferences.model?selection.research:null;
   const selectedOpinion=researchScreenOpinion(selectedResearch,clock);
@@ -296,10 +299,10 @@ export default function App({paperWorkspace=false}={}) {
       {navigationError&&<p className="notice error navigation-error" role="alert">{navigationError}</p>}
       {view==='portfolio'&&<div className="session-banner"><span>{account.session?.kind==='owner'?account.sync:'Guest paper account · records last up to 6 hours'}</span><button className="text-button" onClick={()=>setAccountOpen(true)}>{account.session?.kind==='owner'?(account.conflict?'Review saved versions':'Your account'):'Sign in to keep your saved trades'}<ArrowUpRight size={13}/></button></div>}
       {view==='ranked'?<Recommendations category={category} categoryName={categories.find(row=>row[0]===category)?.[1]} model={preferences.model} onOpen={openRecommendation}/>:view==='portfolio'?<Portfolio onOpen={openFromWorkspace} onMarkets={()=>setView('markets')} clock={clock} model={preferences.model} theme={preferences.theme}/>:<div className="workspace-columns"><section className="market-list" aria-label="Market list"><div className="market-list-heading"><div><h1>{listLabel}</h1><span>{listLoading?'Loading contracts…':`${filtered.length} ${filtered.length===1?'contract':'contracts'}`}</span></div><button className="icon-button" aria-label="Refresh market list" onClick={()=>setListRevision(v=>v+1)} disabled={listLoading}><RefreshCw size={17} className={listLoading?'spin':''}/></button></div>
-        <form className="market-search" onSubmit={lookup}><Search size={17}/><label className="sr-only" htmlFor="market-search">Search contracts or paste a Kalshi URL</label><input id="market-search" ref={search} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search or paste a Kalshi URL"/><kbd>/</kbd></form>
+        <form className="market-search" onSubmit={lookup}><Search size={17}/><label className="sr-only" htmlFor="market-search">Search contracts or paste a Kalshi URL</label><input id="market-search" ref={search} value={query} onChange={e=>{setQuery(e.target.value);setRowLimit(marketPageSize);}} placeholder="Search or paste a Kalshi URL"/><kbd>/</kbd></form>
         <div className="list-columns"><span>Contract</span><span>YES / NO</span></div>
-        <div className="market-rows" ref={listRoot} aria-busy={listLoading}>{listError&&<div className="notice error" role="alert">{listError}<button className="text-button" onClick={()=>setListRevision(v=>v+1)}>Try again</button></div>}{listLoading&&<div className="list-loading" role="status"><Loader2 size={18} className="spin"/><span>Loading exchange contracts</span></div>}{filtered.map(row=><MarketRow key={row.ticker} row={row} selected={row.ticker===selection.ticker} livePrices={row.ticker===selection.ticker?{yes:ask,no:bid===null?null:1-bid}:null} opinion={row.ticker===selection.ticker?selectedOpinion||opinions[row.ticker]:opinions[row.ticker]} onSelect={openMarket} onResearch={selectResearch}/>)}{!listLoading&&!filtered.length&&!listError&&<div className="empty">No matching contracts in this sample. Try another category or paste an exact Kalshi URL.{query.trim().length>=2&&<button className="text-button" onClick={searchArchive}>Search observed history <ArrowUpRight size={13}/></button>}</div>}</div>
-        <div className="list-footer" title={'Catalog checked '+dateLabel(coverage?.as_of)+'; refreshes once a minute while visible.'}><span className="status-dot"/>Catalog snapshot{coverage?.partial&&<span>Partial coverage</span>}<button className="text-button" onClick={openSources}>Coverage</button></div>
+        <div className="market-rows" ref={listRoot} aria-busy={listLoading&&!displayed.length&&!displayed.length}>{listError&&<div className="notice error" role="alert">{listError}<button className="text-button" onClick={()=>setListRevision(v=>v+1)}>Try again</button></div>}{listLoading&&<div className="list-loading" role="status"><Loader2 size={18} className="spin"/><span>Loading exchange contracts</span></div>}{displayed.map(row=><MarketRow key={row.ticker} row={row} selected={row.ticker===selection.ticker} livePrices={row.ticker===selection.ticker?{yes:ask,no:bid===null?null:1-bid}:null} opinion={row.ticker===selection.ticker?selectedOpinion||opinions[row.ticker]:opinions[row.ticker]} onSelect={openMarket} onResearch={selectResearch}/>)}{displayed.length<filtered.length&&<button className="text-button" onClick={()=>setRowLimit(limit=>limit+marketPageSize)}>Show more contracts</button>}{!listLoading&&!filtered.length&&!listError&&<div className="empty">No matching contracts in this sample. Try another category or paste an exact Kalshi URL.{query.trim().length>=2&&<button className="text-button" onClick={searchArchive}>Search observed history <ArrowUpRight size={13}/></button>}</div>}</div>
+        <div className="list-footer" title={'Catalog checked '+dateLabel(coverage?.as_of)+'; refreshes once a minute while visible.'}><span className="status-dot"/>{coverage?.stale?'Showing last snapshot':'Catalog snapshot'}{coverage?.partial&&<span>Partial coverage</span>}<button className="text-button" onClick={openSources}>Coverage</button></div>
       </section>
       <section className="contract-panel" id="contract-content" aria-label="Selected contract">{market?<>
         <div className="contract-heading"><button className="mobile-back text-button" onClick={()=>setMobileDetail(false)}><ArrowLeft size={16}/>Markets</button><div className="contract-meta"><span>{categories.find(c=>c[0]===market.category)?.[1]||listLabel}</span><span>Trading closes {dateLabel(market.close_time)}</span></div><h2 data-testid="selected-title">{contractTitle(market)}</h2>{eventTitle&&eventTitle!==contractTitle(market)&&<p className="contract-event" data-testid="selected-event">{eventTitle}</p>}{scheduledAt&&Number.isFinite(Date.parse(scheduledAt))&&<p className="contract-schedule">Scheduled <time dateTime={scheduledAt}>{new Date(scheduledAt).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'})}</time></p>}<div className="contract-identity"><code data-testid="selected-ticker">{market.ticker}</code><div className="contract-links"><button className="text-button save-market" aria-pressed={account.watchlist.includes(market.ticker)} disabled={account.status!=='ready'} onClick={()=>{try{toggleSavedMarket(market.ticker);}catch(error){setNavigationError(error.message);}}}><Bookmark size={13}/>{account.watchlist.includes(market.ticker)?'Saved':'Save'}</button><a href={'https://kalshi.com/markets/'+(selectedResearch?.series||market.ticker.split('-')[0]).toLowerCase()} target="_blank" rel="noreferrer">On Kalshi <ArrowUpRight size={13}/></a></div></div></div>

@@ -5,7 +5,8 @@ import {contractTitle} from './selection.mjs';
 import {usePanelFocus} from './Modal.jsx';
 import {assistantPayload} from './assistant-context.mjs';
 function Answer({text}) {
-  return <div className="answer">{text.split('\n').map((line,i)=><p key={i}>{line.split(/(\[[^\]]+\]\(https:\/\/[^\s)]+\))/g).map((part,j)=>{
+  return <div className="answer">{text.split('\n').filter(line=>line.trim()).map((line,i)=>line.startsWith('## ')?
+    <h3 key={i}>{line.slice(3)}</h3>:<p key={i}>{line.split(/(\[[^\]]+\]\(https:\/\/[^\s)]+\))/g).map((part,j)=>{
     const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);return link?<a key={j} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>:part;
   })}</p>)}</div>;
 }

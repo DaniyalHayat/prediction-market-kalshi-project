@@ -4,6 +4,7 @@ import {createReadStream} from 'node:fs';
 import {resolve,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isIP} from 'node:net';
+import {createHash} from 'node:crypto';
 import {monitorEventLoopDelay} from 'node:perf_hooks';
 import {GET,POST} from '../app/api/[...path]/route.js';
 import {sizePaperPosition} from '../lib/paper/risk.ts';
@@ -13,8 +14,9 @@ import {cloudEnabled,store} from '../lib/cloud/store.mjs';
 import {freezeForecast,listForecasts,ownerKey} from '../lib/cloud/journal.mjs';
 import {resolveContracts,marketFees} from '../lib/cloud/resolve.mjs';
 import {authStatus,validateTicker} from '../lib/live.mjs';
-import {handleMCP} from '../lib/workspace/mcp.mjs';
-import {serviceAuthorized,reserveAssistant} from '../lib/workspace/assistant.mjs';
+import {handleMCP,localResearchReadback} from '../lib/workspace/mcp.mjs';
+import {serviceAuthorized,reserveAssistant,parseAssistantInput} from '../lib/workspace/assistant.mjs';
+import {planResearchReadback} from '../lib/workspace/azure-research.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
 import {traceContext} from '../lib/runtime-observability.mjs';
 import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
@@ -39,7 +41,7 @@ export async function readBody(req,maximum=16000){
 }
 export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
-  getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
+  getRoute=GET,postRoute=POST,mcp=handleMCP,researchReadback=localResearchReadback,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
   monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger,telemetry=runtimeTelemetry,accountOptions={}}={}){
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
@@ -152,7 +154,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       const url=new URL(req.url,'http://localhost'),edgeVerified=serviceAuthorized(req.headers['x-market-edge-secret'],edgeSecret);
       trace=traceContext(req.headers,{trusted:edgeVerified||serviceAuthorized(req.headers.authorization,serviceSecret)});
       res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
-      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|settle)))$/.test(url.pathname)?url.pathname:'unknown';
+      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|reserve-azure|read-azure|settle)))$/.test(url.pathname)?url.pathname:'unknown';
       const identity=requestIdentity(req,edgeVerified);
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
@@ -200,6 +202,28 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
           const enabled=process.env.AZURE_FOUNDRY_ENABLED==='1'&&Number.isInteger(daily)&&daily>=1&&daily<=30&&Number.isInteger(monthly)&&monthly>=daily&&monthly<=300;
           const allowed=enabled&&await consume('foundry#'+day,daily,172800)&&await consume('foundry#'+month,monthly,45*86400);
           return json(res,{allowed});
+        }
+        if(url.pathname==='/internal/assistant/read-azure'){
+          if(!isAzure)return json(res,{error:'Unknown service path'},404);
+          if(!edgeVerified||!isIP(String(req.headers['x-market-client-ip']||''))||
+            !isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'Open the assistant from the app.'},403);
+          if(!storageEnabled())return json(res,{error:'Assistant quota storage is unavailable'},503);
+          const {messages,...scope}=parseAssistantInput(input),question=messages.at(-1).content.trim();
+          const fingerprint=createHash('sha256').update(serviceSecret+'\0'+identity).digest('hex');
+          const day=new Date(now()).toISOString().slice(0,10);
+          const tools=planResearchReadback(question,scope);
+          await quota(5+2*tools.length);
+          if(!await storage().consume('azure-assistant#'+day+'#'+fingerprint,30,1,172800)){
+            return json(res,{error:'The research assistant allowance is exhausted. Market data remains available.'},429);
+          }
+          const abort=new AbortController();
+          const cancel=()=>abort.abort();
+          res.once('close',cancel);
+          try {
+            const results=await researchReadback({...scope,question,signal:abort.signal});
+            if(!res.destroyed)return json(res,{results});
+          }finally{res.off('close',cancel);}
+          return;
         }
         if(url.pathname==='/internal/assistant/reserve')return json(res,await reserveAssistant(input.fingerprint,{storage:storageEnabled()?storage():null,monthlyDollars:monthlyAssistantDollars,now:now()}));
         if(url.pathname==='/internal/assistant/settle'){

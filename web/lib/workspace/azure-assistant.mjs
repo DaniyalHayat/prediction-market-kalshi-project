@@ -100,9 +100,9 @@ function validatedOrder(data, rows) {
   return value.order.map(id => indexes.get(id));
 }
 
-export async function rankAzureEvidence({question, snippets, authorize, signal}, {env = process.env, fetcher = fetch} = {}) {
+export async function rankAzureEvidence({question, snippets, preserveRetrievalOrder = false, authorize, signal}, {env = process.env, fetcher = fetch} = {}) {
   const evidence = publicEvidence(question, snippets);
-  const fallback = {order: evidence.order, mode: 'deterministic', attempted: false};
+  const fallback = {order: preserveRetrievalOrder ? evidence.rows.map(row => row.index) : evidence.order, mode: 'deterministic', attempted: false};
   if (evidence.rows.length < 2 || typeof authorize !== 'function' || signal?.aborted) return fallback;
   const config = providerConfig(env);
   if (!config) return fallback;
