@@ -1,6 +1,19 @@
-# Kalshi Market Lab
+# Predictir
 
-I built Kalshi Market Lab to make the research before an event-contract trade easier to inspect: what the contract actually resolves on, what evidence supports an estimate, how much depth is available, and what a position could cost after fees.
+**Prediction market research and paper trading**
+
+Predictir brings contract rules, live market prices, independent forecasts and trading costs into one workspace. Practise with simulated money, track paper positions and review the evidence behind each decision.
+
+**[Open Predictir](https://predictir.dev)**
+
+| Technical overview |
+| --- |
+| Next.js, React and TypeScript sizing; a Node.js backend; PostgreSQL on Supabase; exchange WebSocket feeds; and a read-only MCP research assistant. Forecast checks, order-book depth and modeled fees support the paper-trading workflow. |
+
+Previously titled Kalshi Market Lab. The repository address is retained so existing links and service integrations continue to work.
+
+<details>
+<summary>Methods, engineering and local setup</summary>
 
 [Updated Figma source workspace](https://www.figma.com/make/OvkxXfcBywSxzKo1oANMZj) · [Security and data handling](docs/SECURITY.md)
 
@@ -99,3 +112,6 @@ Paper trades stay in this browser's storage. Clearing site data removes that jou
 ## November 4 implementation and validation
 
 The web application adds TypeScript sizing at `POST /api/paper/size`: integer enumeration maximizes worst-case expected log wealth under supplied probability bounds, fees, visible depth and loss limits. Stale/mismatched quotes are rejected and zero position is allowed. This is conditional simulation, not established real-world optimality. Payload CMS/SQLite implements a local research-note collection with draft/reviewed status and access rules. From `web`, run `npm run cms:verify` for real database CRUD and blocked anonymous reads. This is a local API integration, not a deployed admin site. `npm test`, `npm run typecheck`, `npm run build`, and `npm run verify:artifacts` check behavior, types, production compilation and artifact hashes. The local checks require no paid services; hosted provider usage is described in the deployment guide. No real orders are involved.
+
+</details>
+
