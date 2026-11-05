@@ -41,8 +41,8 @@ export async function publicXFeed({topic='music',maximumAccounts=2,enabled=false
       });
       feeds.push({author,...result});
     }catch(error){
-      const status=Number(error.status),seconds=status===402?86400:status===429?900:status===401||status===403?3600:60;
-      await durable.save({pk:'x-public-cooldown',sk:'value',until:now()+seconds*1000,expires_epoch:Math.floor(now()/1000)+seconds},true).catch(()=>{});
+      const status=Number(error.status),seconds=status===402?86400:status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
+      await durable.save({pk:'x-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
       feeds.push({author,...empty('unavailable',Number.isInteger(status)?'Public X retrieval returned HTTP '+status+'.':'Public X retrieval or its quota store is unavailable.')});
     }
   }
@@ -89,7 +89,7 @@ export async function redditEvidence(market,{enabled=false,selectedTicker,sports
     }
     if(!Array.isArray(response.data?.data?.children))return empty('unavailable','Public post listing schema was unavailable; retrieval stopped.');
     const result=filterRedditPosts(response.data,{now:now()});return {status:'available',...result,community,query,as_of:response.as_of,note:'One public subreddit search, up to 25 link posts, cached 15 minutes across viewers. No comments, private data or author-history requests. Surviving posts remain unverified context.'};
-  });}catch(error){const status=Number(error.status),seconds=status===429?900:status===401||status===403?3600:60;
-    await durable.save({pk:'reddit-public-cooldown',sk:'value',until:now()+seconds*1000,expires_epoch:Math.floor(now()/1000)+seconds},true).catch(()=>{});
+  });}catch(error){const status=Number(error.status),seconds=status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
+    await durable.save({pk:'reddit-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
     return empty('unavailable',Number.isInteger(status)?'Approved public Reddit retrieval returned HTTP '+status+'.':'Public Reddit retrieval or its quota store is unavailable.');}
 }
