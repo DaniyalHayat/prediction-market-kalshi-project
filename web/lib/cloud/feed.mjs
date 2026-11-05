@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import {createPrivateKey,sign,constants,randomUUID} from 'node:crypto';
 import {streamCredentials,cloudEnabled,store} from './store.mjs';
 import {PriceIndex} from '../price-index.mjs';
+import {MicrostructureWindow} from './microstructure-window.mjs';
 
 export const WS_URL='wss://external-api-ws.kalshi.com/trade-api/ws/v2';
 export function websocketHeaders(credentials,now=Date.now()) {
@@ -61,7 +62,7 @@ export class MarketFeed {
     if(!Number.isInteger(maximumTickers)||maximumTickers<1||maximumTickers>256)throw new RangeError('Streaming watchlist capacity must be 1–256');
     this.maximumTickers=maximumTickers;
     this.credentials=credentials;this.socketFactory=socket;this.now=now;this.clients=new Map();this.replica=new BookReplica();this.nextId=1;this.status='disconnected';
-    this.samples=[];this.lastSample=new Map();this.archiveChunks=0;this.dirty=new Set();this.pendingRemovals=new Set();this.subscriptionId=null;
+    this.samples=[];this.lastSample=new Map();this.archiveChunks=0;this.dirty=new Set();this.pendingRemovals=new Set();this.subscriptionId=null;this.microstructure=new MicrostructureWindow();
   }
   async add(ticker,listener) {
     if(!/^[A-Za-z0-9_.-]{1,140}$/.test(ticker)||ticker.includes('..'))throw new RangeError('Invalid market ticker');
@@ -81,7 +82,7 @@ export class MarketFeed {
       if(removed)return;removed=true;
       const listeners=this.clients.get(ticker);listeners?.delete(listener);if(!listeners?.size)this.clients.delete(ticker);
       if(!listeners?.size){
-        this.replica.books.delete(ticker);this.dirty.delete(ticker);this.lastSample.delete(ticker);
+        this.replica.books.delete(ticker);this.dirty.delete(ticker);this.lastSample.delete(ticker);this.microstructure.reset(ticker);
         if(this.clients.size){this.pendingRemovals.add(ticker);this.removeUnusedMarkets();}
         else {clearTimeout(this.reconnect);this.socket?.close();this.replica.reset();this.pendingRemovals.clear();this.flush().catch(()=>{});}
       }
@@ -91,7 +92,7 @@ export class MarketFeed {
   broadcast(payload){for(const ticker of this.clients.keys())this.send(ticker,payload);}
   subscribe(tickers) {
     for(const ticker of tickers)this.pendingRemovals.delete(ticker);
-    this.socket.send(JSON.stringify({id:this.nextId++,cmd:'subscribe',params:{channels:['orderbook_delta'],market_tickers:tickers}}));
+    this.socket.send(JSON.stringify({id:this.nextId++,cmd:'subscribe',params:{channels:['orderbook_delta'],market_tickers:tickers,update_interval_ms:0}}));
   }
   removeUnusedMarkets(){
     if(!Number.isInteger(this.subscriptionId)||this.socket?.readyState!==WebSocket.OPEN)return;
@@ -99,6 +100,8 @@ export class MarketFeed {
     if(tickers.length)this.socket.send(JSON.stringify({id:this.nextId++,cmd:'update_subscription',params:{sids:[this.subscriptionId],market_tickers:tickers,action:'delete_markets'}}));
   }
   metrics(){return {status:this.status,tickers:this.clients.size,subscribers:[...this.clients.values()].reduce((n,rows)=>n+rows.size,0),pending_snapshots:this.samples.length};}
+  observations(ticker,limit=512){return this.microstructure.read(ticker,limit);}
+  researchSnapshot(ticker){return {book:this.replica.snapshot(ticker),rows:this.microstructure.read(ticker),connected:this.status==='connected',observed_until_seconds:this.microstructure.clock()};}
   sample(quote) {
     if(!cloudEnabled()||this.now()-(this.lastSample.get(quote.ticker)||0)<1000)return;
     if(this.samples.length>=500)throw new Error('Archive backpressure; reconnect after pending snapshots are persisted');
@@ -131,7 +134,7 @@ export class MarketFeed {
       if(!credentials)throw new Error('An exchange streaming key is not configured');
       const socket=this.socketFactory(WS_URL,{headers:websocketHeaders(credentials,this.now()),handshakeTimeout:12000,maxPayload:2e6});
       this.socket=socket;this.status='connecting';
-      socket.on('open',()=>{if(socket!==this.socket)return;this.status='connected';this.replica.reset();this.subscriptionId=null;this.pendingRemovals.clear();this.subscribe([...this.clients.keys()]);
+      socket.on('open',()=>{if(socket!==this.socket)return;this.status='connected';this.replica.reset();this.microstructure.reset();this.subscriptionId=null;this.pendingRemovals.clear();this.subscribe([...this.clients.keys()]);
         clearInterval(this.emitTimer);this.emitTimer=setInterval(()=>this.emitDirty(),100);this.emitTimer.unref?.();
         this.broadcast({kind:'connection',status:this.status,transport:'exchange-websocket'});});
       socket.on('message',raw=>{
@@ -142,14 +145,14 @@ export class MarketFeed {
           if(event.type==='subscribed'&&event.msg?.channel==='orderbook_delta')this.subscriptionId=event.msg.sid;
           if(Number.isInteger(event.sid)&&['orderbook_snapshot','orderbook_delta'].includes(event.type))this.subscriptionId=event.sid;
           const tracked=!event.msg?.market_ticker||this.clients.has(event.msg.market_ticker);
-          const update=this.replica.apply(tracked?event:{...event,type:'ignored'},this.now(),false);if(update)this.dirty.add(update.ticker);
+          const update=this.replica.apply(tracked?event:{...event,type:'ignored'},this.now(),false);if(update){this.microstructure.append(update.ticker,this.replica.books.get(update.ticker),event);this.dirty.add(update.ticker);}
           this.removeUnusedMarkets();
-        } catch(error) {this.status='resynchronizing';this.broadcast({kind:'connection',status:this.status,reason:error.message});socket.close();}
+        } catch(error) {this.microstructure.reset();this.status='resynchronizing';this.broadcast({kind:'connection',status:this.status,reason:error.message});socket.close();}
       });
-      socket.on('error',()=>{if(socket!==this.socket)return;this.status='unavailable';this.broadcast({kind:'connection',status:this.status,reason:'Exchange stream unavailable; reconnecting with backoff'});});
+      socket.on('error',()=>{if(socket!==this.socket)return;this.microstructure.reset();this.status='unavailable';this.broadcast({kind:'connection',status:this.status,reason:'Exchange stream unavailable; reconnecting with backoff'});});
       socket.on('close',()=>{
         if(socket!==this.socket)return;
-        clearInterval(this.emitTimer);this.dirty.clear();this.status='disconnected';this.replica.reset();this.subscriptionId=null;this.pendingRemovals.clear();
+        clearInterval(this.emitTimer);this.dirty.clear();this.status='disconnected';this.replica.reset();this.microstructure.reset();this.subscriptionId=null;this.pendingRemovals.clear();
         if(this.clients.size)this.reconnect=setTimeout(()=>this.connect().catch(()=>{}),15000);
       });
     } finally {this.connecting=false;}
