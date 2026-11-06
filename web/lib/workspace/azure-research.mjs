@@ -4,6 +4,7 @@ import {safePublicURL} from './source-ranking.mjs';
 const rows=value=>Array.isArray(value)?value:[];
 const clean=(value,length=400)=>typeof value==='string'?value.replace(/[\u0000-\u001f\u007f\[\]<>]/g,' ').trim().slice(0,length):'';
 const cents=value=>Number.isFinite(value)&&value>=0&&value<=1?(100*value).toFixed(1)+'¢':null;
+const percent=value=>cents(value)?.replace('¢','%');
 const date=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toISOString():null;
 const age=(value,now)=>now-Date.parse(value);
 const fresh=(value,now,max)=>Number.isFinite(age(value,now))&&age(value,now)>=-5000&&age(value,now)<=max;
@@ -168,6 +169,38 @@ function fullModelNotes(research,now){
   return checks;
 }
 
+function availabilityFacts(forecast,ticker,now,full){
+  const feedback=forecast?.availability_feedback,source=feedback?.source;
+  const url=publicSource(source?.url),base=percent(feedback?.baseline_probability),range=feedback?.decision_interval;
+  if(!/^KXNBAGAME-/.test(ticker)||feedback?.status!=='available'||!url||
+    !fresh(source?.retrieved_at,now,1200000)||!base||feedback.baseline_probability!==forecast.probability||
+    !Array.isArray(range)||range.length!==2||!range.every(value=>percent(value))||
+    range[0]>forecast.probability||range[1]<forecast.probability)return [];
+  const endpoint=new URL(url);
+  if(endpoint.hostname!=='site.api.espn.com'||endpoint.pathname!=='/apis/site/v2/sports/basketball/nba/summary'||
+    endpoint.searchParams.get('event')!==String(feedback.fixture_id))return [];
+  const scenarios=rows(feedback.scenarios).flatMap(row=>{
+    const player=clean(row?.name,100),conditional=percent(row?.conditional_probability),status=clean(row?.status,20);
+    if(!player||!conditional||!/^(out|suspended)$/i.test(status))return [];
+    const change=(row.conditional_probability-forecast.probability)*100,delta=Math.abs(change).toFixed(1);
+    const sample=Number.isSafeInteger(row.dnp_games)&&Number.isSafeInteger(row.regular_games)&&
+      row.dnp_games>0&&row.regular_games>0&&full?
+      ' The comparison uses '+row.dnp_games+' games the player missed and '+row.regular_games+' games with regular minutes, adjusted for the matchup.' : '';
+    return [player+' is listed '+status.toLowerCase()+'. Stress-testing that absence gives '+conditional+' YES'+
+      (delta!=='0.0'?' ('+delta+' percentage points '+(change<0?'lower':'higher')+')':'')+'.'+sample];
+  }).slice(0,full?3:1);
+  if(!scenarios.length)return [];
+  const original=forecast.base_interval,widened=Array.isArray(original)&&original.length===2&&(range[0]<original[0]||range[1]>original[1]);
+  const decisionRange=range.map(percent).join(' to ');
+  return ['The team-strength estimate is still '+base+' YES. '+scenarios[0],
+    ...scenarios.slice(1),
+    'The '+(widened?'wider ':'')+'decision range is '+decisionRange+'. '+(forecast.eligible===true?
+      'The paper screen uses the conservative end of the range against the actual entry cost, including fees and its safety buffer. A price that looked attractive can become a pass.':
+      'The range can inform a paper scenario. A recommendation still requires a released forecast and current executable quotes.'),
+    'The comparisons are separate stress tests. The historical splits cannot establish how much one player causes a win chance to move. '+link({url,label:'ESPN game availability'})+
+      ' (checked '+date(source.retrieved_at)+').'];
+}
+
 function settlementExample(research,ticker,now){
   const forecast=research.forecast;
   const source=clean(forecast?.source_name,140),url=publicSource(forecast?.source_url);
@@ -299,6 +332,10 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
     }else if(!wants('analyze_execution_lab')&&!wants('get_source_status')&&(!panel||panel==='analysis')){
       const result=explain.contract({...packet,paper_scenarios:guided?[]:packet.paper_scenarios,rules:wants('get_contract')?null:packet.rules},ticker,now);
       parts.push(guided&&title?result.split('\n\n').slice(1).join('\n\n'):result);
+    }
+    if(validForecast&&(!panel||['analysis','paper','evidence','execution'].includes(panel))){
+      const lineup=availabilityFacts(forecast,ticker,now,full);
+      if(lineup.length)parts.push('## What the lineup changes',...lineup);
     }
     if(panel==='paper'||panel==='analysis'||full&&!panel){
       const comparison=paperFacts(research,ticker,now,full);

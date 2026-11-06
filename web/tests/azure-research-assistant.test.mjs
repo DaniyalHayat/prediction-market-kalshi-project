@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import test from 'node:test';
 import {assistantResponse} from '../lib/workspace/assistant.mjs';
+import {azureResearchAnswer} from '../lib/workspace/azure-research.mjs';
 import {normalizeExecutionControls} from '../lib/workspace/execution-research.mjs';
 
 const ticker='KXNFLGAME-26NOV08ARISEA-ARI';
@@ -97,6 +98,30 @@ test('Azure asks at most three scoped MCP tools and answers with cited facts wit
   assert.ok(answer.includes('[NFL availability report]('+goodURL+')'));
   assert.ok(answer.includes('[Kalshi contract]('+rulesURL+')'));
   assert.doesNotMatch(answer,/\]\(https:\/\/evil\.example|Spotify catalog data|Private source/);
+});
+
+test('Ask Why shows how fresh exact-game availability changes the paper screen without replacing the baseline',async ()=>{
+  const nba='KXNBAGAME-26NOV08LALDEN-LAL',now=Date.now(),as_of=new Date(now).toISOString();
+  const url='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401';
+  const feedback={status:'available',fixture_id:'401',baseline_probability:.61,decision_interval:[.47,.69],
+    source:{url,retrieved_at:as_of},scenarios:[{name:'Test Player',status:'Out',conditional_probability:.54,dnp_games:4,regular_games:6}]};
+  const read=async availability_feedback=>{
+    const forecast={probability:.61,interval:[.47,.69],base_interval:[.54,.69],eligible:true,availability_feedback};
+    const packets=new Map([['get_research',{ticker:nba,title:'Los Angeles wins',as_of,forecast,
+      opinion:{side:'PASS',reason:'The cost screen did not clear.'}}]]);
+    const {answer}=await azureResearchAnswer({question:'What changes the probability?',ticker:nba,panel:'analysis',detail:'full',
+      tools:['get_research'],packets,explain:{math:()=>''},now});
+    return answer;
+  };
+  const answer=await read(feedback);
+  assert.match(answer,/team-strength estimate is still 61\.0% YES/);
+  assert.match(answer,/54\.0% YES \(7\.0 percentage points lower\)/);
+  assert.match(answer,/4 games the player missed and 6 games with regular minutes/);
+  assert.match(answer,/wider decision range is 47\.0% to 69\.0%/);
+  assert.match(answer,/fees and its safety buffer/);
+  assert.ok(answer.includes('[ESPN game availability]('+url+')'));
+  assert.doesNotMatch(await read({...feedback,fixture_id:'402'}),/What the lineup changes/);
+  assert.doesNotMatch(await read({...feedback,source:{url,retrieved_at:new Date(now-1200001).toISOString()}}),/What the lineup changes/);
 });
 
 test('Azure quota, origin, geography and replay checks run before MCP',async ()=>{

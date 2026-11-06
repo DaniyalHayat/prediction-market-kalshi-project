@@ -41,7 +41,16 @@ function SourceSwitch({label,active,onToggle}){
     <span className="news-toggle-track" aria-hidden="true"/>{label}
   </button>;
 }
-export default function ContractNews({ticker,model='validated',initial=null,articles=[],onAssistant}){
+function ModelImpact({feedback}){
+  const percentage=value=>(100*value).toFixed(1)+'%';
+  if(feedback?.status!=='available')return <div className="news-brief-section"><h5>Model impact</h5><p>{feedback?.reason||'No verified update changed the model in this news check. Headlines and social posts carry zero forecast weight on their own.'}</p></div>;
+  return <div className="news-brief-section"><h5>What changed in the model</h5>
+    <p>The team model starts at {percentage(feedback.baseline_probability)} YES. The paper screen tests {feedback.decision_interval.map(percentage).join(' to ')} YES after accounting for lineup risk.</p>
+    {feedback.scenarios.map(row=><p key={row.player_id}>{row.name} is listed {row.status.toLowerCase()}. The scenario puts YES at {percentage(row.conditional_probability)}, based on {row.dnp_games} games missed and {row.regular_games} games with regular minutes.</p>)}
+    {safeURL(feedback.source?.url)&&<p><a href={feedback.source.url} target="_blank" rel="noreferrer">Open the matched availability report <ArrowUpRight size={12}/></a></p>}
+  </div>;
+}
+export default function ContractNews({ticker,model='validated',initial=null,articles=[],feedback,onAssistant}){
   const [mode,setMode]=useState('summary'),[reddit,setReddit]=useState(false),[x,setX]=useState(false),[value,setValue]=useState(initial),[loading,setLoading]=useState(!initial),[error,setError]=useState('');
   const request=useRef(null),initialValue=useRef(initial);
   const load=useCallback(async ({includeReddit=false,includeX=false,preview=false,signal}={})=>{
@@ -76,6 +85,7 @@ export default function ContractNews({ticker,model='validated',initial=null,arti
     {error&&<p className="notice error" role="alert">{error}</p>}
     {value&&<>
       <div className="reading-copy news-brief"><h4><Newspaper size={16}/>{long?'The full brief':'Quick read'}</h4>
+        <ModelImpact feedback={value.model_feedback||feedback}/>
         {news.lead?<BriefItem heading={news.direct?'Best-matched report':'Closest related report'} item={news.lead} long={long}/>:<p>No recent public report matched the exact contract in the sources checked.</p>}
         {news.second&&<BriefItem heading="Another publisher" item={news.second} long={long}/>}
         {!long&&news.lead?.impact&&<div className="news-brief-section"><h5>What to verify</h5><p>{news.lead.impact}</p></div>}
