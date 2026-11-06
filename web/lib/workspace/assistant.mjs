@@ -13,19 +13,27 @@ const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD
 const price=value=>(value*100).toFixed(1)+'¢';
 const pct=value=>(value*100).toFixed(1)+'%';
 
-function explainLineup(forecast,ticker,now){
+function explainLineup(forecast,ticker,now,fixtureId){
   const feedback=forecast?.availability_feedback,row=feedback?.scenarios?.[0],range=feedback?.decision_interval;
   const checked=Date.parse(feedback?.source?.retrieved_at),probability=value=>Number.isFinite(value)&&value>=0&&value<=1;
-  if(!ticker.startsWith('KXNBAGAME-')||feedback?.status!=='available'||feedback.baseline_probability!==forecast.probability||
-    !probability(forecast.probability)||!probability(row?.conditional_probability)||!/^(out|suspended)$/i.test(row.status)||
-    typeof row.name!=='string'||!Array.isArray(range)||range.length!==2||!range.every(probability)||
-    range[0]>forecast.probability||range[1]<forecast.probability||!Number.isFinite(checked)||checked>now||now-checked>1200000)return null;
+  if(!ticker.startsWith('KXNBAGAME-')||!['available','unavailable'].includes(feedback?.status)||
+    feedback.baseline_probability!==forecast.probability||!probability(forecast.probability)||
+    !Number.isFinite(checked)||checked>now||now-checked>1200000)return null;
   let url;
   try{url=new URL(feedback.source.url);}catch{return null;}
   if(url.origin!=='https://site.api.espn.com'||url.username||url.password||url.pathname!=='/apis/site/v2/sports/basketball/nba/summary'||
-    url.searchParams.get('event')!==String(feedback.fixture_id))return null;
+    !/^\d{1,20}$/.test(feedback.fixture_id)||url.searchParams.get('event')!==feedback.fixture_id||
+    (fixtureId!=null&&String(fixtureId)!==feedback.fixture_id)||
+    [...url.searchParams].length!==1||url.hash)return null;
+  const citation=`[ESPN game availability](${url.href}) (checked ${new Date(checked).toISOString()}).`;
+  if(feedback.status==='unavailable'){
+    const reason=typeof feedback.reason==='string'?feedback.reason.replace(/[\u0000-\u001f\u007f\[\]<>]/g,' ').trim().slice(0,300):'';
+    return `The team-strength baseline stays at ${pct(forecast.probability)} YES after checking this game's availability report. ${reason||'The report did not support a quantified lineup adjustment.'} ${citation}`;
+  }
+  if(!probability(row?.conditional_probability)||!/^(out|suspended)$/i.test(row.status)||typeof row.name!=='string'||
+    !Array.isArray(range)||range.length!==2||!range.every(probability)||range[0]>forecast.probability||range[1]<forecast.probability)return null;
   const player=row.name.replace(/[\u0000-\u001f\u007f\[\]<>]/g,' ').trim().slice(0,100);
-  return `The team-strength baseline stays at ${pct(forecast.probability)} YES. ${player} is listed ${row.status.toLowerCase()}. Stress-testing that absence gives ${pct(row.conditional_probability)} YES. The decision range of ${range.map(pct).join(' to ')} is used to compare paper entry against the fill price, fees and safety buffer. The lineup test can weaken a trade case, while its historical comparisons cannot establish a causal player effect. [ESPN game availability](${url.href}) (checked ${new Date(checked).toISOString()}).`;
+  return `The team-strength baseline stays at ${pct(forecast.probability)} YES. ${player} is listed ${row.status.toLowerCase()}. Stress-testing that absence gives ${pct(row.conditional_probability)} YES. The decision range of ${range.map(pct).join(' to ')} is used to compare paper entry against the fill price, fees and safety buffer. The lineup test can weaken a trade case, while its historical comparisons cannot establish a causal player effect. ${citation}`;
 }
 
 export function explainContract(packet,ticker,now=Date.now()){
@@ -37,7 +45,7 @@ export function explainContract(packet,ticker,now=Date.now()){
     lines.push(forecast.outcomes?
       `The team-strength model gives the YES team a ${pct(forecast.probability)} chance to win. A tie has ${pct(forecast.outcomes.tie)} modeled probability and pays 50¢, so a YES contract is worth ${price(forecast.expected_settlement_value)} on average under this model.`:
       `The ${forecast.model_name||'independent model'} puts YES at ${pct(forecast.probability)}${forecast.interval?.length===2?' with a '+forecast.interval.map(pct).join(' to ')+' '+(forecast.availability_feedback?.status==='available'?'decision':'model')+' range':''}. ${forecast.experimental?'Treat the estimate as experimental.':''}`);
-    const lineup=explainLineup(forecast,ticker,now);
+    const lineup=explainLineup(forecast,ticker,now,packet.extensions?.sports?.event?.id);
     if(lineup)lines.push(lineup);
   }
   const rows=(packet.paper_scenarios||[]).filter(row=>row.ticker===ticker&&Number.isFinite(row.break_even)&&
@@ -74,7 +82,7 @@ export function explainResearchMath(packet,ticker,now=Date.now()){
   const lines=[`Independent research model: ${f.model_name||'Selected research model'}.`,
     `Model P(YES): ${pct(f.probability)}. Range: ${pct(f.interval[0])} to ${pct(f.interval[1])}.`,
     f.interval_kind||'The range describes model uncertainty; it is separate from the exchange quote.',`Independent source observed at ${new Date(source).toISOString()}.`];
-  const lineup=explainLineup(f,ticker,now);
+  const lineup=explainLineup(f,ticker,now,packet.extensions?.sports?.event?.id);
   if(lineup)lines.push(lineup);
   if(f.experimental)lines.push('This is an experimental paper-research estimate. Its statistical promotion gate has not passed.');
   for(const candidate of packet.decision?.candidates||[]){

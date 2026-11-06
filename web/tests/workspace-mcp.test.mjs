@@ -91,6 +91,16 @@ test('MCP asks for exact NBA availability and its readbacks distinguish lineup r
   }
   const wrong={...value,forecast:{...value.forecast,availability_feedback:{...feedback,fixture_id:'402'}}};
   assert.doesNotMatch(explainContract(wrong,ticker,now),/Test Player/);
+  const reason='The confirmed player reports lack enough comparable, dated DNP and regular-minutes results.';
+  const unavailable={...feedback,status:'unavailable',scenarios:[],reason};
+  const withFeedback=availability_feedback=>({...value,extensions:{sports:{event:{id:fixture}}},forecast:{...value.forecast,availability_feedback}});
+  for(const explain of [explainContract,explainResearchMath]){
+    assert.match(explain(withFeedback(unavailable),ticker,now),/baseline stays at 61\.0% YES after checking/);
+    assert.ok(explain(withFeedback(unavailable),ticker,now).includes(reason));
+    for(const override of [{baseline_probability:.50},{fixture_id:'402',source:{url:url.replace('401','402'),retrieved_at:as_of}},
+      {source:{url,retrieved_at:new Date(now-1200001).toISOString()}}])
+      assert.ok(!explain(withFeedback({...unavailable,...override}),ticker,now).includes(reason));
+  }
 });
 test('HTTP MCP initialization and tool calls require backend authorization',async t=>{
   const url=await listen(t,{mcp:(req,res,body,options)=>handleMCP(req,res,body,{...options,dependencies})});
