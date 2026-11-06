@@ -102,6 +102,33 @@ test('MCP asks for exact NBA availability and its readbacks distinguish lineup r
       assert.ok(!explain(withFeedback({...unavailable,...override}),ticker,now).includes(reason));
   }
 });
+test('dense price history retains bounded recent candles and their provenance',async t=>{
+  const now=Date.now(),as_of=new Date(now).toISOString(),source_url=source+'/candlesticks';
+  const rows=Array.from({length:120},(_,i)=>({time:new Date(now-(120-i)*60000).toISOString(),
+    value:.412299121,volume:16277.0222,value_kind:'last_trade',midpoint:.41497123}));
+  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,contractHistory:async()=>({ticker,as_of,source_url,rows})}}),
+    client=new Client({name:'bounded-history-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
+  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
+  const response=await client.callTool({name:'get_price_history',arguments:{ticker,hours:'24'}});
+  assert.ok(Buffer.byteLength(response.content[0].text)<=14000);
+  const result=packet(response);
+  assert.equal(result.window_hours,24);assert.equal(result.available_observations,120);assert.equal(result.sample_truncated,true);
+  assert.equal(result.rows.length,48);assert.equal(result.rows.at(-1).time,rows.at(-1).time);
+  assert.equal(result.rows.at(-1).price_usd_per_contract,rows.at(-1).value);
+  assert.equal(result.sources[0].url,source_url);
+});
+test('Analysis Ask Why leads with the current PASS before point-estimate paper P/L',()=>{
+  const now=Date.now(),as_of=new Date(now).toISOString(),data={ticker,as_of,
+    forecast:{probability:.41,source_as_of:as_of,interval:[.26,.59]},
+    opinion:{side:'PASS',reason:'Neither side clears the conservative range.'},
+    paper_scenarios:[{ticker,side:'NO',contracts:45,break_even:.437,quote_as_of:as_of,expected_profit:6.76}]};
+  const result=explainContract(data,ticker,now);
+  assert.match(result,/Research screen: PASS\. Supported allocation: 0 contracts\. Neither side clears the conservative range\./);
+  assert.match(result,/At the model’s point estimate, the expected paper P\/L is \$6\.76/);
+  assert.ok(result.indexOf('Research screen: PASS')<result.indexOf('$6.76'));
+  const stale=explainContract({...data,as_of:new Date(now-91000).toISOString()},ticker,now);
+  assert.doesNotMatch(stale,/Research screen|\$6\.76/);
+});
 test('contract MCP withholds unusable quotes but keeps matching settlement rules',async t=>{
   const current=await dependencies.book(),expected='KXCPI-26NOV-T0.2';
   const books=[{...current,ticker:expected},{...current,as_of:new Date(Date.now()-91000).toISOString()},
