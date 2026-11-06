@@ -55,7 +55,7 @@ export function nbaAvailabilityFeedback({game, selection, forecast, current, gam
   const reported = Array.isArray(current.rows) ? current.rows : [];
   const currentRows = uniqueRows(reported.filter(row => id(row?.player_id) && teams.has(row.team_id)), row => row.player_id)
     .filter(row => typeof row.status === 'string' && /^(?:out|suspended)$/i.test(row.status.trim()) &&
-      typeof row.name === 'string' && row.name.trim()).slice(0, 4);
+      typeof row.name === 'string' && row.name.trim()).slice(0, 16);
   if (!currentRows.length) return {...result, reason: 'No unique confirmed Out or Suspended player was reported for either team.'};
   if (typeof baseline?.predict !== 'function') return {...result, reason: 'A pre-sample team-strength fit is unavailable.'};
 
