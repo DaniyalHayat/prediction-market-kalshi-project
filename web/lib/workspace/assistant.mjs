@@ -41,6 +41,10 @@ export function explainContract(packet,ticker,now=Date.now()){
   const forecast=packet.forecast,age=now-Date.parse(forecast?.source_as_of||'');
   const fresh=Number.isFinite(age)&&age>=-5000&&age<=(forecast.max_source_age_seconds??86400)*1000;
   const lines=[packet.title||ticker];
+  const checked=now-Date.parse(packet.as_of),current=checked>=-5000&&checked<=90000,opinion=packet.opinion;
+  if(current&&['YES','NO','PASS'].includes(opinion?.side)){
+    lines.push('Research screen: '+opinion.side+'. '+(opinion.side==='PASS'?'Supported allocation: 0 contracts. ':'')+(opinion.reason||''));
+  }
   if(fresh&&Number.isFinite(forecast.probability)){
     lines.push(forecast.outcomes?
       `The team-strength model gives the YES team a ${pct(forecast.probability)} chance to win. A tie has ${pct(forecast.outcomes.tie)} modeled probability and pays 50¢, so a YES contract is worth ${price(forecast.expected_settlement_value)} on average under this model.`:
@@ -52,8 +56,8 @@ export function explainContract(packet,ticker,now=Date.now()){
     now-Date.parse(row.quote_as_of)>=-5000&&now-Date.parse(row.quote_as_of)<90000);
   if(rows.length){
     lines.push('The $20 paper comparison',...rows.map(row=>
-      `${row.side} would take ${row.contracts} contracts at ${price(row.break_even)} each, fees included. ${Number.isFinite(row.expected_profit)&&fresh?
-        'The model puts the expected paper P/L at '+money(row.expected_profit)+'.':
+      `${row.side} would take ${row.contracts} contracts at ${price(row.break_even)} each, fees included. ${Number.isFinite(row.expected_profit)&&current&&fresh?
+        'At the model’s point estimate, the expected paper P/L is '+money(row.expected_profit)+'.':
         'A thesis needs a settlement value above that entry price to make the trade worthwhile.'}`));
   }
   const signal=packet.market_signal;

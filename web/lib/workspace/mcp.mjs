@@ -104,7 +104,14 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
       sources:[...links,...matches.map(row=>({label:row.publisher||'Attributed reporting',url:row.url})),...packet.sources].slice(0,8)};
   });
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{
-    const value=await deps.contractHistory(ticker,Number(hours));return {...value,units:{price:'USD per contract',volume:'Contracts'},rows:value.rows.slice(-120).map(({value:price,volume,...row})=>({...row,price_usd_per_contract:price,volume_contracts:volume}))};
+    const value=await deps.contractHistory(ticker,Number(hours));
+    const rows=value.rows.slice(-120).map(({time,value:price,volume,value_kind,midpoint})=>({time,value_kind,midpoint,price_usd_per_contract:price,volume_contracts:volume}));
+    const history={...value,units:{price:'USD per contract',volume:'Contracts'},
+      window_hours:Number(hours),available_observations:value.rows.length,
+      sources:value.source_url?[{label:'Kalshi public price candles',url:value.source_url,retrieved_at:value.as_of}]:[]};
+    const packet=sample=>({...history,rows:sample,sample_truncated:sample.length<value.rows.length});
+    const full=packet(rows);
+    return Buffer.byteLength(JSON.stringify(full))<=14000?full:packet(rows.slice(-48));
   });
   register('get_source_status','Read public provider availability and warehouse coverage counts. No credentials or private records.',{},async()=>({as_of:new Date().toISOString(),providers:deps.providerStatus(),warehouse:await deps.warehouseStatus()}));
   register('search_retained_evidence','Search only already retained public evidence for the selected ticker using lexical and real local semantic retrieval. Returns bounded source citations. Does not load news/social feeds, index private data, change probabilities or access journals. If empty, the user must explicitly Load contract news.',{ticker,query:z.string().min(3).max(300),limit:z.number().int().min(1).max(8).default(6)},async({ticker,query,limit})=>deps.searchRetainedEvidence(ticker,query,{limit}));
