@@ -90,9 +90,22 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
     const releaseCount=()=>{if(countReleased)return;countReleased=true;connections--;
       const count=(streamByIP.get(identity)||1)-1;if(count)streamByIP.set(identity,count);else streamByIP.delete(identity);};
+    res.once('close',releaseCount);
+    const disconnected=()=>{
+      if(!req.aborted&&!res.destroyed)return false;
+      releaseCount();return true;
+    };
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
-    try{await quota(3,'stream-opens');if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
+    try{
+      await quota(3,'stream-opens');
+      if(disconnected())return;
+      const minuteAllowed=await consumeMinute();
+      if(disconnected())return;
+      const bytesAllowed=minuteAllowed&&await consumeBytes();
+      if(disconnected())return;
+      if(!bytesAllowed)throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});
+    }
     catch(error){releaseCount();throw error;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
     const removers=[],latest=new Map();let ticks=0,closed=false,blockedSince=0,checking=false,refilling=false,bytesRemaining=65536;
@@ -119,7 +132,8 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       for(const ticker of tickers){
         const remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest.set(ticker,{...message,ticker});
           else send(multiplex?{ticker,status:message.status,reason:message.reason}:message,multiplex?'status':null);});
-        if(closed)remove();else removers.push(remove);
+        if(closed){remove();break;}
+        removers.push(remove);
       }
     }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',reason:'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
   }
