@@ -3,7 +3,7 @@ import { marketDetails, request, book, validateTicker } from '../live.mjs';
 import { CATEGORIES } from './catalog.mjs';
 import { researchReport, modelEvidence } from './index.mjs';
 import { executionEstimate } from './math.mjs';
-import { evidenceEntities,evidenceTopicGroups,topicWords } from '../workspace/source-ranking.mjs';
+import { evidenceEntities,evidenceTopicGroups,sportsEvidenceClaim,sportsTeamMention,topicWords } from '../workspace/source-ranking.mjs';
 import { nflContractIdentity } from '../workspace/nfl-source.mjs';
 
 const NEWS_ENDPOINT = 'https://api.gdeltproject.org/api/v2/doc/doc';
@@ -65,16 +65,18 @@ export function filterSportsHeadlines(news,context) {
   if(context.unsupported)return {status:'not_queried',articles:[],reason:'Headlines withheld: an exact supported team and league news topic could not be established.'};
   const articles=(news?.articles||[]).filter(article=>{
     const text=newsText(article.title),identity=context.aliases.some(alias=>hasPhrase(text,alias));
-    if(/\b(?:promo code|promotional code|sign up bonus|bonus bets|free bets|betting bonus)\b/.test(text))return false;
+    const exactFixture=context.teams.length===2&&context.teams.every(team=>sportsTeamMention(article.title,team));
+    if(!identity||!sportsEvidenceClaim(article.title,article.description||article.excerpt,{exactFixture})||
+      /\b(?:promo code|promotional code|sign up bonus|bonus bets|free bets|betting bonus)\b/.test(text))return false;
     if(context.league==='NBA'){
       const canonical=context.teams.some(team=>hasPhrase(text,team)&&!['Miami Heat','Utah Jazz','Orlando Magic'].includes(team));
-      return identity&&(/\b(?:nba|basketball)\b/.test(text)||canonical||/\b(?:76ers|sixers|timberwolves|lakers|celtics|cavaliers|mavericks|clippers|grizzlies|pelicans|raptors|trail blazers|knicks)\b/.test(text));
+      return /\b(?:nba|basketball)\b/.test(text)||canonical||/\b(?:76ers|sixers|timberwolves|lakers|celtics|cavaliers|mavericks|clippers|grizzlies|pelicans|raptors|trail blazers|knicks)\b/.test(text);
     }
-    if(context.league==='NFL')return identity&&(/\b(?:nfl|football|quarterback|qb|injury|practice|head coach)\b/.test(text)||context.teams.some(team=>hasPhrase(text,team)));
-    return identity&&/\b(?:premier league|epl|soccer|football|line ?ups?|starting xi|match preview|match report)\b/.test(text);
+    if(context.league==='NFL')return /\b(?:nfl|football|quarterback|qb|injury|practice|head coach)\b/.test(text)||context.teams.some(team=>hasPhrase(text,team));
+    return /\b(?:premier league|epl|soccer|football|line ?ups?|starting xi|match preview|match report)\b/.test(text);
   });
   return {...news,articles,status:news?.status==='live'&&!articles.length?'empty':news?.status||'unavailable',
-    filtered_out:(news?.articles?.length||0)-articles.length,relevance_scope:context.league+' team-qualified headline metadata; unrelated city reporting is excluded.'};
+    filtered_out:(news?.articles?.length||0)-articles.length,relevance_scope:context.league+' headlines about availability, schedule changes or the matched fixture.'};
 }
 
 export function newsQuery(market, category) {

@@ -36,7 +36,7 @@ function collectPositionSources(ticker,model,deps){
   }
   const marketPacket=add('market',()=>deps.marketDetails(ticker));
   const orderBook=add('book',()=>deps.book(ticker,1));
-  add('research',()=>deps.workspaceResearch(ticker,{fast:true,model,marketPacket,orderBook}));
+  add('research',()=>deps.workspaceResearch(ticker,{fast:true,model,marketPacket,orderBook,refreshAvailability:/^KXNBAGAME-/.test(ticker)}));
   add('news',()=>deps.workspaceEvidence(ticker,{model,marketPacket}));
   add('history',()=>deps.contractHistory(ticker));
   add('flow',()=>deps.trades(ticker));
@@ -89,7 +89,7 @@ function links(rows){
   return [...unique.values()].slice(0,8);
 }
 
-function decisionSections(input,{evaluation,action,book,history,flow,news,reason,now}){
+function decisionSections(input,{evaluation,action,book,history,flow,news,feedback,reason,now}){
   const p=evaluation,sections=[];
   const label=input.side.toUpperCase();
   if(p.settlement.confirmed){
@@ -115,6 +115,11 @@ function decisionSections(input,{evaluation,action,book,history,flow,news,reason
       sections.push({heading:'What a tie changes',text:'This NFL contract pays $1 per winning contract, '+usd(payout.tie_payout)+' on either side after a tie, and $0 on a loss. The pregame model estimates a '+percent(payout.win_probability)+' chance for this side to win and '+percent(payout.tie_probability)+' for a tie. Weighting those payouts puts the average modeled hold value at '+usd(payout.expected_per_contract)+' per contract. The range reflects sensitivity to team strength and the historical tie rate. It excludes roster effects and can miss the actual result.'});
     }
   }else if(action!=='SETTLE')sections.push({heading:'The hold-or-sell call',text:reason+' Check the missing source, liquidity or model coverage shown here before relying on a new call.'});
+  if(feedback?.status==='available'&&p.forecast_fresh){
+    const scenarios=feedback.scenarios.map(row=>row.name+' ('+row.status+'): '+percent(row.conditional_probability)+' YES in this scenario, using '+row.dnp_games+' games missed and '+row.regular_games+' games with regular minutes.');
+    sections.push({heading:'How lineup evidence changes the risk',text:'The team model starts at '+percent(feedback.baseline_probability)+' YES. '+scenarios.join(' ')+
+      ' The scan uses the wider YES range of '+feedback.decision_interval.map(percent).join(' to ')+' when comparing hold value with current bids.'});
+  }
   const signal=history?.ticker===input.ticker?history.market_signal:null;
   const changes=signal?.status==='available'&&Number.isFinite(signal.last_midpoint)&&Number.isFinite(signal.prediction)&&Date.parse(signal.observed_at)>=now-180000;
   const move=changes?Math.round((signal.prediction-signal.last_midpoint)*10000)/100:null;
@@ -161,7 +166,8 @@ export async function reviewPaperPosition(raw,{signal,deadlineMs=POSITION_REVIEW
   }
   if(!packet)reason='All scan slots are busy. Try again shortly.';
   const flow=summarizePositionFlow(tradeInfo,input.ticker,at);
-  const {sections,reports}=decisionSections(input,{evaluation,action,book:bookInfo,history,flow,news,reason,now:at});
+  const feedback=model?.forecast?.availability_feedback;
+  const {sections,reports}=decisionSections(input,{evaluation,action,book:bookInfo,history,flow,news,feedback,reason,now:at});
   const sources=links([{label:'Kalshi settlement rules',url:marketInfo?.source_url,retrieved_at:marketInfo?.as_of},
     {label:'Kalshi bid depth',url:bookInfo?.source_url,retrieved_at:bookInfo?.as_of},
     {label:'Kalshi public trades',url:tradeInfo?.source_url,retrieved_at:tradeInfo?.as_of},
@@ -174,7 +180,7 @@ export async function reviewPaperPosition(raw,{signal,deadlineMs=POSITION_REVIEW
   }
   const alternatives=(ideas?.rows||[]).filter(row=>row.ticker!==input.ticker&&(!market?.event_ticker||row.event_ticker!==market.event_ticker)).slice(0,3);
   const sourceNames=['market','book','research','news','history','flow'],duration_ms=Math.round(performance.now()-start);
-  return {ticker:input.ticker,action,reason,sections,sources,alternatives,
+  return {ticker:input.ticker,action,reason,sections,sources,alternatives,...(feedback?{model_feedback:feedback}:{}),
     evaluation:{...evaluation,action,reason,fee_assumption:Number.isFinite(model?.fee_coefficient)?'series_schedule':'general_fee_formula'},
     flow,as_of:new Date(at).toISOString(),duration_ms,
     timings_ms:{...Object.fromEntries(sourceNames.map(key=>[key,results[key]?.duration??null])),total:duration_ms},

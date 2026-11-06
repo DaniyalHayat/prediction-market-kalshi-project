@@ -31,7 +31,8 @@ export function tradeCandidates(market,book,research,{budget=20,now=Date.now(),c
       const conservativeEdge=scenario.contracts?range[0]-(scenario.cost/scenario.contracts)-bufferCents/100:null;
       const pointEdge=scenario.contracts?p-(scenario.cost/scenario.contracts)-bufferCents/100:null;
       const favorable=open&&scenario.contracts>0&&conservativeEdge>0;
-      const scenarioEligible=open&&scenario.contracts>0&&pointEdge>0&&f.fresh&&experimental&&isExperimental;
+      const scenarioEligible=open&&scenario.contracts>0&&pointEdge>0&&f.fresh&&experimental&&isExperimental&&
+        (research.forecast.availability_feedback?.status!=='available'||favorable);
       const eligible=favorable&&f.eligible;
       const maxPrice=Math.max(0,range[0]-bufferCents/100);
       rows.push({ticker:market.ticker,title:market.yes_sub_title||market.title,event_ticker:market.event_ticker,side:side.toUpperCase(),category:market.category,

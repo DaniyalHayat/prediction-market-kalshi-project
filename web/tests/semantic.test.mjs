@@ -34,6 +34,17 @@ test('storage reservations close before inference and expired Reddit chunks cann
 test('provider first-seen time is not relabeled as verified source publication in retained citations',()=>{
   const chunks=publicEvidenceChunks(market,{...evidence,items:[{...evidence.items[0],time_basis:'provider_first_seen'}]},{now:NOW}),source=chunks.find(row=>row.source_url==='https://example.org/injury');assert.equal(source.published_at,null);assert.equal(source.retrieved_at,evidence.as_of);
 });
+test('retained sports search excludes older non-performance stories after the ranking rules change',async()=>{
+  const testTicker='KXNBAGAME-TEST-'+randomUUID(),m={...market,ticker:testTicker},e={...evidence,ticker:testTicker},
+    repository=createEvidenceRepository({now:()=>NOW,embed:fixtureEmbed});
+  const publicity={...e.items[0],title:'Lakers forward asks a sports betting app to stop using his likeness',
+    excerpt:'The request went out to the vendor.',url:'https://example.org/likeness'};
+  await repository.index(m,{...e,items:[e.items[0],publicity]},{enabled:true,selectedTicker:testTicker});
+  const result=await repository.search(testTicker,'Lakers forward');
+  assert.equal(result.status,'available');
+  assert.ok(result.citations.some(row=>row.url==='https://example.org/injury'));
+  assert.ok(result.citations.every(row=>row.url!=='https://example.org/likeness'));
+});
 test('reciprocal-rank fusion promotes independent lexical/semantic agreement without calling it confidence',()=>{
   const result=reciprocalRankFusion([{id:'lexical'},{id:'both'}],[{id:'semantic'},{id:'both'}]);assert.equal(result[0].id,'both');assert.equal(result[0].lexical_rank,2);assert.equal(result[0].semantic_rank,2);assert.equal(result[0].confidence,undefined);
 });

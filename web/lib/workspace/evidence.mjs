@@ -101,7 +101,7 @@ function summaries(market,items,related,{sports,topic,music,film,sourceLinks}){
   if(sourceLinks.length)sections.push({heading:'What to check next',text:sourceLinks[0].detail,url:sourceLinks[0].url});
   if(market.rules_primary)sections.push({heading:'Settlement check',text:cleanText(market.rules_primary,700)});
   const count=items.length+related.length;
-  sections.push({heading:'What the sources cover',text:`${items.length} matched and ${related.length} related ${count===1?'item':'items'}. Reports, headlines and social posts are displayed as context alongside the price and model.`});
+  sections.push({heading:'What the sources cover',text:`${items.length} matched and ${related.length} related ${count===1?'item':'items'}. Reporting can point to facts worth checking. Forecasts use verified structured observations and the model’s own inputs.`});
   const longRead=sections.map(row=>row.heading+'\n'+row.text).join('\n\n');
   return {summary,long_read:longRead,news_summary:summary,news_long_read:longRead,news_sections:sections};
 }
@@ -134,6 +134,6 @@ export async function contractEvidence(market,{enabled=false,selectedTicker,redd
     ...(alternative?[{name:'Kworb chart data',kind:'data',status:alternative.status,reason:alternative.reason,as_of:alternative.measurement_date}]:[])];
   const value={ticker:market.ticker,status:items.length?'available':related_items.length||source_links.length?'context_available':'no_matched_items',as_of:new Date(now).toISOString(),items,related_items,source_links,feeds,film,music_alternatives:alternative,
     source_catalog:SOURCE_CATALOG.filter(s=>s.topics.includes(topic)),ranking_method:{classification:'editorial_heuristic',weights:{entity_relevance:.4,source_tier:.25,recency:.2,specific_update_terms:.15},horizon_multiplier:{long_horizon_asset_story_for_same_day_contract:.55},publisher_diversity:'First two per publisher promoted; remaining items follow.',accuracy_validated:false},
-    experimental_sensitivity:{status:'not_calibrated',affects_forecast:false,probability_adjustment:null,reason:'News and social opinions remain inspectable context. No held-out source-to-outcome evaluation supports a probability adjustment.'}};
+    experimental_sensitivity:{status:'not_calibrated',affects_forecast:false,probability_adjustment:null,reason:'A headline or social post supplies no numeric adjustment by itself. The research model evaluates verified observations separately.'}};
   return {...value,...summaries(market,items,related_items,{sports:context,film,topic,music:alternative,sourceLinks:source_links})};
 }

@@ -14,7 +14,8 @@ export function parseExecutionRequest(input){
 
 export async function workspaceExecutionResearch(ticker,{controls={},model='baseline'}={},dependencies={}){
   const parsed=parseExecutionRequest({ticker,controls,model}),deps={book,workspaceResearch,marketFees,feed:marketFeed,now:Date.now,...dependencies};
-  const [research,restDepth,fees]=await Promise.all([deps.workspaceResearch(ticker,{fast:true,model:parsed.model}),deps.book(ticker,1),deps.marketFees(ticker).catch(()=>null)]);
+  const [research,restDepth,fees]=await Promise.all([deps.workspaceResearch(ticker,{fast:true,model:parsed.model,refreshAvailability:/^KXNBAGAME-/.test(ticker)}),
+    deps.book(ticker,1),deps.marketFees(ticker).catch(()=>null)]);
   if(research.ticker!==ticker||research.market?.ticker!==ticker||restDepth.ticker!==ticker)throw new RangeError('The execution inputs do not match the selected contract');
   const now=deps.now(),source=research.forecast||{},forecast={...usableForecast(research,now,ticker),source_as_of:source.source_as_of,validation:source.validation,
     outcomes:source.outcomes,expected_settlement_value:source.expected_settlement_value,settlement_value_interval:source.settlement_value_interval};
@@ -29,6 +30,7 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
   const result=executionResearch({market:research.market,book:depth,forecast,book_history:history,observation_end_seconds:native?captured.observed_until_seconds:undefined,controls:parsed.controls,fee_coefficient:coefficient,now});
   return {...result,ticker,title:research.market.yes_sub_title||research.title||research.market.title,as_of:new Date(now).toISOString(),book_as_of:depth.as_of,
     forecast:{...result.forecast,eligible:forecast.eligible,experimental:forecast.experimental,release_reason:forecast.reason,
+      ...(forecast.valid&&forecast.fresh&&source.availability_feedback?.status==='available'?{availability_feedback:source.availability_feedback}:{}),
       ...(forecast.valid&&forecast.fresh&&source.outcomes?{outcomes:source.outcomes,expected_settlement_value:source.expected_settlement_value,settlement_value_interval:source.settlement_value_interval}:{})},
     data_quality:{...result.data_quality,gaps:[...(result.data_quality?.gaps||[]),...(!aligned?[recent?'The current book and event window are unaligned; live flow adjustments are withheld.':'A recent continuous stream window is unavailable; live flow adjustments are withheld.']:[])]},
     fee_schedule:{status:feeVerified?'series_coefficient_available':'assumed_default',coefficient,

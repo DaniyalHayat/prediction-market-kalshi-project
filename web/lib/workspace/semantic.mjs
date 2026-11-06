@@ -3,7 +3,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {validateTicker} from '../live.mjs';
-import {safePublicURL,explicitlyHistorical} from './source-ranking.mjs';
+import {safePublicURL,explicitlyHistorical,sportsEvidenceClaim} from './source-ranking.mjs';
 export const EMBEDDING_MODEL=Object.freeze({id:'Xenova/all-MiniLM-L6-v2',revision:'751bff37182d3f1213fa05d7196b954e230abad9',dimensions:384,dtype:'q8',pooling:'mean',normalize:true,device:'cpu'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 const clean=(value,maximum)=>String(value||'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,' ').trim().slice(0,maximum);
@@ -170,7 +170,9 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
       if(vector&&schema){semantic=(await db.query(`WITH scoped AS MATERIALIZED(SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding_vector FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding_vector IS NOT NULL ORDER BY retrieved_at DESC LIMIT 256) SELECT *,1-(embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector) AS cosine_similarity FROM scoped ORDER BY embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector LIMIT 30`,[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision,'['+vector.join(',')+']'])).rows.filter(row=>row.cosine_similarity>=.15);}
       else if(vector)semantic=rows.filter(row=>validVector(row.embedding)&&row.model_revision===EMBEDDING_MODEL.revision&&row.model_id===EMBEDDING_MODEL.id).map(row=>({...row,cosine_similarity:cosineSimilarity(vector,row.embedding)})).filter(row=>row.cosine_similarity>=.15).sort((a,b)=>b.cosine_similarity-a.cosine_similarity).slice(0,30);
     }catch{semantic=[];semanticStatus='unavailable';}
-    const current=rows=>rows.filter(row=>!explicitlyHistorical(row.title,row.source_url,now()));
+    const sportsGame=/^KX(?:NBA|NFL|EPL)GAME-/.test(ticker);
+    const current=rows=>rows.filter(row=>!explicitlyHistorical(row.title,row.source_url,now())&&
+      (!sportsGame||row.source_kind==='public_contract_rules'||sportsEvidenceClaim(row.title,row.content,{exactFixture:!row.source_kind?.startsWith('related_')})));
     const seenSources=new Set();
     const citations=reciprocalRankFusion(current(lexical),current(semantic),{limit:60}).filter(row=>{
       if(seenSources.has(row.source_url))return false;

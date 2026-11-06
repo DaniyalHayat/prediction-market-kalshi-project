@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {localPositionReview} from '../lib/workspace/mcp.mjs';
 import {parsePositionReview,reviewPaperPosition,summarizePositionFlow} from '../lib/workspace/position-review.mjs';
+import {screenAvailabilityForecast} from '../lib/workspace/nba-availability-feedback.mjs';
 import {POST} from '../app/api/[...path]/route.js';
 import {proxyBackend} from '../lib/workspace/proxy.mjs';
 
@@ -46,6 +47,24 @@ test('SELL requires a released interval below bids and filters recommendations b
   assert.deepEqual(result.alternatives.map(row=>row.ticker),['IDEA-1','IDEA-2','IDEA-3']);
   assert.equal(result.alternative_coverage.category_count,8);
   assert.deepEqual(result.alternative_coverage.checked_categories,['macro','sports']);
+});
+test('automatic and manual paper scans account for a matched lineup scenario before issuing HOLD',async()=>{
+  const {position,dependencies}=setup('KXNBAGAME-26NOV06PORLAL-LAL',{p:.51,interval:[.42,.63]});
+  const baseResearch=dependencies.workspaceResearch;
+  assert.equal((await reviewPaperPosition(position,{dependencies})).action,'HOLD');
+  dependencies.workspaceResearch=async(ticker,options)=>{
+    assert.equal(options.refreshAvailability,true);
+    const value=await baseResearch(ticker,options);
+    const feedback={status:'available',baseline_probability:.51,decision_interval:[.30,.63],
+      scenarios:[{name:'Sample player',status:'Out',conditional_probability:.39,dnp_games:3,regular_games:5}]};
+    return {...value,forecast:screenAvailabilityForecast(value.forecast,feedback)};
+  };
+  for(const automatic of [false,true]){
+    const result=await reviewPaperPosition({...position,automatic},{dependencies});
+    assert.equal(result.action,'REVIEW');
+    assert.deepEqual(result.evaluation.fair_value_range,[3,6.3]);
+    assert.match(result.sections.find(row=>row.heading.includes('lineup evidence')).text,/39% YES/);
+  }
 });
 
 test('mismatched or stale bids, experimental models and shared partial depth do not trigger alerts',async()=>{
