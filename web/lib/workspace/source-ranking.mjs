@@ -3,6 +3,38 @@ const stopWords=new Set(['will','would','which','what','this','that','with','fro
 const words=value=>normalize(value).split(' ').filter(w=>w.length>2&&!stopWords.has(w)&&!/^\d+$/.test(w));
 const sportsTopics=new Set(['nfl','nba','epl']);
 const specificUpdate=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart|trade|starter|quarterback|practice|reps)\b/;
+const availabilityUpdate=/\b(?:injur(?:y|ies|ed)|player availability|availability (?:report|update|status)|ruled (?:out|in)|sidelined|(?:listed as|is|remains) (?:questionable|doubtful|probable)|(?:questionable|doubtful|probable) (?:for|vs|against|to play|with)|(?:expected|cleared|set) to (?:play|start|miss)|will (?:play|miss)|(?:will not|won t) (?:play|start)|out (?:vs|against|for (?:tonight|the (?:game|season|rest of)|\d+ (?:games?|weeks?)))|(?:confirmed|starting|projected) line ?up|starting xi|starting (?:five|quarterback|goalkeeper)|(?:did not|didn t|limited in|returned to|full) practice|minutes restriction|(?:serves?|serving) (?:a |an )?suspension|suspended for)\b/;
+const scheduleUpdate=/\b(?:postponed|canceled|cancelled|rescheduled|venue change|kickoff moved|tip ?off moved)\b/;
+const fixturePage=/\b(?:game preview|match preview|game details)\b/;
+const fixturePreview=/\b(?:matchup|face off|prepare(?:s|d)? for)\b/;
+const fixtureRecap=/\b(?:game summary|match report|box ?score|live score|game recap|highlights)\b/;
+const sportsNoise=/\b(?:likeness|sports betting app|betting endorsement|endorsement deal|sponsorship deal|merchandise launch|ticket availability|fantasy football|festival)\b/;
+const genericNicknames=new Set(['united','city','athletic','albion','forest','palace','heat','magic','jazz']);
+function teamPhrases(name){
+  const team=normalize(name);
+  if(!team)return [];
+  const nickname=team.endsWith('trail blazers')?'trail blazers':team.split(' ').at(-1);
+  const phrases=[team];
+  if(nickname.length>=5&&!genericNicknames.has(nickname))phrases.push(nickname);
+  if(team==='philadelphia 76ers')phrases.push('sixers');
+  return phrases;
+}
+const includesPhrase=(padded,phrase)=>padded.includes(' '+phrase+' ');
+export function sportsTeamMention(value,name){
+  const padded=' '+normalize(value)+' ';
+  return teamPhrases(name).some(phrase=>includesPhrase(padded,phrase));
+}
+export function sportsEvidenceClaim(title,excerpt,{exactFixture=false,fixtureUpcoming=false}={}){
+  return classifySportsEvidence(normalize(title),normalize(title+' '+(excerpt||'')),exactFixture,fixtureUpcoming);
+}
+function classifySportsEvidence(headline,text,exactFixture,fixtureUpcoming){
+  if(sportsNoise.test(headline)||fixturePage.test(headline)&&!exactFixture||
+    fixtureRecap.test(headline)&&(!exactFixture||fixtureUpcoming))return null;
+  if(availabilityUpdate.test(text))return 'availability_report';
+  if(exactFixture&&scheduleUpdate.test(text))return 'schedule_report';
+  if(exactFixture&&(fixturePage.test(headline)||fixturePreview.test(headline)||fixtureRecap.test(headline)))return 'fixture_report';
+  return null;
+}
 const titleNoise=new Set(['best','there','end','hit','finish','reach','close','last','win','hold','today','tomorrow','week','month','year','date','time','next','total','price','points','contract','degrees','january','february','march','april','may','june','july','august','september','october','november','december','jan','feb','mar','apr','jun','jul','aug','sep','oct','nov','dec']);
 export function topicWords(value){return [...new Set(words(value).filter(word=>!titleNoise.has(word)))];}
 export function evidenceTopicGroups(market){
@@ -54,10 +86,15 @@ export function evidenceSearchTerms(market,{sports}={}){
   return [...new Set(names)].slice(0,8);
 }
 export function safePublicURL(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
-function interpretation(text,topic){
-  if(topic==='nfl'&&/\b(qb|quarterback)\b/.test(text)&&specificUpdate.test(text))return {claim_type:'availability_report',impact:'A change at quarterback can alter pass depth, sack exposure and play calling. Check who takes first-team reps and who is confirmed at kickoff. A team-strength model cannot isolate this change from the headline.'};
-  if(/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes)\b/.test(text)&&sportsTopics.has(topic))return {claim_type:'availability_report',impact:'Check the player, expected role and official game status. A confirmed absence can change the lineup and matchup.'};
-  if(/\b(postponed|cancelled|canceled|rescheduled)\b/.test(text))return {claim_type:'schedule_report',impact:'A schedule change can affect cancellation or rescheduling rules. Verify the official event notice and the exact contract settlement treatment before interpreting any price.'};
+function interpretation(text,topic,claim){
+  if(claim==='availability_report'){
+    const impact=topic==='nfl'&&/\b(qb|quarterback)\b/.test(text)?
+      'A quarterback change can alter passing, sack exposure and play calling. Verify the starter for this game.':
+      'Verify the player, role and official status for this matchup. A confirmed lineup change can affect the matchup.';
+    return {claim_type:claim,impact};
+  }
+  if(claim==='fixture_report')return {claim_type:claim,impact:'Check the date, opponents and game status against the contract. Fixture coverage establishes context for the event.'};
+  if(claim==='schedule_report'||/\b(postponed|cancelled|canceled|rescheduled)\b/.test(text))return {claim_type:'schedule_report',impact:'A schedule change can affect cancellation or rescheduling rules. Verify the official event notice and the exact contract settlement treatment before interpreting any price.'};
   if(topic==='film'&&/\b(review|reviews|critics|tomatometer)\b/.test(text))return {claim_type:'critic_context',impact:'Review coverage can inform critical reception. Verify the review count, embargo date and score definition; positive-review share does not directly measure ticket sales or the probability of a box-office threshold.'};
   if(topic==='film'&&/\b(presales|tickets|opening|gross|screens)\b/.test(text))return {claim_type:'demand_context',impact:'Reported presales, screens or gross can inform demand only when the release territory, currency and weekend match the contract. Separate forecasts from realized box-office receipts.'};
   if(topic==='music'&&/\b(streams|streaming|chart|billboard|spotify)\b/.test(text))return {claim_type:'chart_context',impact:'Chart reporting can inform momentum. Match artist versus song, platform, territory and daily versus weekly measurement; cross-chart ranks do not establish the settlement result.'};
@@ -70,32 +107,35 @@ export function explicitlyHistorical(title,url,now){
 }
 export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={}){
   const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
-  const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),ranked=[];
+  const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),isSport=sportsTopics.has(topic),ranked=[];
+  const teams=(sports?.teams||[]).map(team=>team.name),fixtureUpcoming=Date.parse(sports?.event?.played_at)>now;
+  const entityTerms=entities.map(entity=>({entity,terms:isSport?(teams.includes(entity)?teamPhrases(entity):[normalize(entity)]):words(entity)}));
   const titleTerms=topicWords(market?.title).slice(0,6),topicGroups=evidenceTopicGroups(market),assetContext=topicGroups.length===1;
   const hoursToClose=(Date.parse(market?.close_time)-now)/3600000;
   for(const item of (items||[]).slice(0,200)){
     const title=String(item.title||item.excerpt||'').slice(0,500),excerpt=String(item.excerpt||item.description||'').slice(0,900),text=normalize(title+' '+excerpt),url=safePublicURL(item.url),asof=item.as_of||item.published_at||item.created_at,date=Date.parse(asof);
     if(!url||!title||!Number.isFinite(date)||date>now+300000||now-date>7*86400000||explicitlyHistorical(title,url,now)||/\b(guaranteed|lock of the day|parlay|my prediction|unpopular opinion|giveaway|promo code|bonus bets|free bets|survivor pool|fantasy football|betting odds)\b/.test(text))continue;
-    const tokens=new Set(text.split(' '));
-    const matched=entities.filter(entity=>{const parts=words(entity),nickname=parts.at(-1),teamName=(sports?.teams||[]).some(t=>t.name===entity),distinctNickname=teamName&&nickname?.length>=5&&!['united','city','athletic','albion','forest','palace'].includes(nickname);return parts.length>0&&(parts.every(w=>tokens.has(w))||distinctNickname&&tokens.has(nickname));});
-    const groupTerms=topicGroups.map(group=>group.find(term=>(' '+text+' ').includes(' '+normalize(term)+' '))).filter(Boolean);
+    const padded=' '+text+' ',tokens=isSport?null:new Set(text.split(' '));
+    const matched=entityTerms.filter(({terms})=>isSport?terms.some(term=>includesPhrase(padded,term)):
+      terms.length>0&&terms.every(term=>tokens.has(term))).map(({entity})=>entity);
+    const groupTerms=topicGroups.map(group=>group.find(term=>includesPhrase(padded,normalize(term)))).filter(Boolean);
     if(assetContext&&(!groupTerms.length||groupTerms[0]==='ETH'&&/\beth zurich\b/.test(text)))continue;
-    const relatedTerms=!matched.length&&!sportsTopics.has(topic)&&!['reddit','x'].includes(item.platform)?
+    const relatedTerms=!matched.length&&!isSport&&!['reddit','x'].includes(item.platform)?
       topicGroups.length?(groupTerms.length===topicGroups.length?groupTerms:[]):titleTerms.filter(term=>tokens.has(term)):[];
     if(!matched.length&&relatedTerms.length<(assetContext?1:2))continue;
-    const fixturePage=/\b(game details|game summary|match report|box ?score|live score|game preview|game recap|highlights)\b/.test(normalize(title));
-    if(sportsTopics.has(topic)&&fixturePage&&(sports?.teams||[]).length===2&&sports.teams.some(team=>!matched.includes(team.name)))continue;
+    const exactFixture=teams.length===2&&teams.every(team=>matched.includes(team));
+    const claim=isSport?classifySportsEvidence(normalize(title),text,exactFixture,fixtureUpcoming):null;
+    if(isSport&&!claim)continue;
     const identityURL=new URL(safePublicURL(item.publisher_url)||url),postURL=new URL(url),source=SOURCE_CATALOG.find(s=>s.handle&&item.platform==='x'&&postURL.hostname==='x.com'&&postURL.pathname.split('/')[1]?.toLowerCase()===s.handle.toLowerCase()&&s.handle.toLowerCase()===String(item.author||'').toLowerCase()||s.domain&&(identityURL.hostname===s.domain||identityURL.hostname.endsWith('.'+s.domain)));
     const tier=item.platform==='reddit'?'community_context':source?.tier||'unverified_context';
-    const specificity=specificUpdate.test(text);
+    const specificity=isSport?claim!=='fixture_report':specificUpdate.test(text);
     const reputation={primary:1,reported:.8,specialist_context:.55,community_context:.2,unverified_context:.35}[tier]??.35;
     const relevance=matched.length?Math.min(1,matched.length/Math.min(2,entities.length)):Math.min(.5,relatedTerms.length/Math.max(1,topicGroups.length||titleTerms.length));
     const freshness=Math.exp(-(now-date)/(36*3600000));
     const distantHorizon=assetContext&&hoursToClose>=0&&hoursToClose<=24&&/\b(?:next \d+ (?:months?|years?)|in \d+ (?:months?|years?)|by (?:\w+ )?20\d{2})\b/.test(text);
     const score=Math.round(100*(.4*relevance+.25*reputation+.2*freshness+.15*Number(specificity))*(distantHorizon?.55:1));
-    const teamMatches=(sports?.teams||[]).filter(team=>matched.includes(team.name)).length;
-    const match_scope=assetContext||!matched.length||topicGroups.length&&groupTerms.length<topicGroups.length||sportsTopics.has(topic)&&sports?.teams?.length===2&&teamMatches!==2?'related':'matched';
-    ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,match_scope,...interpretation(text,topic),
+    const match_scope=assetContext||!matched.length||topicGroups.length&&groupTerms.length<topicGroups.length||isSport&&!exactFixture?'related':'matched';
+    ranked.push({...item,id:item.id||url,title,url,excerpt,publisher:source?.name||item.publisher||item.source||'Unverified source',source_tier:tier,as_of:new Date(date).toISOString(),score,match_scope,...interpretation(text,topic,claim),
       confidence:tier==='primary'?'primary_source':tier==='reported'?'attributed_report':'unverified_context',metrics:item.metrics||{},
       why_relevant:assetContext?(distantHorizon?'Covers the asset over a longer horizon than this contract. Use it as background.':'Covers the same asset. Check the contract’s price source and measurement window.'):relatedTerms.length?'Shares the terms '+relatedTerms.join(', ')+'. Verify the subject, date and measurement before using it.':'Names '+matched.join(' and ')+'. '+(match_scope==='related'?(sportsTopics.has(topic)?'This is a team or player update. Check the exact game before applying it.':'This is an entity mention. Check whether it covers the specific contract measurement.'):specificity?'Includes a specific update to review.':'Provides context for the selected outcome.'),
       limitations:[...(item.limitations||[]),...(item.platform==='reddit'?['Community votes and heuristics do not prove authenticity or factual accuracy.']:[]),'Editorial relevance rank; not a probability, accuracy score or estimate of price impact.'],topic,matched_entities:matched});

@@ -4,7 +4,7 @@ import {fitBasketball,fitSoccer,evaluateSports,teamForm,lowMinutesSplit} from '.
 import {parseGames,parseMinutes,matchGame,sportsContractDate,bookmakerComparison} from '../lib/workspace/sports.mjs';
 import {parseApple,rankPersistence,musicIdentity} from '../lib/workspace/music.mjs';
 import {workspaceMarkets,inferCategory,selectSeries,WORKSPACE_CATEGORIES} from '../lib/workspace/catalog.mjs';
-import {screenSportsForecast,workspaceResearch,workspaceOpinions,candleRows} from '../lib/workspace/router.mjs';
+import {screenSportsForecast,workspaceEvidence,workspaceResearch,workspaceOpinions,candleRows} from '../lib/workspace/router.mjs';
 const NOW=Date.now(),ticker='KXNBAGAME-26NOV07SASPOR-SAS';
 const market={ticker,event_ticker:'KXNBAGAME-26NOV07SASPOR',title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',
   close_time:new Date(NOW+86400000).toISOString(),rules_primary:'If San Antonio wins the San Antonio vs Portland Pro Basketball game originally scheduled for Nov 7, 2026, then the market resolves to Yes.'};
@@ -83,6 +83,30 @@ test('passing holdout with incomplete coverage is withheld with the same precise
   const values=await Promise.all([{}, {assistant:true}, {fast:true}].map(options=>workspaceResearch(ticker,options,deps)));
   assert.ok(values.every(value=>value.opinion.side==='PASS'&&value.opinion.reason===decision.reasons[0]));
   assert.ok(values.every(value=>value.forecast.evidence.label==='Holdout passed; source coverage incomplete'));
+});
+test('matched lineup evidence reaches the paper screen and the explicit news response',async()=>{
+  const source_as_of=new Date(NOW).toISOString(),current={...forecast,probability:.64,interval:[.58,.72],validation:{passed:true}};
+  const quotes={...depth,raw:{orderbook_fp:{yes_dollars:[['.44','100']],no_dollars:[['.48','100']]}}};
+  const availability_feedback={status:'available',baseline_probability:.64,decision_interval:[.46,.72],
+    source:{url:'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=100',retrieved_at:source_as_of},
+    scenarios:[{player_id:'11',name:'Sample player',status:'Out',conditional_probability:.52,dnp_games:3,regular_games:5}]};
+  assert.equal(screenSportsForecast(market,current,quotes,{now:NOW}).side,'yes');
+  const details={market},deps={marketDetails:async()=>details,book:async()=>quotes,marketFees:async()=>({coefficient:.07}),
+    marketBrief:async()=>({market,ticker,decision:{side:'insufficient_edge'},sources:[]}),
+    sportsResearch:async(_market,options)=>{
+      assert.equal(options.refreshAvailability,true);
+      return {league:'nba',forecast:current,availability_feedback};
+    }};
+  const run=(ticker,options)=>workspaceResearch(ticker,options,deps);
+  const research=await run(ticker,{fast:true,refreshAvailability:true});
+  assert.equal(research.forecast.probability,.64);
+  assert.deepEqual(research.forecast.interval,[.46,.72]);
+  assert.equal(research.opinion.side,'PASS');
+  assert.match(research.opinion.reason,/lineup scenario/);
+  assert.equal(research.paper_scenarios.find(row=>row.side==='YES').scenario_eligible,false);
+  const news=await workspaceEvidence(ticker,{retain:false},{marketDetails:deps.marketDetails,workspaceResearch:run,
+    request:async()=>({}),contractEvidence:async()=>({ticker,items:[]})});
+  assert.deepEqual(news.model_feedback,availability_feedback);
 });
 test('Apple identity, chart dates and ordinal rank history remain source-specific',()=>{
   const payload={feed:{country:'us',updated:new Date(NOW).toISOString(),results:[{id:'123',name:'Track',artistName:'Artist',url:'https://music.apple.com/us/song/123'}]}};
