@@ -6,6 +6,7 @@ import {executionEstimate} from '../intelligence/math.mjs';
 import {workspaceCatalog,categorySnapshot,inferCategory,inferResearchFamily,WORKSPACE_CATEGORIES} from './catalog.mjs';
 import {warehouseStatus,marketAttribution,searchPublicMarkets} from './warehouse.mjs';
 import {sportsResearch} from './sports.mjs';
+import {screenAvailabilityForecast} from './nba-availability-feedback.mjs';
 import {musicResearch} from './music.mjs';
 import {contractEvidence} from './evidence.mjs';
 import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
@@ -85,10 +86,10 @@ export function screenSportsForecast(market,forecast,depth,{coefficient=.07,feeV
       fee_note:feeVerified?'General taker formula with the exchange series multiplier; individual-market exceptions still require inspection.':'Explicit general taker-fee assumption; a market-specific schedule was not verified.'},
     validation_note:'A historical team-strength holdout and parameter range do not establish calibrated contract uncertainty, injury effects, profitable fills or optimal real-world trades. Position size remains conditional on your own budget and assumptions.'};
 }
-export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline',evidence=false,marketPacket,orderBook}={},dependencies={}) {
+export async function workspaceResearch(ticker,{fast=false,assistant=false,model='baseline',evidence=false,refreshAvailability=false,marketPacket,orderBook}={},dependencies={}) {
   validateTicker(ticker);
   model=modelChoice(model);
-  const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full')+'#'+Number(evidence),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
+  const key=ticker+'#'+model+'#'+(fast?'fast':assistant?'assistant':'full')+'#'+Number(evidence)+(refreshAvailability?'#availability':''),useCache=!Object.keys(dependencies).length,hit=researchCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&researchInflight.has(key))return researchInflight.get(key);
   const deps={marketDetails,book,marketBrief,marketFees,sportsResearch,musicResearch,contractHistory,...dependencies};
@@ -98,7 +99,7 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
     const depthPromise=(orderBook||deps.book(ticker,1)).catch(()=>null),feesPromise=deps.marketFees(ticker).catch(()=>null);
     const briefPromise=deps.marketBrief(ticker,{contracts:1},{marketDetails:async()=>detail,book:()=>depthPromise,
       ...((fast||assistant||!evidence)?{headlines:async()=>({status:'not_queried',articles:[],reason:'Use Load contract news for explicit evidence retrieval.'})}:{})});
-    const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant}).catch(()=>({reason:'Matched sports evidence could not be refreshed. Its source or shared cache is temporarily unavailable.',error:true}));
+    const sportsPromise=deps.sportsResearch(market,{includeAvailability:!fast&&!assistant,refreshAvailability}).catch(()=>({reason:'Matched sports evidence could not be refreshed. Its source or shared cache is temporarily unavailable.',error:true}));
     const musicPromise=!fast?deps.musicResearch(market,{includeSpotify:!assistant,includeAlternatives:evidence&&!assistant}).catch(error=>({forecast:{probability:null,reason:error.message},error:true})):null;
     const signalPromise=assistant&&(!Object.keys(dependencies).length||dependencies.contractHistory)?
       deps.contractHistory(ticker).then(history=>history.market_signal).catch(()=>null):null;
@@ -110,7 +111,17 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
     if(sports?.forecast||alternative){
       const selected=alternative?{...(sports.forecast||{}),...alternative}:sports.forecast;
       forecast={...selected,evidence:{tier:selected.eligible?2:1,label:alternative&&!selected.eligible?(selected.inplay?'Experimental score-clock model':'Experimental calibrated ensemble'):selected.eligible?'Chronological matchup holdout':selected.validation?.passed&&sports.coverage?.partial?'Holdout passed; source coverage incomplete':'Unvalidated matchup scenario'}};
-      decision=screenSportsForecast(market,forecast,depth,{coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason});
+      const screenOptions={coefficient:Number.isFinite(fees?.coefficient)?fees.coefficient:.07,feeVerified:Number.isFinite(fees?.coefficient),coverage:sports.coverage,mappingReason:sports.reason};
+      const baselineForecast=forecast;
+      const feedback=alternative?alternative.availability_feedback:sports.availability_feedback;
+      if(sports.league==='nba'&&feedback){
+        forecast=feedback.status==='available'?screenAvailabilityForecast(forecast,feedback):{...forecast,availability_feedback:feedback};
+      }
+      decision=screenSportsForecast(market,forecast,depth,screenOptions);
+      if(forecast.interval!==baselineForecast.interval&&forecast.availability_feedback?.status==='available'&&
+        decision.side==='insufficient_edge'&&screenSportsForecast(market,baselineForecast,depth,screenOptions).side!=='insufficient_edge'){
+        decision.reasons.unshift('The lineup scenario widens the decision range enough that the entry no longer clears costs and the safety buffer.');
+      }
       if(alternative&&!alternative.eligible)decision.reasons.unshift(alternative.promotion_reason||'The experimental model has not passed its promotion gate.');
       status='modeled';summary=forecast.outcomes?
         `${forecast.model_name} estimates a ${(forecast.probability*100).toFixed(1)}% win chance for the YES team. The paper scenario includes the $0.50 tie payout.`:
@@ -144,16 +155,25 @@ export async function workspaceEvidence(ticker,{reddit=false,includeX=false,mode
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&evidenceInflight.has(key))return evidenceInflight.get(key);
   const task=(async()=>{
-    const {market}=await (marketPacket||deps.marketDetails(ticker));
+    const detail=await (marketPacket||deps.marketDetails(ticker)),{market}=detail;
     if(market?.ticker!==ticker)throw new Error('Evidence identity does not match the selected contract');
     const series=[market.series_ticker,market.series,market.event_ticker?.split('-')[0],ticker.split('-')[0]]
       .find(value=>typeof value==='string'&&/^[A-Za-z0-9_.-]{1,140}$/.test(value)&&!value.includes('..'));
     const settlementSources=Promise.race([deps.request('/series/'+encodeURIComponent(series))
       .then(result=>result.data?.series?.settlement_sources||[]).catch(()=>[]),delay(1000,[],{ref:false})]);
-    const recent=['full','assistant','fast'].map(mode=>researchCache.get([ticker,model,mode,0].join('#')))
-      .find(entry=>entry?.until>Date.now())?.value;
-    const value=await deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,
-      sports:recent?.extensions?.sports,music:recent?.extensions?.music,settlementSources,headlineMode:preview?'official':'full'});
+    const recent=['full#0#availability','fast#0#availability','assistant#0#availability','full#0','assistant#0','fast#0']
+      .map(mode=>researchCache.get([ticker,model,mode].join('#'))).find(entry=>entry?.until>Date.now())?.value;
+    const checkAvailability=deps.workspaceResearch||workspaceResearch;
+    const refresh=/^KXNBAGAME-/.test(ticker)&&!preview&&!recent?.forecast?.availability_feedback&&
+      (useCache||dependencies.workspaceResearch)?Promise.race([checkAvailability(ticker,{fast:true,model,refreshAvailability:true,marketPacket:detail})
+        .catch(()=>null),delay(4400,null,{ref:false})]):null;
+    const [evidenceResult,checked]=await Promise.all([deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,
+      sports:recent?.extensions?.sports,music:recent?.extensions?.music,settlementSources,headlineMode:preview?'official':'full'}),refresh]);
+    const feedback=(checked||recent)?.forecast?.availability_feedback;
+    const value=feedback?{...evidenceResult,model_feedback:feedback}:evidenceResult;
+    if(checked&&feedback?.status==='available')for(const mode of ['full','assistant','fast']){
+      researchCache.delete([ticker,model,mode,0].join('#'));
+    }
     const retention=preview?null:await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker,deferEmbedding:true})
       .catch(()=>({status:'unavailable',reason:'Evidence remains readable; retained search is temporarily unavailable.'}));
     const result=retention?{...value,retention}:value;
@@ -332,7 +352,10 @@ export async function workspaceGET(endpoint,params,dependencies={}) {
     return {ticker,market:{...detail.market,category:inferCategory(detail.market,profile?[profile.data.series]:[])},fees,as_of:detail.as_of,source_url:detail.source_url};
   }
   if(endpoint==='workspace/history')return contractHistory(params.get('ticker'),Number(params.get('hours')||24));
-  if(endpoint==='workspace/research')return workspaceResearch(validateTicker(params.get('ticker')),{fast:params.get('compact')==='1',model:params.get('model')||'baseline'});
+  if(endpoint==='workspace/research'){
+    const ticker=validateTicker(params.get('ticker'));
+    return workspaceResearch(ticker,{fast:params.get('compact')==='1',model:params.get('model')||'baseline',refreshAvailability:/^KXNBAGAME-/.test(ticker)});
+  }
   if(endpoint==='workspace/evidence'){
     if(!['0','1'].includes(params.get('reddit')||'0')||!['0','1'].includes(params.get('x')||'0'))throw new RangeError('Use 0 or 1 for evidence source toggles');
     const preview=params.get('preview')==='1';

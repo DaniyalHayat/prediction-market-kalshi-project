@@ -1,10 +1,10 @@
 # Selected-contract evidence
 
-Reviewed November 4, 2026 ET; bounded live checks were observed on November 5 UTC. No production deployment is included in this change.
+Updated November 6, 2026 ET.
 
 ## Contract and source boundaries
 
-`contractEvidence(market, {enabled, selectedTicker, redditEnabled, includeX, news, sports, music})` requires explicit enablement and an exact selected ticker before any new retrieval. Reddit remains a separate opt-in. The result supplies ranked items, readable summary and long-read views, source status, film preference sensitivity and music alternatives. It never changes a forecast, trade side or allocation.
+`contractEvidence(market, {enabled, selectedTicker, redditEnabled, includeX, news, sports, music})` requires explicit enablement and an exact selected ticker before any new retrieval. Reddit remains a separate opt-in. The result supplies ranked items, readable summary and long-read views, source status, film preference sensitivity and music alternatives. Publisher headlines and social posts have zero direct forecast weight. The selected NBA evidence route also reports any structured fixture input used by the paper screen.
 
 Items retain source URLs, dates, headline/description scope, engagement metadata where supplied, source tiers and reasons for relevance. ESPN descriptions, publisher headlines and public X posts are not represented as full article reads. GDELT first-seen timestamps remain labeled as first-seen metadata. Editorial ranking weights are entity relevance 40%, source tier 25%, recency 20% and specific update terms 15%. These are review-order choices, not validated source accuracy or causal price-impact estimates. Duplicated titles are removed and publisher diversity is promoted; syndication and correlated reporting remain possible.
 
@@ -32,7 +32,9 @@ A working additional adapter reads [Kworb's US daily Spotify song chart](https:/
 
 Matched sports research includes each team's last five completed games and form, the last five observed head-to-head games, recent player points/rebounds/assists/minutes and actual dated boxscore rows. Missing players or boxscores stay missing; an explicit DNP row has zero observed minutes. Player averages use observed statistics and expose coverage. Injury snapshots are current reported availability, not a reconstructed historical injury archive. For official participation status consult the dated [NBA injury reports](https://official.nba.com/nba-injury-report-2026-27-season), which the league updates throughout the day.
 
-Low-minute scenarios show actual games and win counts at the stated minutes threshold, including sample sizes and intervals. They do not identify a causal injury effect: minutes respond to coaching, foul trouble, game state, rest and injuries. Recent form, head-to-head and roster splits can overlap the model's training history; they are descriptive evidence, not additive independent signals. Retrieval is bounded to 10 recent team games, or 24 when availability comparisons are requested, with concurrency three and week-long completed-boxscore caching.
+Low-minute comparisons show observed results, including sample sizes and intervals. They describe games in which coaching, foul trouble, game state, rest and injuries can all affect minutes. Retrieval is bounded to 10 recent team games, or 24 when availability comparisons are requested, with concurrency three and week-long completed-boxscore caching.
+
+For pregame NBA contracts, a fresh, exact ESPN fixture response can supply an Out or Suspended player input. The calculation compares at least three explicit DNPs with at least four games of 20 or more minutes. It subtracts expected results from a team-strength fit trained before the sample, shrinks the difference toward zero with a four-game prior and caps the shift at 12 percentage points. Each player is stressed separately. The forecast keeps its validated baseline and the paper entry and hold-or-sell checks use the union of the baseline and scenario ranges. This can withhold a recommendation when it no longer clears costs. The scenario has no injury-specific calibration or causal effect estimate.
 
 ## Film preference
 

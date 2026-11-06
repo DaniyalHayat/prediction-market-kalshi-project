@@ -38,7 +38,7 @@ test('NFL brief distinguishes the exact matchup, related team reports and offici
   const value=await contractEvidence(nflMarket,{enabled:true,selectedTicker:nflMarket.ticker,sports:nflSports},{
     now:()=>NOW,sportsNews:async()=>({status:'available',articles:[
       {...row,title:'Seahawks QB ruled out for Arizona Cardinals matchup',excerpt:'Fixture report names both clubs and the quarterback change.',url:'https://www.espn.com/nfl/story/_/id/1'},
-      {...row,title:'Cardinals trade update at quarterback',url:'https://www.espn.com/nfl/story/_/id/2'},
+      {...row,title:'Cardinals starting quarterback limited in practice',url:'https://www.espn.com/nfl/story/_/id/2'},
       {...row,title:'Arizona Cardinals vs Dallas Cowboys game recap',url:'https://www.espn.com/nfl/story/_/id/3'},
       {...row,title:'Seattle Seahawks guaranteed lock of the day',url:'https://www.espn.com/nfl/story/_/id/4'}
     ]}),publicXFeed:async()=>{socialCalls++;},redditEvidence:async()=>{socialCalls++;}
@@ -83,10 +83,26 @@ test('matched player availability can qualify team news while city-only headline
     {title:'Los Angeles budget update',url:'https://example.org/city',as_of:new Date(NOW-60000).toISOString()}],market,{sports:{...sports,availability:[{name:'LeBron James'}]},now:NOW});
   assert.equal(value.length,2);assert.ok(value.every(row=>row.claim_type==='availability_report'));assert.ok(value.some(row=>row.matched_entities.includes('LeBron James')));
 });
+test('a matched player publicity story cannot lead the report or appear in sources',async()=>{
+  const date=new Date(NOW-60000).toISOString(),row={publisher:'ESPN',platform:'publisher_metadata',as_of:date};
+  const result=await contractEvidence(market,{enabled:true,selectedTicker:market.ticker,
+    sports:{...sports,availability:[{name:'LeBron James'}]}},{
+    now:()=>NOW,sportsNews:async()=>({status:'available',articles:[
+      {...row,title:'LeBron James asks a sports betting app to stop using his likeness',excerpt:'A spokesperson said the request went out Wednesday.',url:'https://www.espn.com/nba/story/likeness'},
+      {...row,title:'Lakers ticket availability update',url:'https://www.espn.com/nba/story/tickets'},
+      {...row,title:'Lakers forward LeBron James ruled out for Celtics matchup',url:'https://www.espn.com/nba/story/game-status'}
+    ]})
+  });
+  assert.equal(result.items.length,1);
+  assert.equal(result.items[0].claim_type,'availability_report');
+  assert.match(result.news_summary,/ruled out for Celtics matchup/);
+  assert.doesNotMatch(JSON.stringify(result),/likeness|story\/tickets/);
+  assert.equal(result.experimental_sensitivity.probability_adjustment,null);
+});
 test('a newly indexed historical or different-opponent game page is excluded from current selected-trade news',()=>{
   const selected={ticker:'KXNBAGAME-26NOV04ATLWAS-WAS',title:'Washington wins',yes_sub_title:'Washington Wizards'},context={teams:[{name:'Atlanta Hawks'},{name:'Washington Wizards'}]},base={publisher:'NBA.com',as_of:new Date(NOW-60000).toISOString(),time_basis:'provider_first_seen'};
   const result=rankEvidence([{...base,title:'Washington Wizards vs Charlotte Hornets Mar 9, 2015 Game Details - NBA.com',url:'https://www.nba.com/game/was-vs-cha-0021400938'},
-    {...base,title:'Washington Wizards vs Charlotte Hornets Nov 4, 2026 Game Details - NBA.com',url:'https://www.nba.com/game/was-vs-cha-fixture'},
+    {...base,title:'Washington Wizards vs Charlotte Hornets Nov 4, 2026 Game Details - NBA.com',excerpt:'Includes the injury report.',url:'https://www.nba.com/game/was-vs-cha-fixture'},
     {...base,title:'Atlanta Hawks vs Washington Wizards Nov 4, 2026 Game Preview',url:'https://www.nba.com/game/atl-vs-was-fixture'},
     {...base,title:'Washington Wizards reported player availability update',url:'https://www.espn.com/nba/story/availability'}],selected,{sports:context,now:NOW});
   assert.equal(result.length,2);assert.ok(result.every(row=>!row.url.includes('cha')));assert.ok(result.some(row=>row.title.includes('availability')));
