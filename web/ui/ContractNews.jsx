@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {ArrowUpRight,Newspaper,RefreshCw} from 'lucide-react';
-import {api,dateLabel} from './api.mjs';
+import {api,dateLabel,percent} from './api.mjs';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 import './contract-news.css';
 const safeURL=value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
@@ -34,19 +34,27 @@ function SourceSwitch({label,active,onToggle}){
     <span className="news-toggle-track" aria-hidden="true"/>{label}
   </button>;
 }
-export default function ContractNews({ticker,initial=null,articles=[],onEvidence}){
+function ModelImpact({feedback}){
+  if(feedback?.status!=='available')return <div className="news-brief-section"><h5>Model impact</h5><p>{feedback?.reason||'No verified update changed the model in this check. Headlines and social posts carry zero forecast weight on their own.'}</p></div>;
+  return <div className="news-brief-section"><h5>What changed in the model</h5>
+    <p>The team model starts at {percent(feedback.baseline_probability)} YES. The paper screen tests {feedback.decision_interval.map(percent).join(' to ')} YES after accounting for lineup risk.</p>
+    {feedback.scenarios.map(row=><p key={row.player_id}>{row.name} is listed {row.status.toLowerCase()}. The scenario puts YES at {percent(row.conditional_probability)}, based on {row.dnp_games} games missed and {row.regular_games} games with regular minutes.</p>)}
+    {safeURL(feedback.source?.url)&&<p><a href={feedback.source.url} target="_blank" rel="noreferrer">Open the matched availability report <ArrowUpRight size={12}/></a></p>}
+  </div>;
+}
+export default function ContractNews({ticker,model='validated',initial=null,articles=[],feedback,onEvidence}){
   const [mode,setMode]=useState('summary'),[reddit,setReddit]=useState(false),[x,setX]=useState(false),[value,setValue]=useState(initial),[loading,setLoading]=useState(!initial),[error,setError]=useState('');
   const request=useRef(null);
   const load=useCallback(async ({includeReddit=false,includeX=false,preview=false}={})=>{
     request.current?.abort();const controller=new AbortController();request.current=controller;setLoading(true);setError('');
-    const params=new URLSearchParams({ticker,reddit:includeReddit?'1':'0',x:includeX?'1':'0',preview:preview?'1':'0'});
+    const params=new URLSearchParams({ticker,model,reddit:includeReddit?'1':'0',x:includeX?'1':'0',preview:preview?'1':'0'});
     try{
       const result=await api('/api/workspace/evidence?'+params,{signal:controller.signal});
       if(result.ticker!==ticker)throw new Error('The returned news belongs to another contract. Refresh to check the selected contract.');
-      if(!controller.signal.aborted){setValue(result);onEvidence?.(result);}
+      if(!controller.signal.aborted){setValue(result);onEvidence?.(result,!preview);}
     }catch(error){if(!controller.signal.aborted&&error.name!=='AbortError')setError(error.message);}
     finally{if(!controller.signal.aborted)setLoading(false);}
-  },[ticker,onEvidence]);
+  },[ticker,model,onEvidence]);
   useEffect(()=>{
     if(!initial)load({preview:true});
     return()=>request.current?.abort();
@@ -66,6 +74,7 @@ export default function ContractNews({ticker,initial=null,articles=[],onEvidence
     {error&&<p className="notice error" role="alert">{error}</p>}
     {value&&<>
       <div className="reading-copy news-brief"><h4><Newspaper size={16}/>{long?'The full brief':'Quick read'}</h4>
+        <ModelImpact feedback={value.model_feedback||feedback}/>
         {long&&value.news_sections?.length?value.news_sections.map(row=><div className="news-brief-section" key={row.heading}><h5>{row.heading}</h5><p>{row.text}{safeURL(row.url)&&<> <a href={row.url} target="_blank" rel="noreferrer">Open source <ArrowUpRight size={12}/></a></>}</p></div>):
           <ReadText value={long?(value.news_long_read||value.long_read||value.news_summary||value.summary):(value.news_summary||value.summary)}/>}
       </div>

@@ -5,7 +5,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {createResearchServer,handleMCP,publicResearch,boundPacket} from '../lib/workspace/mcp.mjs';
-import {serviceAuthorized,parseAssistantInput,reserveAssistant,assistantResponse} from '../lib/workspace/assistant.mjs';
+import {serviceAuthorized,parseAssistantInput,reserveAssistant,assistantResponse,explainContract,explainResearchMath} from '../lib/workspace/assistant.mjs';
 import {createMarketServer,requestIdentity} from '../cloud/server.mjs';
 import {MarketFeed} from '../lib/cloud/feed.mjs';
 import {streamText} from 'ai';
@@ -69,6 +69,28 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   const research=await client.callTool({name:'get_research',arguments:{ticker}});assert.equal(packet(research).opinion.side,'PASS');assert.ok(!JSON.stringify(research).includes('PRIVATE_CATALOG_SENTINEL'));
   const retained=await client.callTool({name:'search_retained_evidence',arguments:{ticker,query:'reported availability'}});assert.equal(packet(retained).citations[0].citation_id,'E1');assert.equal(packet(retained).sources[0].url,source);
   const other=await client.callTool({name:'search_retained_evidence',arguments:{ticker:'KXCPI-26NOV-T0.2',query:'private journals'}});assert.equal(other.isError,true);
+});
+test('MCP asks for exact NBA availability and its readbacks distinguish lineup risk from the baseline',async t=>{
+  const now=Date.now(),as_of=new Date(now).toISOString(),fixture='401';
+  const url='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event='+fixture;
+  const feedback={status:'available',fixture_id:fixture,baseline_probability:.61,decision_interval:[.47,.69],
+    source:{url,retrieved_at:as_of},scenarios:[{name:'Test Player',status:'Out',conditional_probability:.54}]};
+  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,workspaceResearch:async (selected,options)=>{
+    assert.equal(selected,ticker);assert.equal(options.refreshAvailability,true);
+    return {ticker,as_of,forecast:{probability:.61,interval:[.47,.69],source_as_of:as_of,availability_feedback:feedback}};
+  }}});
+  const client=new Client({name:'lineup-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
+  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
+  const value=packet(await client.callTool({name:'get_research',arguments:{ticker}}));
+  for(const explain of [explainContract,explainResearchMath]){
+    const answer=explain(value,ticker,now);
+    assert.match(answer,/baseline stays at 61\.0% YES/);
+    assert.match(answer,/54\.0% YES/);
+    assert.match(answer,/47\.0% to 69\.0%.*fill price, fees and safety buffer/);
+    assert.ok(answer.includes('[ESPN game availability]('+url+')'));
+  }
+  const wrong={...value,forecast:{...value.forecast,availability_feedback:{...feedback,fixture_id:'402'}}};
+  assert.doesNotMatch(explainContract(wrong,ticker,now),/Test Player/);
 });
 test('HTTP MCP initialization and tool calls require backend authorization',async t=>{
   const url=await listen(t,{mcp:(req,res,body,options)=>handleMCP(req,res,body,{...options,dependencies})});
