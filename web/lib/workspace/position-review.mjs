@@ -119,6 +119,8 @@ function decisionSections(input,{evaluation,action,book,history,flow,news,feedba
     const scenarios=feedback.scenarios.map(row=>row.name+' ('+row.status+'): '+percent(row.conditional_probability)+' YES in this scenario, using '+row.dnp_games+' games missed and '+row.regular_games+' games with regular minutes.');
     sections.push({heading:'How lineup evidence changes the risk',text:'The team model starts at '+percent(feedback.baseline_probability)+' YES. '+scenarios.join(' ')+
       ' The scan uses the wider YES range of '+feedback.decision_interval.map(percent).join(' to ')+' when comparing hold value with current bids.'});
+  }else if(feedback?.status==='unavailable'&&feedback.source?.url&&p.forecast_fresh&&Number.isFinite(feedback.baseline_probability)){
+    sections.push({heading:'Lineup check',text:'The team model stays at '+percent(feedback.baseline_probability)+' YES. '+feedback.reason});
   }
   const signal=history?.ticker===input.ticker?history.market_signal:null;
   const changes=signal?.status==='available'&&Number.isFinite(signal.last_midpoint)&&Number.isFinite(signal.prediction)&&Date.parse(signal.observed_at)>=now-180000;

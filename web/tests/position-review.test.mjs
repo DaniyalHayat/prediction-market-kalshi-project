@@ -53,6 +53,14 @@ test('automatic and manual paper scans account for a matched lineup scenario bef
   const baseResearch=dependencies.workspaceResearch;
   assert.equal((await reviewPaperPosition(position,{dependencies})).action,'HOLD');
   dependencies.workspaceResearch=async(ticker,options)=>{
+    const value=await baseResearch(ticker,options);
+    return {...value,forecast:{...value.forecast,availability_feedback:{status:'unavailable',baseline_probability:.51,
+      reason:'There are too few comparable games.',source:{url:'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=100'}}}};
+  };
+  const insufficient=await reviewPaperPosition(position,{dependencies});
+  assert.equal(insufficient.action,'HOLD');
+  assert.match(insufficient.sections.find(row=>row.heading==='Lineup check').text,/51% YES.*too few comparable games/);
+  dependencies.workspaceResearch=async(ticker,options)=>{
     assert.equal(options.refreshAvailability,true);
     const value=await baseResearch(ticker,options);
     const feedback={status:'available',baseline_probability:.51,decision_interval:[.30,.63],
