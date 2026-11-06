@@ -7,7 +7,7 @@ export const WORKSPACE_CATEGORIES = [
   {id:'sports',name:'Sports',sourceCategories:['Sports'],preferred:['KXNBAGAME','KXNFLGAME','KXEPLGAME','KXUCLGAME']},
   {id:'macro',name:'Economy',preferred:['KXCPI','KXU3','KXFEDDECISION']},
   {id:'crypto',name:'Crypto',preferred:['KXBTC15M','KXBTC','KXETH']},
-  {id:'travel',name:'Travel',preferred:['KXTSAD','KXTSA']},
+  {id:'travel',name:'Travel',preferred:['KXTSAD','KXTSA','KXTSAW','KXORDPAX','KXRDUVISITS','KXBOIPASSENGERS']},
   {id:'weather',name:'Weather',preferred:['KXHIGHNY','KXHIGHCHI','KXHIGHMIA','KXHIGHLAX']},
   {id:'science',name:'Tech & science',sourceCategories:['Science and Technology'],preferred:['KXLLM1','KXTOPMODEL','KXSPACEXCOUNT']},
   {id:'climate',name:'Climate',sourceCategories:['Climate and Weather'],preferred:['KXHURRICANE','KXRAINNYC']},
