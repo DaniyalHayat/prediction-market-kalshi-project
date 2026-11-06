@@ -4,6 +4,7 @@ import {readJSON} from './transport.mjs';
 import {observeProviderAttempt} from './runtime/telemetry.mjs';
 
 export const BASE = "https://external-api.kalshi.com/trade-api/v2";
+const exactMarketDataPath = /^\/(?:markets\/(?!trades$|orderbooks$)[^/]+(?:\/orderbook)?|series\/[^/]+\/markets\/[^/]+\/candlesticks)$/;
 // Optional public-data service; credentials are sent only to the official exchange.
 const DATA_SERVICE = (process.env.KALSHI_DATA_SERVICE_URL || "").replace(/\/$/, "");
 export const VERTICALS = { Macro: ["KXFEDDECISION", "KXCPI", "KXU3"], Sports: ["KXNBAGAME", "KXNFLGAME"], Travel: ["KXTSA", "KXTSAD"], Weather: ["KXHIGHNY","KXHIGHCHI","KXHIGHMIA"], Crypto: ["KXBTC","KXETH"] };
@@ -136,6 +137,9 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
         if (!state.providerCooldown || cooldown.until > state.providerCooldown.until) state.providerCooldown=cooldown;
         while (state.cooldowns.size>256) state.cooldowns.delete(state.cooldowns.keys().next().value);
         throw upstreamError(429,seconds);
+      }
+      if (response.status === 404 && exactMarketDataPath.test(path)) {
+        throw Object.assign(new Error("The selected contract was not found in the current Kalshi market catalog."), {status:404,upstream_status:404});
       }
       throw upstreamError(response.status);
     }
