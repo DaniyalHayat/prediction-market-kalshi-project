@@ -87,7 +87,8 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]};
   });
   register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker},async({ticker})=>{
-    const research=await deps.workspaceResearch(ticker,{assistant:true,model:modelScope}),packet=publicResearch(research);
+    const research=await deps.workspaceResearch(ticker,{assistant:true,model:modelScope,
+      ...(/^KXNBAGAME-/.test(ticker)?{refreshAvailability:true}:{})}),packet=publicResearch(research);
     if(research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
     const evidence=await deps.contractEvidence(research.market,{enabled:true,selectedTicker:ticker,redditEnabled:false,includeX:false,headlineMode:'official',
       sports:research.extensions?.sports,settlementSources:research.rules?.settlement_sources}).catch(()=>null);
