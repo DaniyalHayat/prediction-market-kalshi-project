@@ -120,6 +120,10 @@ test('Ask Why shows how fresh exact-game availability changes the paper screen w
   assert.match(answer,/wider decision range is 47\.0% to 69\.0%/);
   assert.match(answer,/fees and its safety buffer/);
   assert.ok(answer.includes('[ESPN game availability]('+url+')'));
+  const insufficient=await read({...feedback,status:'unavailable',scenarios:[],reason:'There are too few comparable games.'});
+  assert.match(insufficient,/Lineup check/);
+  assert.match(insufficient,/kept the team-strength estimate at 61\.0% YES\. There are too few comparable games/);
+  assert.match(insufficient,/Headline mentions alone carry zero weight/);
   assert.doesNotMatch(await read({...feedback,fixture_id:'402'}),/What the lineup changes/);
   assert.doesNotMatch(await read({...feedback,source:{url,retrieved_at:new Date(now-1200001).toISOString()}}),/What the lineup changes/);
 });

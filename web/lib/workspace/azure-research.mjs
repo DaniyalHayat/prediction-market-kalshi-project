@@ -172,13 +172,17 @@ function fullModelNotes(research,now){
 function availabilityFacts(forecast,ticker,now,full){
   const feedback=forecast?.availability_feedback,source=feedback?.source;
   const url=publicSource(source?.url),base=percent(feedback?.baseline_probability),range=feedback?.decision_interval;
-  if(!/^KXNBAGAME-/.test(ticker)||feedback?.status!=='available'||!url||
+  if(!/^KXNBAGAME-/.test(ticker)||!['available','unavailable'].includes(feedback?.status)||!url||
     !fresh(source?.retrieved_at,now,1200000)||!base||feedback.baseline_probability!==forecast.probability||
     !Array.isArray(range)||range.length!==2||!range.every(value=>percent(value))||
     range[0]>forecast.probability||range[1]<forecast.probability)return [];
   const endpoint=new URL(url);
   if(endpoint.hostname!=='site.api.espn.com'||endpoint.pathname!=='/apis/site/v2/sports/basketball/nba/summary'||
     endpoint.searchParams.get('event')!==String(feedback.fixture_id))return [];
+  const citation=link({url,label:'ESPN game availability'})+' (checked '+date(source.retrieved_at)+').';
+  if(feedback.status==='unavailable')return ['The lineup check kept the team-strength estimate at '+base+' YES. '+
+    (clean(feedback.reason,250)||'The matchup lacks the dated comparison games needed to estimate a lineup effect.')+
+    ' Headline mentions alone carry zero weight in the paper decision. '+citation];
   const scenarios=rows(feedback.scenarios).flatMap(row=>{
     const player=clean(row?.name,100),conditional=percent(row?.conditional_probability),status=clean(row?.status,20);
     if(!player||!conditional||!/^(out|suspended)$/i.test(status))return [];
@@ -197,8 +201,7 @@ function availabilityFacts(forecast,ticker,now,full){
     'The '+(widened?'wider ':'')+'decision range is '+decisionRange+'. '+(forecast.eligible===true?
       'The paper screen uses the conservative end of the range against the actual entry cost, including fees and its safety buffer. A price that looked attractive can become a pass.':
       'The range can inform a paper scenario. A recommendation still requires a released forecast and current executable quotes.'),
-    'The comparisons are separate stress tests. The historical splits cannot establish how much one player causes a win chance to move. '+link({url,label:'ESPN game availability'})+
-      ' (checked '+date(source.retrieved_at)+').'];
+    'The comparisons are separate stress tests. The historical splits cannot establish how much one player causes a win chance to move. '+citation];
 }
 
 function settlementExample(research,ticker,now){
@@ -335,7 +338,7 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
     }
     if(validForecast&&(!panel||['analysis','paper','evidence','execution'].includes(panel))){
       const lineup=availabilityFacts(forecast,ticker,now,full);
-      if(lineup.length)parts.push('## What the lineup changes',...lineup);
+      if(lineup.length)parts.push(forecast.availability_feedback?.status==='available'?'## What the lineup changes':'## Lineup check',...lineup);
     }
     if(panel==='paper'||panel==='analysis'||full&&!panel){
       const comparison=paperFacts(research,ticker,now,full);
