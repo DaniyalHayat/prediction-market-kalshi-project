@@ -300,6 +300,7 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
   const modeled = validForecast(row);
   const forecast = modeled ? { ...row, probability: row.probability, interval: [...row.interval], evidence: modelEvidence(row) }
     : { probability: null, interval: null, model_name: null, validation: null,
+      source_name: row?.source_name, source_url: row?.source_url, source_as_of: row?.source_as_of, source_sha256: row?.source_sha256,
       evidence: { tier: 0, label: 'Probability withheld' }, reason: row?.reason || (!category
         ? 'No independent probability model is mapped to this exact series. Market quotes and headlines are evidence, not a substitute probability.'
         : report?.errors?.join('; ') || 'The exact contract has no supported independent forecast at this time.') };
@@ -345,8 +346,10 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
     reasons, candidates, assumptions: { contracts, slippage_cents: slippage, fee_coefficient: coefficient, uncertainty_buffer,
       fee_note: 'The coefficient is an explicit taker-fee assumption, not a verified market-specific fee schedule.' },
     validation_note: 'Passing an underlying-value holdout does not establish calibrated contract probabilities or profitable net trading. A screen is not an order or a profit claim.' };
+  const forecastLabel = forecast.evidence.tier === 1 ? 'The uncalibrated proxy estimates' : 'The independent model estimates';
+  const rangeLabel = forecast.evidence.tier === 1 ? 'sensitivity range' : 'uncertainty range';
   const summary = !modeled ? `${clean(market.title, 240)}: evidence only. ${forecast.reason}`
-    : `The independent model estimates ${percent(forecast.probability)} YES, with a ${percent(forecast.interval[0])}–${percent(forecast.interval[1])} uncertainty/sensitivity range. `
+    : `${forecastLabel} ${percent(forecast.probability)} YES, with a ${percent(forecast.interval[0])}–${percent(forecast.interval[1])} ${rangeLabel}. `
       + (best ? `${best.side.toUpperCase()} clears modeled filled-book cost, assumed fees and the ${(100 * uncertainty_buffer).toFixed(1)}¢ extra buffer by ${(100 * best.conservative_edge).toFixed(1)}¢ at the conservative bound. This remains an unproven research hypothesis.`
         : `${decision.label}. ${reasons[0] || 'No verified executable cost advantage was established.'}`);
   const sources = [{ kind: 'official_market', label: 'Kalshi market and settlement rules', url: publicURL(detail.source_url), retrieved_at: detail.as_of }];
@@ -354,7 +357,7 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
     if (result) sources.push({ kind, label: kind === 'official_series' ? 'Kalshi series metadata' : 'Kalshi event metadata', url: publicURL(result.source_url), retrieved_at: result.as_of, sha256: result.sha256 });
   }
   if (depth) sources.push({ kind: 'order_book', label: 'Kalshi public order book', url: publicURL(depth.source_url), retrieved_at: depth.as_of });
-  if (modeled) sources.push({ kind: 'independent_model', label: clean(forecast.source_name || forecast.model_name, 200), url: publicURL(forecast.source_url), retrieved_at: forecast.source_as_of, sha256: forecast.source_sha256 });
+  if (modeled || forecast.source_url) sources.push({ kind: 'independent_model', label: clean(forecast.source_name || forecast.model_name, 200), url: publicURL(forecast.source_url), retrieved_at: forecast.source_as_of, sha256: forecast.source_sha256 });
   if (news?.retrieved_at) sources.push({ kind: 'headline_metadata', label: (news.provider || 'News') + ' headline metadata', url: publicURL(news.source_url), retrieved_at: news.retrieved_at, sha256: news.sha256 });
   return { ticker, title: clean(market.title, 240), as_of: new Date(now).toISOString(),
     status: modeled ? 'modeled' : 'evidence_only', category: category ? { id: category.id, name: category.name } : { id: 'unsupported', name: profile?.category || 'Evidence only' }, series,

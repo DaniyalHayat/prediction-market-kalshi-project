@@ -43,7 +43,7 @@ function prepareModels(category, sources) {
   }
   return models;
 }
-function distribution(market, category, bundle, models, now=Date.now()) {
+export function distribution(market, category, bundle, models, now=Date.now()) {
   const id=category.id, date=eventDate(market), bounds=marketBounds(market,["weather","travel"].includes(id) ? 1 : ["inflation","labor"].includes(id) ? .1 : .01);
   if(!bounds) return {reason:"Unsupported or ambiguous strike definition; probability withheld."};
   if(!date) return {reason:"Target observation date could not be read unambiguously."};
@@ -87,14 +87,18 @@ function distribution(market, category, bundle, models, now=Date.now()) {
     const latestObservation=source.observation?.rows.at(-1)?.date;
     if(horizon===0 && (localHour>=8 && (!latestObservation || now-Date.parse(latestObservation)>3*3600000))) return {reason:"Today’s observed daily maximum is incomplete or stale; a fresh matching-station observation is required."};
     const center=Math.max(observedMax,...periods.map(row=>row.value)), sigma=2.5+.6*horizon;
-    const probability=gaussianProbability(center,sigma,bounds,observedMax);
-    const variants=[.7,1,1.5].flatMap(multiplier=>[-1,0,1].map(shift=>gaussianProbability(center+shift,sigma*multiplier,bounds,observedMax)));
-    return {probability,interval:[Math.min(...variants),Math.max(...variants)],interval_kind:"Assumed forecast-error sensitivity band; not a calibrated confidence interval",
-      n:0,effective_n:0,center,range_80:[Math.max(observedMax,center-1.281551566*sigma),center+1.281551566*sigma],
+    const probability=gaussianProbability(center,sigma,bounds);
+    const variants=[probability,...[.7,1,1.5].flatMap(multiplier=>[-1,0,1].map(shift=>gaussianProbability(center+shift,sigma*multiplier,bounds)))];
+    const interval=[Math.min(...variants),Math.max(...variants)];
+    const saturated=probability===0 || probability===1 || interval[0]===interval[1];
+    return {probability:saturated ? null : probability,interval:saturated ? null : interval,
+      ...(saturated ? {reason:"The weather proxy cannot resolve this strike within the assumed error range."} : {}),
+      interval_kind:"Assumed forecast-error sensitivity band; not a calibrated confidence interval",
+      n:0,effective_n:0,center,range_80:[center-1.281551566*sigma,center+1.281551566*sigma],
       target_date:date,source_name:source.name,source_url:source.source_url,source_as_of:source.retrieved_at,source_sha256:source.sha256,model_name:category.model,
       inputs:{station:site.station,horizon_days:horizon,forecast_hours:periods.length,observed_max:Number.isFinite(observedMax) ? observedMax : null,assumed_sigma_f:sigma},
       validation:null,warnings:[source.revision_note,"Forecast-error sigma is an explicit assumption; no archived NWS forecast backtest is available.",
-        "A grid-point forecast is not the exact climate-report station. Sensitivity is not calibrated prediction accuracy."]};
+        "Preliminary NWS observations inform the forecast center. The contract's named settlement report determines the outcome."]};
   }
   const asset=market.series==="KXBTC" ? "BTC" : market.series==="KXETH" ? "ETH" : null;
   const source=bundle.sources.find(row=>row.asset===asset);
@@ -142,7 +146,7 @@ function marketReport(market, category, bundle, models, now) {
     strike_type:market.strike_type,floor_strike:market.floor_strike,cap_strike:market.cap_strike,volume_24h:number(market.volume_24h_fp),
     rules_primary:market.rules_primary || null,...forecast,...quote,
     evidence,
-    status:forecast.probability===undefined ? "withheld" : evidence.tier===0 ? "validation warning" :
+    status:!Number.isFinite(forecast.probability) ? "withheld" : evidence.tier===0 ? "validation warning" :
       quote.side && quote.conservative_edge>0 ? evidence.tier===2 ? "research candidate" : "provisional hypothesis" : "no conservative edge"};
 }
 export async function researchReport(id) {
