@@ -14,7 +14,7 @@ import {MockLanguageModelV4,simulateReadableStream} from 'ai/test';
 const ticker='KXNBAGAME-26NOV07SASPOR-SAS',secret='service-test-'.repeat(5),edgeSecret='edge-test-'.repeat(5);
 const source='https://external-api.kalshi.com/trade-api/v2/markets/'+ticker;
 const dependencies={marketDetails:async()=>({market:{ticker,title:'San Antonio wins',yes_sub_title:'San Antonio',status:'active',rules_primary:'The exact selected outcome.'},source_url:source,as_of:'2026-11-04T12:00:00Z'}),
-  book:async()=>({metrics:{book_bid:.4,book_ask:.42},raw:{orderbook_fp:{yes_dollars:[['.4','10']],no_dollars:[['.58','10']]}},source_url:source+'/orderbook',as_of:'2026-11-04T12:00:00Z'}),
+  book:async()=>({ticker,metrics:{book_bid:.4,book_ask:.42},raw:{orderbook_fp:{yes_dollars:[['.4','10']],no_dollars:[['.58','10']]}},source_url:source+'/orderbook',as_of:new Date().toISOString()}),
   workspaceResearch:async()=>({ticker,summary:'PASS: independent holdout not established',opinion:{side:'PASS'},sources:[{url:source}],extensions:{music:{spotify:{references:[{name:'PRIVATE_CATALOG_SENTINEL'}]}}}}),
   contractHistory:async()=>({ticker,rows:[{time:'2026-11-04T12:00:00Z',value:.4}]}),warehouseStatus:async()=>({configured:true,source_batches:3}),providerStatus:()=>[],
   searchRetainedEvidence:async(t,query)=>({ticker:t,status:'available',citations:[{citation_id:'E1',text:'Synthetic retained source fixture.',url:source}],sources:[{url:source}],query})};
@@ -49,6 +49,31 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   const research=await client.callTool({name:'get_research',arguments:{ticker}});assert.equal(packet(research).opinion.side,'PASS');assert.ok(!JSON.stringify(research).includes('PRIVATE_CATALOG_SENTINEL'));
   const retained=await client.callTool({name:'search_retained_evidence',arguments:{ticker,query:'reported availability'}});assert.equal(packet(retained).citations[0].citation_id,'E1');assert.equal(packet(retained).sources[0].url,source);
   const other=await client.callTool({name:'search_retained_evidence',arguments:{ticker:'KXCPI-26NOV-T0.2',query:'private journals'}});assert.equal(other.isError,true);
+});
+test('contract MCP withholds unusable quotes but keeps matching settlement rules',async t=>{
+  const current=await dependencies.book(),expected='KXCPI-26NOV-T0.2';
+  const books=[{...current,ticker:expected},{...current,as_of:new Date(Date.now()-91000).toISOString()},
+    {...current,as_of:new Date(Date.now()+60000).toISOString()},{...current,metrics:{...current.metrics,book_state:'crossed'}},null];
+  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,book:async()=>books.shift()}}),
+    client=new Client({name:'unusable-book-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
+  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
+  for(let i=0;i<5;i++){
+    const result=packet(await client.callTool({name:'get_contract',arguments:{ticker}}));
+    assert.equal(result.market.ticker,ticker);assert.match(result.rules.primary,/exact selected outcome/);
+    assert.equal(result.book.status,'unavailable');assert.equal(result.book.as_of,undefined);
+    assert.deepEqual(result.book.yes_bid_levels,[]);assert.deepEqual(result.book.no_bid_levels,[]);
+    assert.equal(result.quotes.yes_ask_usd,null);assert.equal(result.quotes.no_ask_usd,null);
+    assert.deepEqual(result.sources.map(row=>row.label),['Kalshi contract']);
+  }
+});
+test('public MCP tools never return upstream exception text',async t=>{
+  const marker='test-upstream-private-sentinel';
+  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,warehouseStatus:async()=>{throw new Error(marker);}}}),
+    client=new Client({name:'upstream-error-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
+  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
+  const result=await client.callTool({name:'get_source_status',arguments:{}});
+  assert.equal(result.isError,true);assert.equal(packet(result).status,'unavailable');
+  assert.match(packet(result).reason,/temporarily unavailable/);assert.doesNotMatch(JSON.stringify(result),new RegExp(marker));
 });
 test('HTTP MCP initialization and tool calls require backend authorization',async t=>{
   const url=await listen(t,{mcp:(req,res,body,options)=>handleMCP(req,res,body,{...options,dependencies})});

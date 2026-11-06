@@ -3,7 +3,7 @@ import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/st
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {z} from 'zod';
-import {marketDetails,book,validateTicker} from '../live.mjs';
+import {marketDetails,book,number,validateTicker} from '../live.mjs';
 import {workspaceResearch,contractHistory} from './router.mjs';
 import {providerStatus} from './providers.mjs';
 import {warehouseStatus} from './warehouse.mjs';
@@ -69,13 +69,17 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
   }
   const register=(name,description,inputSchema,handler)=>server.registerTool(name,{description,inputSchema,
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true}},async input=>{
-      try{if(input.ticker)check(input.ticker);return output(await handler(input));}
-      catch(error){return {isError:true,content:[{type:'text',text:JSON.stringify({status:'unavailable',reason:error.message})}]};}
+      try{if(input.ticker)check(input.ticker);}
+      catch(error){return {isError:true,...output({status:'unavailable',reason:error.message})};}
+      try{return output(await handler(input));}
+      catch{return {isError:true,...output({status:'unavailable',reason:'The selected public research source is temporarily unavailable.'})};}
     });
   register('get_contract','Read the selected public contract rules, exact outcome identity and current public order book. No account or order access.',{ticker},async({ticker})=>{
-    const [detail,depth]=await Promise.all([deps.marketDetails(ticker),deps.book(ticker,1).catch(()=>null)]);
-    const m=detail.market;
-    const levels=side=>(depth?.raw?.orderbook_fp?.[side]||[]).map(([price,quantity])=>({bid_price_usd_per_contract:Number(price),quantity_contracts:Number(quantity)}))
+    const [detail,observed]=await Promise.all([deps.marketDetails(ticker),deps.book(ticker,1).catch(()=>null)]);
+    const m=detail?.market,age=Date.now()-Date.parse(observed?.as_of);
+    if(m?.ticker!==ticker)throw new Error('Mismatched market details');
+    const depth=observed?.ticker===ticker&&age>=-5000&&age<=90000&&observed.metrics?.book_state!=='crossed'?observed:null;
+    const levels=side=>(depth?.raw?.orderbook_fp?.[side]||[]).map(([price,quantity])=>({bid_price_usd_per_contract:number(price),quantity_contracts:number(quantity)}))
       .filter(row=>Number.isFinite(row.bid_price_usd_per_contract)&&row.bid_price_usd_per_contract>=0&&row.bid_price_usd_per_contract<=1&&Number.isFinite(row.quantity_contracts)&&row.quantity_contracts>0)
       .sort((a,b)=>b.bid_price_usd_per_contract-a.bid_price_usd_per_contract).slice(0,12);
     return {ticker,market:{ticker:m.ticker,event_ticker:m.event_ticker,title:m.title,yes_sub_title:m.yes_sub_title,status:m.status,
@@ -84,8 +88,9 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
       quotes:{unit:'USD per contract with a $1 binary settlement payout',yes_ask_usd:depth?.metrics?.book_ask??null,
         no_ask_usd:Number.isFinite(depth?.metrics?.book_bid)?Math.round((1-depth.metrics.book_bid)*1e8)/1e8:null,
         costs_note:'Visible asks exclude entry fees, slippage and quantity-dependent depth. Quote percentages are not independent model probabilities.'},
-      account_balances_available:false,book:{as_of:depth?.as_of,yes_bid_levels:levels('yes_dollars'),no_bid_levels:levels('no_dollars'),
-        note:'Displayed quantities are public bid liquidity in contracts. Buying YES uses opposite NO bids at 1 minus bid price, and conversely for buying NO.'},
+      account_balances_available:false,book:{status:depth?'available':'unavailable',as_of:depth?.as_of,yes_bid_levels:levels('yes_dollars'),no_bid_levels:levels('no_dollars'),
+        note:depth?'Displayed quantities are public bid liquidity in contracts. Buying YES uses opposite NO bids at 1 minus bid price, and conversely for buying NO.':
+          'A fresh, matching order book was unavailable.'},
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},...(depth?[{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]:[])]};
   });
   register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker,include_reporting:z.boolean().default(true)},async({ticker,include_reporting})=>{
