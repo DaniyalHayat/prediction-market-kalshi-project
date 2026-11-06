@@ -38,6 +38,8 @@ try {
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto('http://127.0.0.1:' + server.address().port)
   await page.getByRole('heading', {name: 'Operations review'}).waitFor()
+  assert.equal(await page.locator('.workspace-layout').evaluate(el => getComputedStyle(el).display), 'grid',
+    'The same-origin workbench stylesheet loads under the operator CSP')
   const tokenInput = page.getByLabel('Operator token')
   await page.getByRole('button', {name: 'Run and archive'}).click()
   await page.getByText('Enter a 32–256 character operator token without spaces.').waitFor()

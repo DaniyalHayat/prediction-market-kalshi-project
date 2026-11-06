@@ -57,16 +57,14 @@ h3 { font-size: 16px; font-weight: 640; }
 .rule-editor summary { min-height: 42px; padding: 11px 0 7px; cursor: pointer; }
 .rule-editor summary span { float: right; color: #a8cbeb; margin-inline-start: 6px; font-size: 12px; }
 .rule-editor p { margin: 0 0 8px; color: #c1cad5; font-size: 12px; }
-.rule-form { display: grid; grid-template-columns: 1fr 1fr 1fr minmax(75px, .75fr) auto; align-items: start; gap: 8px; margin-bottom: 10px; }
-.rule-form button { margin-top: 21px; }
+.rule-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 8px; margin-bottom: 10px; }
+.rule-form > * { min-width: 0; }
+.rule-form :is(.fui-Input, .fui-Select) { min-width: 0; width: 100%; }
+.rule-form > button { grid-column: 1 / -1; justify-self: start; }
 .rule-form select, .connector-filter select { min-height: 40px; }
 .active-rules { display: grid; gap: 4px; margin: 6px 0 10px; padding: 0; list-style: none; }
 .active-rules li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 8px; border: 1px solid #414951; border-radius: 6px; font-size: 12px; }
 
-@media (max-width: 1030px) {
-  .rule-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rule-form button { justify-self: start; margin-top: 0; }
-}
 @media (max-width: 700px) {
   .workspace { padding-top: 16px; }
   .workspace-layout { grid-template-columns: minmax(0, 1fr); }

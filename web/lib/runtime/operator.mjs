@@ -60,7 +60,7 @@ export function createOperatorServer({token, readSnapshot, assets, runReview, ev
   return createServer({maxHeaderSize: 8192, headersTimeout: 6000, requestTimeout: 25000}, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const host = req.headers.host || '', origin = req.headers.origin;
     if (!/^(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$/.test(host) || origin && origin !== 'http://' + host) { res.writeHead(403); res.end(); return; }
     if (!req.url || req.url.length > 1024 || !req.url.startsWith('/') || /^\/[\/\\]/.test(req.url)) { res.writeHead(400); res.end(); return; }
