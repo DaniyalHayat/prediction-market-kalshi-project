@@ -50,6 +50,7 @@ test('uncalibrated proxy can be inspected but cannot become a YES/NO screen', as
   const result = await marketBrief(ticker, {}, dependencies({ researchReport: async () => ({ markets: [{ ticker, probability: .99, interval: [.98, 1], source_as_of: new Date(NOW).toISOString(), validation: null }] }) }));
   assert.equal(result.forecast.probability, .99);
   assert.equal(result.decision.side, 'insufficient_edge');
+  assert.match(result.summary, /uncalibrated proxy.*sensitivity range/i);
 });
 test('headlines never alter probability or side; no article bodies are returned', async () => {
   const a = await marketBrief(ticker, {}, dependencies());
