@@ -28,6 +28,7 @@ import {HEADLINE_REPLAY_MAX_BYTES} from '../lib/workspace/proxy.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
+const rateWindowMs=60000,azureHeavyRequestsPerWindow=12;
 function json(res,value,status=200){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
 export function requestIdentity(req,edgeVerified=false){
   const claimed=String(req.headers['x-market-client-ip']||'').trim();
@@ -71,14 +72,18 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
     res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
   }
+  function withinLimit(key,maximum,slot){
+    let item=limits.get(key);
+    if(!item||item.slot!==slot){
+      if(limits.size>4096)return false;
+      item={slot,used:0};limits.set(key,item);
+    }
+    return ++item.used<=maximum;
+  }
   function allowed(identity){
-    const current=now(),slot=Math.floor(current/60000);
+    const slot=Math.floor(now()/rateWindowMs);
     if(limits.size>2048)for(const [key,value] of limits)if(value.slot<slot)limits.delete(key);
-    const update=(key,maximum)=>{
-      let item=limits.get(key);if(!item||item.slot!==slot){if(limits.size>4096)return false;item={slot,used:0};limits.set(key,item);}
-      return ++item.used<=maximum;
-    };
-    return update('global',1200)&&update(identity,120);
+    return withinLimit('global',1200,slot)&&withinLimit(identity,120,slot);
   }
   async function quota(weight=1){
     if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
@@ -255,6 +260,17 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       if(edgeVerified&&!isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'This service is unavailable in your region'},403);
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
       if(!['GET','POST','PUT'].includes(req.method))return json(res,{error:'Method not allowed'},405);
+      const fullEvidence=req.method==='GET'&&url.pathname==='/api/workspace/evidence'&&url.searchParams.get('preview')!=='1';
+      const headlineReplay=url.pathname==='/api/workspace/graphql';
+      const heavyWork=fullEvidence||(req.method==='POST'&&headlineReplay)||
+        (req.method==='GET'&&(url.pathname==='/api/workspace/execution-research'||url.pathname==='/api/workspace/recommendations'));
+      if(isAzure&&heavyWork){
+        const current=now(),slot=Math.floor(current/rateWindowMs);
+        if(!withinLimit('heavy#'+identity,azureHeavyRequestsPerWindow,slot)){
+          res.setHeader('Retry-After',String(Math.ceil(((slot+1)*rateWindowMs-current)/1000)));
+          return json(res,{error:'Research requests are arriving too quickly. Retry shortly.'},429);
+        }
+      }
       if(url.pathname==='/api/session'||url.pathname.startsWith('/api/account/')){
         await quota(2);const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
         const handler=makeAccountHandler({storage:storageEnabled()?storage():null,secret:process.env.ACCOUNT_COOKIE_SECRET||serviceSecret,secure:production,...accountOptions});
@@ -269,7 +285,6 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await resolveContracts(url.searchParams.get('q')));}
       if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await marketFees(url.searchParams.get('ticker')));}
       if(req.method==='POST'&&!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
-      const headlineReplay=url.pathname==='/api/workspace/graphql';
       const raw=req.method==='POST'?await readBody(req,headlineReplay?HEADLINE_REPLAY_MAX_BYTES:undefined):'';
       if(url.pathname==='/api/journal'){
         if(!storageEnabled())return json(res,{error:'The durable journal is not connected'},503);
@@ -281,7 +296,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:headlineReplay?6:url.pathname==='/api/workspace/position-review'?5:
+      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:(headlineReplay||(isAzure&&fullEvidence))?6:url.pathname==='/api/workspace/position-review'?5:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={privateRuntime:true,params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
