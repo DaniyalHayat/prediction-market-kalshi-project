@@ -173,6 +173,12 @@ try{
   const mobile=page.getByRole('dialog',{name:'Contract research assistant'});
   await mobile.getByText('Fixture answer for KXTEST-BETA (history).',{exact:true}).waitFor();
   assert.equal(await mobile.getAttribute('aria-modal'),'true');
+  const modes=mobile.getByRole('group',{name:'Ask Why view'});
+  const inactive=await modes.getByRole('button',{name:'Test the idea'}).evaluate(button=>({
+    background:getComputedStyle(button).backgroundColor,height:button.getBoundingClientRect().height,
+  }));
+  assert.equal(inactive.background,'rgba(0, 0, 0, 0)','Unselected controls use the app surface');
+  assert.ok(inactive.height>=44,'Mobile view controls keep a 44px target');
   await mobile.getByRole('button',{name:'Close assistant'}).click();
   assert.equal(await mobileTrigger.evaluate(button=>document.activeElement===button),true);
   assert.deepEqual(errors,[]);

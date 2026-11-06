@@ -21,7 +21,12 @@
 .assistant-eyebrow span { padding: 0 4px; color: var(--muted); }
 .assistant-identity code,.assistant-identity small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .assistant-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 5px; margin: 10px 14px 0; border: 1px solid var(--line); border-radius: 9px; }
-.assistant-modes button { display: flex; gap: 6px; align-items: center; justify-content: center; min-height: 40px; border-radius: 6px; color: var(--muted); font-weight: 550; font-size: 13px; }
+.assistant-modes button,.assistant-next button,.explain-lab-tools button,.explain-lab-actions button {
+  background: transparent;
+  color: var(--ink);
+}
+.assistant-modes button { display: flex; gap: 6px; align-items: center; justify-content: center; min-height: 44px; border-radius: 6px; font-weight: 550; font-size: 13px; }
+.assistant-modes button:hover,.explain-lab-tools button:hover { background: var(--soft); }
 .assistant-modes button[aria-pressed="true"] { background: var(--soft); color: var(--ink); }
 .assistant-modes button[aria-pressed="true"] svg { color: var(--explain-mark); }
 .assistant-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; padding: 16px 15px 20px; scrollbar-gutter: stable; }
@@ -46,9 +51,9 @@
 .assistant-question { background: var(--soft); border-radius: 8px; margin: 10px 0; padding: 10px 11px; font-size: 13px; overflow-wrap: anywhere; }
 .assistant-question small { color: var(--muted); display: block; margin-bottom: 4px; }
 .assistant-next h3 { color: var(--muted); font-size: 12px; margin: 18px 0 4px; }
-.assistant-next button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; width: 100%; padding: 8px 2px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+.assistant-next button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; width: 100%; padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
 .assistant-next button svg { color: var(--explain-mark); flex: none; }
-.assistant-next button:hover { color: var(--explain-mark); }
+.assistant-next button:hover { background: var(--soft); color: var(--explain-mark); }
 .assistant-workbench .assistant-form { border-radius: 10px; border-color: var(--line); padding: 5px 6px 5px 11px; margin: 0 14px 4px; gap: 4px; align-items: center; }
 .assistant-workbench .assistant-form:focus-within { border-color: var(--explain-mark); }
 .assistant-workbench .assistant-form textarea { padding: 6px 0; min-height: 36px; font-size: 15px; }
