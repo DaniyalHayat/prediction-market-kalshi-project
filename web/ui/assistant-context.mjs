@@ -8,15 +8,17 @@ const prompts={
   execution:['Execution lab','Explain the execution lab for','Compare the submitted paper scenario with the even-paced schedule, including costs, observed depth and limits.'],
 };
 
-export function assistantContext(panel,ticker,{detail='brief',result,prepare}={}){
-  const [label,prefix,instruction]=prompts[panel];
+export function assistantContext(panel,ticker,{detail='brief',result,prepare,evidence}={}){
+  const prompt=prompts[panel];
+  if(!prompt)return null;
+  const [label,prefix,instruction]=prompt;
   if(result&&(panel!=='execution'||result.ticker!==ticker||!result.controls))return null;
   const executionControls=result?.controls;
   const timestamp=result?.book_as_of||result?.as_of;
   const submitted=executionControls
     ?` Submitted scenario: ${executionControls.action} ${executionControls.side.toUpperCase()}, ${executionControls.contracts} contracts over ${executionControls.horizon_seconds} seconds.${Number.isFinite(Date.parse(timestamp))?' The result used depth observed at '+new Date(timestamp).toISOString()+'.':''}`
     :'';
-  return {panel,detail,label:executionControls?'Submitted execution scenario':label,executionControls,prepare,
+  return {panel,detail,label:executionControls?'Submitted execution scenario':label,executionControls,prepare,evidence,
     question:`${prefix} ${ticker}.${submitted} ${instruction}`};
 }
 

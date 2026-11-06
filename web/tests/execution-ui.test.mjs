@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EXECUTION_DEFAULTS,EXECUTION_FEATURES,executionControls,executionDepth,executionFingerprint,requestExecution} from '../ui/execution-state.mjs';
-import {CONTRACT_TABS,moveContractTab} from '../ui/contract-tabs.mjs';
+import {CONTRACT_TABS,moveContractTab} from '../ui/contract-tabs.ts';
 
 test('execution requests preserve every selected model toggle and numeric assumption without sending unrelated client data',async()=>{
   const controls={...EXECUTION_DEFAULTS,side:'no',action:'sell',contracts:'31',horizon_seconds:'600',risk_aversion:'0',inventory:'-10',order_flow:false,arrival_clustering:false,private_balance:999999};

@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {Download,RefreshCw,Upload,X} from 'lucide-react';
 import {api,exportJSON,dateLabel,percent} from './api.mjs';
-import Modal from './Modal.jsx';
+import Modal from './Modal';
 export function journalToken() {
   let token=localStorage.getItem('market-lab-journal-token');
   if(!/^[a-f0-9]{64}$/.test(token||'')){token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem('market-lab-journal-token',token);}

@@ -4,17 +4,17 @@ import dynamic from 'next/dynamic';
 import {Activity,ArrowLeft,ArrowUpRight,Bitcoin,BookOpen,Check,ChevronDown,CloudSun,Database,ExternalLink,FlaskConical,
   Leaf,Loader2,MessageSquare,Music2,Plane,RefreshCw,Search,Trophy,Landmark,X,Palette,ChartNoAxesCombined,Wallet,LayoutDashboard,FileText,UserRound,Bookmark} from 'lucide-react';
 import {api,API_BASE,cents,count,dollars,percent,dateLabel} from './api.mjs';
-import {initialSelection,selectionReducer,contractTitle,refreshMarketRows} from './selection.mjs';
-import Chart from './Chart.jsx';
-import Modal from './Modal.jsx';
+import {initialSelection,selectionReducer,contractTitle,refreshMarketRows} from './selection';
+import Chart from './Chart';
+import Modal from './Modal';
 import useOpinions from './useOpinions.jsx';
 import Appearance from './Appearance.jsx';
-import {appearance,DEFAULT_PREFERENCES,PREFERENCE_KEY} from './preferences.mjs';
-import {mergeResearchRefresh,researchRefreshDelay} from './research-state.mjs';
-import {researchScreenOpinion,screenFreshness} from './screen-freshness.mjs';
+import {appearance,DEFAULT_PREFERENCES,PREFERENCE_KEY} from './preferences';
+import {mergeResearchRefresh,researchRefreshDelay} from './research-state';
+import {researchScreenOpinion,screenFreshness} from './screen-freshness';
 import ContractNews,{ReadMode,ReadText} from './ContractNews.jsx';
 import useAccount,{toggleSavedMarket} from './useAccount.jsx';
-import {CONTRACT_TABS,moveContractTab} from './contract-tabs.mjs';
+import {CONTRACT_TABS,moveContractTab} from './contract-tabs';
 import {assistantContext} from './assistant-context.mjs';
 import usePaperLedger from './usePaperLedger.jsx';
 import usePositionReviews from './usePositionReviews.jsx';
@@ -25,7 +25,7 @@ const Recommendations=dynamic(()=>import('./Recommendations.jsx'),{loading:()=> 
 const ExecutionLab=dynamic(()=>import('./ExecutionLab.jsx'),{loading:()=> <div className="workspace-empty" role="status">Loading execution lab…</div>});
 const Paper=dynamic(()=>import('./Paper.jsx'));
 const Journal=dynamic(()=>import('./Journal.jsx'));
-const Assistant=dynamic(()=>import('./Assistant.jsx'),{loading:()=> <aside className="assistant-panel" role="status">Opening the research assistant…</aside>});
+const Assistant=dynamic(()=>import('./Assistant'),{loading:()=> <aside className="assistant-panel" role="status"><div className="assistant-heading"><Loader2 size={16} className="spin"/> Opening Ask Why…</div></aside>});
 const Account=dynamic(()=>import('./Account.jsx'));
 const marketPageSize=48;
 const noPositions=[];
@@ -325,7 +325,7 @@ export default function App({paperWorkspace=false}={}) {
           {tab==='execution'&&<ExecutionLab key={market.ticker+'#'+preferences.model} market={market} book={book} fees={selection.fees} clock={clock} closed={closed} onRefreshDepth={refreshExecutionBook} model={preferences.model} initialControls={executionContext?.ticker===market.ticker?executionContext.controls:null} onControlsChange={controls=>setExecutionContext({ticker:market.ticker,controls})} onAssistant={askExecution} paperWorkspace={paperWorkspace}/>}
           {tab==='rules'&&<><div className="section-title"><h3>Settlement rules</h3><AskWhy panel="rules" onAsk={askPanel} label="settlement rules"/></div><p className="rule-text">{market.rules_primary||'No primary rule text was returned. Inspect the exchange contract.'}</p>{market.rules_secondary&&<details className="method"><summary>Secondary rules</summary><p>{market.rules_secondary}</p></details>}<dl className="definition-list"><div><dt>Trading close</dt><dd>{dateLabel(market.close_time)}</dd></div><div><dt>Expected expiration</dt><dd>{dateLabel(market.expected_expiration_time)}</dd></div><div><dt>Status / outcome</dt><dd>{market.status||'Unknown'} / {market.result||'Unsettled'}</dd></div></dl><div className="section-title"><h3>Source records</h3><AskWhy panel="sources" onAsk={askPanel} label="source records"/></div><SourceRows sources={selectedResearch?.sources||[]}/><p className="footnote">Close, expiration and settlement are separate events. Source timestamps and missing evidence remain visible.</p></>}
         </div></>:<div className="contract-placeholder"><Activity size={28}/><h2>Select a contract</h2><p>Its rules, prices and analysis will appear here.</p></div>}</section>
-      {assistantLaunch&&<Assistant key={assistantLaunch.id} market={market} research={selectedResearch} model={assistantLaunch.model} launch={assistantLaunch} onClose={()=>setAssistant(false)}/>}
+      {assistantLaunch&&<Assistant key={assistantLaunch.id} market={market} book={book} fees={selection.fees} research={selectedResearch} history={history} model={assistantLaunch.model} launch={assistantLaunch} onClose={()=>setAssistant(false)}/>}
       </div>}
     </main>
     {journal&&<Journal onClose={()=>setJournal(false)}/>}

@@ -1,0 +1,112 @@
+.assistant-workbench {
+  --explain-mark: #b9a6fc;
+  --explain-tint: color-mix(in srgb, var(--explain-mark) 13%, var(--panel));
+  width: clamp(390px, 30vw, 510px);
+  min-width: 0;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: -18px 0 40px #0003;
+}
+[data-theme="light"] .assistant-workbench { --explain-mark: #5c399b; }
+.assistant-workbench .assistant-heading { height: 68px; padding: 0 18px; }
+.assistant-heading .assistant-brand { gap: 10px; align-items: center; }
+.assistant-glyph { display: grid; place-items: center; width: 37px; height: 37px; border: 1px solid var(--line); border-radius: 9px; background: var(--explain-tint); }
+.assistant-heading .assistant-glyph svg { color: var(--explain-mark); }
+.assistant-brand h2 { margin: 0; font-size: 16px; letter-spacing: -.025em; }
+.assistant-brand small { color: var(--muted); font-size: 12px; }
+.assistant-workbench .icon-button { min-height: 44px; min-width: 44px; }
+.assistant-identity { display: grid; gap: 5px; padding: 13px 18px 15px; background: var(--page); }
+.assistant-identity strong { font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; letter-spacing: -.025em; }
+.assistant-eyebrow { margin: 0; color: var(--explain-mark); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .1em; }
+.assistant-eyebrow span { padding: 0 4px; color: var(--muted); }
+.assistant-identity code,.assistant-identity small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.assistant-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 5px; margin: 10px 14px 0; border: 1px solid var(--line); border-radius: 9px; }
+.assistant-modes button { display: flex; gap: 6px; align-items: center; justify-content: center; min-height: 40px; border-radius: 6px; color: var(--muted); font-weight: 550; font-size: 13px; }
+.assistant-modes button[aria-pressed="true"] { background: var(--soft); color: var(--ink); }
+.assistant-modes button[aria-pressed="true"] svg { color: var(--explain-mark); }
+.assistant-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; padding: 16px 15px 20px; scrollbar-gutter: stable; }
+.assistant-scroll>[hidden] { display: none; }
+.assistant-brief { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--line); margin-bottom: 14px; }
+.assistant-brief>div { min-width: 0; background: var(--page); display: grid; align-content: start; gap: 5px; padding: 10px; }
+.assistant-brief span,.assistant-brief small { color: var(--muted); font-size: 11px; line-height: 1.25; }
+.assistant-brief strong { font-size: 14px; font-variant-numeric: tabular-nums; line-height: 1.3; overflow-wrap: anywhere; }
+.assistant-workbench .answer { margin: 0 0 14px; }
+.assistant-workbench .answer p { font-size: 14px; line-height: 1.58; margin: 5px 0; overflow-wrap: anywhere; }
+.assistant-workbench .answer a { color: var(--explain-mark); }
+.assistant-workbench h3 { margin: 0 0 7px; font-size: 14px; line-height: 1.35; font-weight: 650; }
+.answer-lead { border-left: 3px solid var(--explain-mark); background: var(--explain-tint); border-radius: 0 8px 8px 0; padding: 12px 13px; }
+.answer-lead h3 { color: var(--explain-mark); }
+.answer-details { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--page); }
+.answer-details>summary { min-height: 44px; align-content: center; padding: 8px 11px; cursor: pointer; font-size: 13px; }
+.answer-details>summary small { margin-left: 5px; color: var(--muted); font-size: 11px; }
+.answer-step { border-top: 1px solid var(--line); padding: 11px; }
+.answer-sources { margin: 0; padding: 4px 11px 8px; list-style: none; }
+.answer-sources a { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 40px; font-size: 13px; }
+.answer-sources a svg { flex: none; }
+.assistant-question { background: var(--soft); border-radius: 8px; margin: 10px 0; padding: 10px 11px; font-size: 13px; overflow-wrap: anywhere; }
+.assistant-question small { color: var(--muted); display: block; margin-bottom: 4px; }
+.assistant-next h3 { color: var(--muted); font-size: 12px; margin: 18px 0 4px; }
+.assistant-next button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; width: 100%; padding: 8px 2px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+.assistant-next button svg { color: var(--explain-mark); flex: none; }
+.assistant-next button:hover { color: var(--explain-mark); }
+.assistant-workbench .assistant-form { border-radius: 10px; border-color: var(--line); padding: 5px 6px 5px 11px; margin: 0 14px 4px; gap: 4px; align-items: center; }
+.assistant-workbench .assistant-form:focus-within { border-color: var(--explain-mark); }
+.assistant-workbench .assistant-form textarea { padding: 6px 0; min-height: 36px; font-size: 15px; }
+.assistant-workbench .send { min-width: 43px; min-height: 43px; background: var(--explain-tint); color: var(--explain-mark); }
+.assistant-workbench .send:disabled { opacity: .45; }
+.assistant-workbench .assistant-note { font-size: 11px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.assistant-workbench :is(button,a,summary,input,select,h2):focus-visible { outline: 2px solid var(--explain-mark); outline-offset: 2px; }
+.assistant-status { display: flex; align-items: center; gap: 6px; min-height: 25px; padding: 3px 16px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+.assistant-status svg { color: var(--explain-mark); }
+.assistant-stage { display: flex; align-items: center; gap: 7px; margin: 10px 0; font-size: 13px; color: var(--muted); }
+.assistant-pulse,.assistant-stage>span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--explain-mark); flex: none; }
+.assistant-stage>span { animation: assistant-breathe 1.2s ease-in-out infinite alternate; }
+@keyframes assistant-breathe { to { opacity: .42; } }
+.assistant-retry { font-size: 13px; }
+.assistant-jump { position: sticky; bottom: 0; background: var(--panel); padding: 8px; }
+.explain-lab { display: grid; gap: 13px; }
+.explain-lab h3,.explain-lab p { margin: 0; }
+.explain-lab p { line-height: 1.52; overflow-wrap: anywhere; }
+.explain-lab-intro { display: grid; gap: 5px; }
+.explain-lab-intro>small,.explain-lab-note,.explain-lab-option small { color: var(--muted); font-size: 12px; }
+.explain-lab-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.explain-lab-tools button { display: flex; align-items: center; gap: 6px; min-height: 45px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; text-align: left; font-size: 12px; line-height: 1.3; }
+.explain-lab-tools button svg { flex: none; color: var(--muted); }
+.explain-lab-tools button[aria-pressed="true"] { background: var(--explain-tint); border-color: var(--explain-mark); color: var(--ink); }
+.explain-lab-tools button[aria-pressed="true"] svg { color: var(--explain-mark); }
+.explain-lab-work { display: grid; gap: 11px; padding: 11px; border: 1px solid var(--line); background: var(--page); border-radius: 8px; }
+.explain-lab-work>p { color: var(--muted); font-size: 12px; }
+.explain-lab-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.explain-lab-controls label { display: grid; align-content: start; gap: 5px; min-width: 0; color: var(--muted); font-size: 12px; }
+.explain-lab-controls label:has(select[id*="sourceIndex"]) { grid-column: 1/-1; }
+.explain-lab-controls :is(input,select) { min-width: 0; width: 100%; min-height: 43px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; background: var(--panel); color: var(--ink); font-size: 14px; }
+.explain-lab-controls .explain-slider { grid-column: 1/-1; }
+.explain-slider>span { display: flex; justify-content: space-between; gap: 6px; }
+.explain-slider output { color: var(--ink); font-variant-numeric: tabular-nums; }
+.explain-lab-controls input[type="range"] { padding: 0; border: 0; accent-color: var(--explain-mark); cursor: pointer; }
+.explain-lab-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.explain-lab-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font-size: 12px; }
+.explain-lab-actions button:hover { background: var(--soft); }
+.explain-lab-result { border-left: 3px solid var(--explain-mark); background: var(--explain-tint); border-radius: 0 8px 8px 0; padding: 10px; }
+.explain-lab-result p { font-size: 13px; }
+.explain-lab-result[data-ready="false"] { border-color: var(--muted); background: var(--soft); }
+.explain-lab-metrics { display: grid; gap: 5px; margin: 9px 0 0; }
+.explain-lab-metrics>div { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; border-top: 1px solid var(--line); padding-top: 5px; }
+.explain-lab-metrics dt { color: var(--muted); font-size: 12px; }
+.explain-lab-metrics dd { margin: 0; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.explain-lab-metrics dd small { display: block; color: var(--muted); font-size: 10px; }
+.explain-lab-option { border-top: 1px solid var(--line); padding: 8px 0 2px; }
+.explain-lab-option a { color: var(--explain-mark); text-decoration: underline; overflow-wrap: anywhere; }
+.explain-lab-result>small { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; color: var(--explain-mark); }
+.explain-lab-result[data-ready="false"]>small { color: var(--muted); }
+@media(max-width:1370px) { .with-assistant .assistant-workbench { width: min(100%,460px); } }
+@media(max-width:760px) {
+  .with-assistant .assistant-workbench { width: 100%; box-shadow: none; }
+  .assistant-workbench .assistant-heading { height: 54px; padding: 0 12px; }
+  .assistant-identity { padding: 8px 12px 10px; }
+  .assistant-identity strong { font-size: 16px; }
+  .assistant-modes { margin: 6px 10px 0; }
+  .assistant-scroll { padding: 10px 10px 14px; }
+  .assistant-workbench .assistant-form textarea,.explain-lab-controls :is(input,select) { font-size: 16px; }
+}
+@media(prefers-reduced-motion:reduce) { .assistant-stage>span { animation: none; } }

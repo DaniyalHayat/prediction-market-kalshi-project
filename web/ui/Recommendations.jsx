@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {ArrowUpRight,Loader2,RefreshCw,SlidersHorizontal} from 'lucide-react';
 import {api,cents,count,dateLabel,dollars,percent} from './api.mjs';
-import {createVisibleRefresh,screenFreshness,screenRefreshDelay} from './screen-freshness.mjs';
+import {createVisibleRefresh,screenFreshness,screenRefreshDelay} from './screen-freshness';
 function DoubleChance({value}){
   if(typeof value==='number')return <strong>{percent(value)}</strong>;
   if(!value||!Number.isFinite(value.probability))return <><strong>{value?.possible?'Possible on a full payout':'Unavailable'}</strong>{value?.reason&&<small>{value.reason}</small>}</>;

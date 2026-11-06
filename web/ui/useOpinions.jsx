@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {api} from './api.mjs';
-import {createVisibleRefresh,displayedOpinion,screenRefreshDelay} from './screen-freshness.mjs';
+import {createVisibleRefresh,displayedOpinion,screenRefreshDelay} from './screen-freshness';
 
 export default function useOpinions(root,markets,model='validated',enabled=true) {
   const [visible,setVisible]=useState([]),[opinions,setOpinions]=useState({}),[clock,setClock]=useState(Date.now());

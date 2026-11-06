@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/dashboard/paper.js';
-import {appearance,DEFAULT_PREFERENCES,THEMES,contrastRatio} from '../ui/preferences.mjs';
+import {appearance,DEFAULT_PREFERENCES,THEMES,contrastRatio} from '../ui/preferences.ts';
 import {attachEntryContext,portfolioTickers,PAPER_STORAGE,PAPER_BALANCE,updateStoredLedger} from '../ui/paper-state.mjs';
 import {acceptPortfolioBook,portfolioTotals} from '../ui/portfolio-state.mjs';
 import {paperCapital} from '../ui/paper-capital.mjs';
-import {mergeResearchRefresh,researchRefreshDelay} from '../ui/research-state.mjs';
-import {initialSelection,selectionReducer,refreshMarketRows} from '../ui/selection.mjs';
+import {mergeResearchRefresh,researchRefreshDelay} from '../ui/research-state.ts';
+import {initialSelection,selectionReducer,refreshMarketRows} from '../ui/selection.ts';
 import {automaticReviewSignal,duePositionReviews,positionReviewInput,REVIEW_INTERVAL_MS} from '../ui/position-review-state.mjs';
 const paper=globalThis.KalshiPaper,now=Date.parse('2026-11-04T17:00:00Z');
 const book={ticker:'KXTEST-YES',as_of:'2026-11-04T16:59:50Z',source_url:'https://api.elections.kalshi.com/trade-api/v2/markets/KXTEST-YES/orderbook',raw:{orderbook_fp:{yes_dollars:[['.35','100']],no_dollars:[['.6','100']]}}};

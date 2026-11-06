@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {readJSON,fetchJSON} from '../lib/transport.mjs';
-import {initialSelection, selectionReducer, contractTitle} from '../ui/selection.mjs';
+import {initialSelection, selectionReducer, contractTitle} from '../ui/selection.ts';
 
 test('HTML success and proxy failure responses become a useful typed error', async () => {
   for (const status of [200, 502]) await assert.rejects(() => readJSON(new Response('<!doctype html><h1>Unavailable</h1>',

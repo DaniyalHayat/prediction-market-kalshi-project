@@ -1,0 +1,12 @@
+export type Panel = 'analysis' | 'evidence' | 'history' | 'execution' | 'rules' | 'sources' | 'paper';
+export type Model = 'validated' | 'challenger';
+export type Market = {ticker:string;title?:string;yes_sub_title?:string;status?:string;close_time?:string};
+export type Book = {ticker:string;as_of?:string;metrics?:{book_ask?:number}};
+export type Evidence = {ticker:string;as_of?:string;items?:unknown[]};
+export type Research = {ticker:string;error?:string;opinion?:{side?:'YES'|'NO'|'PASS'};
+  forecast?:{probability?:number;outcomes?:object;expected_settlement_value?:number}};
+export type Snapshot = {market:Market;book?:Book|null;fees?:unknown;research?:Research|null;history?:unknown};
+export type Launch = {panel?:Panel;label?:string;question?:string;detail?:'brief'|'full';evidence?:Evidence;
+  prepare?:(signal:AbortSignal)=>Promise<Evidence|undefined>;
+  executionControls?:{action:'buy'|'sell';side:'yes'|'no';contracts:number;horizon_seconds:number}};
+export type Message = {role:'user'|'assistant';content:string};

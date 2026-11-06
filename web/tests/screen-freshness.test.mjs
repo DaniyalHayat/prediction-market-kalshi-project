@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createVisibleRefresh,displayedOpinion,researchScreenOpinion,screenFreshness,screenRefreshDelay} from '../ui/screen-freshness.mjs';
+import {createVisibleRefresh,displayedOpinion,researchScreenOpinion,screenFreshness,screenRefreshDelay} from '../ui/screen-freshness.ts';
 const now=Date.parse('2026-11-04T20:00:00Z'),iso=offset=>new Date(now+offset).toISOString();
 const opinion={ticker:'KXNBA-TEST',side:'YES',probability:.6,interval:[.5,.7],as_of:iso(-1000),source_as_of:iso(-5000)};
 test('a fresh response cannot refresh an expired live forecast or executable quote',()=>{

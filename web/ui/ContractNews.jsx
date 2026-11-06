@@ -51,7 +51,7 @@ export default function ContractNews({ticker,model='validated',initial=null,arti
     try{
       const result=await api('/api/workspace/evidence?'+params,{signal:pending,timeoutMs:20000});
       if(result.ticker!==ticker)throw new Error('The returned news belongs to another contract. Refresh to check the selected contract.');
-      if(!pending.aborted)setValue(result);
+      if(!pending.aborted){setValue(result);return result;}
     }catch(error){if(!pending.aborted&&error.name!=='AbortError')setError(error.message);}
     finally{if(!controller.signal.aborted)setLoading(false);}
   },[ticker,model]);
@@ -64,7 +64,7 @@ export default function ContractNews({ticker,model='validated',initial=null,arti
   const long=mode==='long';
   const retained=['retained','retained_ephemeral'].includes(value?.retention?.status);
   const sourceLinks=(value?.source_links||[]).filter(row=>safeURL(row.url));
-  const ask=()=>onAssistant?.({detail:long?'full':'brief',...(!retained?{prepare:signal=>load({includeReddit:reddit,includeX:x,signal})}:{})});
+  const ask=()=>onAssistant?.({detail:long?'full':'brief',evidence:value,...(!retained?{prepare:signal=>load({includeReddit:reddit,includeX:x,signal})}:{})});
   return <section className="contract-news" aria-label="Contract news and context"><div className="readout-heading"><div><span className="eyebrow">Evidence & reporting</span><h3>Contract news</h3></div><ReadMode value={mode} onChange={setMode} label="Contract news reading length"/></div>
     <div className="news-preferences">
       <SourceSwitch label="Reddit context" active={reddit} onToggle={()=>{setReddit(!reddit);load({includeReddit:!reddit,includeX:x});}}/>

@@ -16,7 +16,7 @@ const markets=[
   {ticker:'KXTEST-BETA',title:'Beta kickoff',rules_primary:'Beta wins the named fixture.'},
 ].map(market=>({...market,category:'sports',status:'active',yes_ask:.4,yes_bid:.35,close_time,volume_24h:100}));
 const book=ticker=>({ticker,as_of,raw:{orderbook_fp:{yes_dollars:[['.35','100']],no_dollars:[['.60','100']]}}});
-const reporting=(title,publisher,url,excerpt)=>({title,publisher,url,excerpt,as_of,why_relevant:'Names Alpha and the exact fixture.',impact:'Check the final lineup before using this report.'});
+const reporting=(title,publisher,url,excerpt)=>({title,publisher,url,excerpt,as_of,match_scope:'matched',why_relevant:'Names Alpha and the exact fixture.',impact:'Check the final lineup before using this report.'});
 const events=[],payloads=[];
 const news=ticker=>({ticker,as_of,items:[
   reporting('Starter cleared','League report','https://league.example/lineup','Alpha’s starter has been cleared for this fixture.'),
@@ -50,6 +50,19 @@ await context.route('**/*',async route=>{
     events.push(['news',ticker,url.searchParams.get('model'),preview]);
     return json({...news(ticker),...(preview==='0'?{retention:{status:'retained',chunks:3}}:{})});
   }
+  if(url.pathname==='/api/workspace/graphql'){
+    const {operationName,variables}=request.postDataJSON();
+    assert.equal(operationName,'HeadlineReplay');
+    const observed=new Date(now-10*60000).toISOString();
+    const packet=news(variables.ticker);
+    return json({data:{headlineReplay:{...variables,status:'ready',unavailable_sources:[],
+      evidence:{...packet,items:packet.items.map(row=>({...row,as_of:observed}))},
+      history:{ticker:variables.ticker,as_of,rows:[
+        {time:new Date(now-15*60000).toISOString(),midpoint:.4},
+        {time:new Date(now-5*60000).toISOString(),midpoint:.45}
+      ]}
+    }}});
+  }
   if(url.pathname==='/api/workspace/execution-research'){
     const {ticker,controls}=request.postDataJSON();
     const market=markets.find(row=>row.ticker===ticker);
@@ -58,7 +71,7 @@ await context.route('**/*',async route=>{
   if(url.pathname==='/api/assistant'){
     const payload=request.postDataJSON();
     payloads.push(payload);events.push(['assistant',payload.ticker,payload.panel]);
-    return route.fulfill({contentType:'text/plain',body:`Fixture answer for ${payload.ticker} (${payload.panel}).`});
+    return route.fulfill({contentType:'text/plain',body:`## The short answer\nFixture answer for ${payload.ticker} (${payload.panel}).\n\n## Why that matters\nFixture reasoning.\n\nSources checked: [League record](https://league.example/results)`});
   }
   return json({});
 });
@@ -90,6 +103,32 @@ try{
   await analysisMode.getByRole('button',{name:'Long read'}).click();
   await page.getByText('This matchup has a small holdout sample.',{exact:true}).waitFor();
   await ask('Ask why about this analysis','analysis','KXTEST-ALPHA','full');
+  const trigger=page.getByRole('button',{name:'Ask why about this analysis',exact:true});
+  await trigger.click();
+  await assistant.getByText('Fixture answer for KXTEST-ALPHA (analysis).',{exact:true}).waitFor();
+  assert.equal(await assistant.getByText('Fixture reasoning.',{exact:true}).isVisible(),true);
+  await assistant.getByText('Open source links',{exact:false}).click();
+  assert.equal(await assistant.getByRole('link',{name:'League record'}).getAttribute('href'),'https://league.example/results');
+  await assistant.getByRole('button',{name:'Test the idea',exact:true}).click();
+  const ideas=assistant.getByRole('region',{name:'Contract scenario tools'});
+  await ideas.getByRole('button',{name:'Vanishing depth',exact:true}).waitFor();
+  assert.equal(await ideas.getByRole('group',{name:'Choose a scenario tool'}).getByRole('button').count(),8);
+  await ideas.getByRole('button',{name:'Vanishing depth',exact:true}).click();
+  const depth=ideas.getByRole('slider',{name:/Depth remaining/});
+  await depth.focus();
+  await depth.press('End');
+  await ideas.getByRole('button',{name:'Pin baseline'}).click();
+  await depth.press('Home');
+  await ideas.getByText('+5 contracts vs pinned',{exact:true}).waitFor();
+  await assistant.getByRole('button',{name:'Answer',exact:true}).click();
+  await assistant.getByRole('button',{name:'Test the idea',exact:true}).click();
+  assert.equal(await depth.inputValue(),'0');
+  await ideas.getByRole('button',{name:'Headline replay',exact:true}).click();
+  await ideas.getByRole('button',{name:'Load reporting',exact:true}).click();
+  await ideas.getByText('5¢',{exact:true}).waitFor();
+  await ideas.getByRole('button',{name:'Load reporting',exact:true}).press('Escape');
+  await assistant.waitFor({state:'hidden'});
+  assert.equal(await trigger.evaluate(button=>document.activeElement===button),true);
   const newsPanel=page.getByRole('region',{name:'Contract news and context'});
   await newsPanel.getByText('Best-matched report',{exact:true}).waitFor();
   await newsPanel.getByText('Another publisher',{exact:true}).waitFor();
@@ -128,6 +167,14 @@ try{
   await page.getByRole('radio',{name:/Validated model view/}).check();
   await page.getByRole('button',{name:'Close appearance settings'}).click();
   await ask('Ask why about exchange price history','history','KXTEST-BETA','brief','validated');
+  await page.setViewportSize({width:390,height:844});
+  const mobileTrigger=page.getByRole('button',{name:'Ask why about exchange price history',exact:true});
+  await mobileTrigger.click();
+  const mobile=page.getByRole('dialog',{name:'Contract research assistant'});
+  await mobile.getByText('Fixture answer for KXTEST-BETA (history).',{exact:true}).waitFor();
+  assert.equal(await mobile.getAttribute('aria-modal'),'true');
+  await mobile.getByRole('button',{name:'Close assistant'}).click();
+  assert.equal(await mobileTrigger.evaluate(button=>document.activeElement===button),true);
   assert.deepEqual(errors,[]);
   console.log('Browser assertions passed for scoped auto-submit, model and contract switches, retained news, paper privacy and submitted execution controls.');
 }finally{await browser.close();}

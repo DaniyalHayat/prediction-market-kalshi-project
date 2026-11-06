@@ -41,8 +41,12 @@ export const paperTools = {
   discard: {name: 'discard_paper_scenario', input: {ticker: tickerInput, scenario_id: scenarioId, confirmed}},
 };
 
-export const paperRequestInput = z.discriminatedUnion('operation', Object.entries(paperTools).map(([operation, tool]) =>
-  z.strictObject({operation: z.literal(operation), ...tool.input})));
+export const paperRequestInput = z.discriminatedUnion('operation', [
+  z.strictObject({operation: z.literal('preview'), ...paperTools.preview.input}),
+  z.strictObject({operation: z.literal('list'), ...paperTools.list.input}),
+  z.strictObject({operation: z.literal('save'), ...paperTools.save.input}),
+  z.strictObject({operation: z.literal('discard'), ...paperTools.discard.input}),
+]);
 
 class PaperActionError extends Error {
   constructor(message, status) { super(message); this.status = status; }

@@ -4,7 +4,7 @@ import {createMarketServer} from '../cloud/server.mjs';
 import {makePostgresStore} from '../lib/postgres-store.mjs';
 import {guestSession, sealSession} from '../lib/workspace/account.mjs';
 import {createPaperScenarioActions, paperActionError, paperRequestInput} from '../lib/workspace/paper-actions.mjs';
-import {POST} from '../app/api/workspace/paper-scenarios/route.js';
+import {POST} from '../app/api/workspace/paper-scenarios/route.ts';
 
 const ticker = 'TEST-PAPER-YES', other = 'TEST-OTHER-YES', origin = 'https://azure-paper.example';
 const edge = 'fixture-edge-'.repeat(5), service = 'fixture-service-'.repeat(5), secret = 'fixture-account-'.repeat(5);

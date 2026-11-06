@@ -1,7 +1,7 @@
 'use client';
 import {X,Check} from 'lucide-react';
-import Modal from './Modal.jsx';
-import {THEMES} from './preferences.mjs';
+import Modal from './Modal';
+import {THEMES} from './preferences';
 export default function Appearance({value,onChange,onClose,storageError}){
   return <Modal titleId="appearance-title" onClose={onClose} className="appearance-dialog">
     <div className="dialog-heading"><div><h2 id="appearance-title">Your workspace</h2><p>Appearance stays on this device.</p></div><button className="icon-button" aria-label="Close appearance settings" onClick={onClose}><X size={20}/></button></div>

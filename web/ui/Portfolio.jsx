@@ -7,7 +7,7 @@ import usePortfolioFeed from './usePortfolioFeed.jsx';
 import {portfolioTickers} from './paper-state.mjs';
 import {portfolioTotals} from './portfolio-state.mjs';
 import {paperCapital} from './paper-capital.mjs';
-import Chart from './Chart.jsx';
+import Chart from './Chart';
 import PaperCash from './PaperCash.jsx';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
 import PositionReview from './PositionReview.jsx';

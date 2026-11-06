@@ -45,6 +45,9 @@ test('evidence route propagates exact selected trade and Reddit opt-in, while re
   const result=await workspaceEvidence(ticker,{reddit:true,includeX:false},deps);
   assert.equal(result.retention.status,'retained');assert.equal(calls[0][2].selectedTicker,ticker);assert.equal(calls[0][2].redditEnabled,true);assert.equal(calls[0][2].includeX,false);
   assert.equal(calls[1][3].enabled,true);assert.equal(calls[1][3].deferEmbedding,true);
+  calls.length=0;
+  const replay=await workspaceEvidence(ticker,{retain:false},deps);
+  assert.equal(replay.retention,undefined);assert.equal(calls.length,1);assert.equal(calls[0][2].headlineMode,'full');
   let search=0,loads=0;await workspaceGET('workspace/evidence/search',new URLSearchParams({ticker,q:'injury report'}),{workspaceEvidence:async()=>{loads++;},searchRetainedEvidence:async(t,q)=>{search++;assert.equal(t,ticker);assert.equal(q,'injury report');return {citations:[]};}});assert.equal(search,1);assert.equal(loads,0);
   await assert.rejects(workspaceGET('workspace/evidence',new URLSearchParams({ticker,reddit:'yes'}),{}),/0 or 1/);
 });

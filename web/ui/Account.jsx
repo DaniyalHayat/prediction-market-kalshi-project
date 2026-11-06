@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {X,LogIn,LogOut,Download} from 'lucide-react';
-import Modal from './Modal.jsx';
+import Modal from './Modal';
 import {exportJSON,dateLabel} from './api.mjs';
 import {signInOwner,signOutOwner,resolveAccountConflict,loadAccountSession} from './useAccount.jsx';
 import {PAPER_STORAGE} from './paper-state.mjs';

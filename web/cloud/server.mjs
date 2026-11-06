@@ -24,6 +24,7 @@ import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pi
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
 import {azureMode,azureOrigin} from '../lib/workspace/azure-mode.mjs';
 import {createPaperScenarioActions,paperActionError} from '../lib/workspace/paper-actions.mjs';
+import {HEADLINE_REPLAY_MAX_BYTES} from '../lib/workspace/proxy.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
@@ -268,7 +269,8 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await resolveContracts(url.searchParams.get('q')));}
       if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await marketFees(url.searchParams.get('ticker')));}
       if(req.method==='POST'&&!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
-      const raw=req.method==='POST'?await readBody(req):'';
+      const headlineReplay=url.pathname==='/api/workspace/graphql';
+      const raw=req.method==='POST'?await readBody(req,headlineReplay?HEADLINE_REPLAY_MAX_BYTES:undefined):'';
       if(url.pathname==='/api/journal'){
         if(!storageEnabled())return json(res,{error:'The durable journal is not connected'},503);
         const token=String(req.headers.authorization||'').replace(/^Bearer /,'');if(!token)return json(res,{error:'A private journal token is required'},401);ownerKey(token);
@@ -279,7 +281,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:url.pathname==='/api/workspace/position-review'?5:
+      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:headlineReplay?6:url.pathname==='/api/workspace/position-review'?5:
         url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
       const context={privateRuntime:true,params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);

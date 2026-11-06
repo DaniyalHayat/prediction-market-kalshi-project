@@ -1,5 +1,5 @@
-import Workspace from '../ui/App.jsx';
-import ReplayWorkspace from '../ui/ReplayWorkspace.jsx';
+import Workspace from '../ui/App';
+import ReplayWorkspace from '../ui/ReplayWorkspace';
 import {azureMode} from '../lib/workspace/azure-mode.mjs';
 
 export default function Home() {

@@ -5,11 +5,11 @@ import {paperGuestCookie, paperRequestInput, paperTools} from '../../../../lib/w
 import {readProxyBody} from '../../../../lib/workspace/proxy.mjs';
 import {validateTicker} from '../../../../lib/live.mjs';
 
-const reply = (body, status = 200) => Response.json(body, {status, headers: {
+const reply = (body:unknown, status = 200) => Response.json(body, {status, headers: {
   'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', Vary: 'Cookie',
 }});
 
-export async function POST(request) {
+export async function POST(request:Request) {
   if (process.env.PREDICTIR_MODE !== 'live') return reply({error: 'The hosted paper scenario workspace is unavailable here.'}, 404);
   try {
     const origin = azureOrigin();
@@ -24,7 +24,7 @@ export async function POST(request) {
     const {operation, ...args} = parsed.data;
     validateTicker(args.ticker);
     const local = !process.env.CONTAINER_APP_NAME && process.env.PREDICTIR_AZURE_LOCAL === '1';
-    const suppliedCookies = request.headers.get('cookie');
+    const suppliedCookies = request.headers.get('cookie') || '';
     const cookie = paperGuestCookie(suppliedCookies) || (local ? paperGuestCookie(suppliedCookies, false) : '');
     if (!cookie) return reply({error: 'Open a current guest workspace session first.'}, 401);
     const access = await azureAccess(request.headers);
@@ -36,8 +36,8 @@ export async function POST(request) {
       headers: {
         Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json', Origin: origin,
         Authorization: 'Bearer ' + process.env.ASSISTANT_SERVICE_SECRET,
-        'X-Market-Edge-Secret': process.env.MARKET_EDGE_SECRET, 'X-Market-Paper-Action': '1',
-        'X-Market-Country': access.country, 'X-Market-Client-IP': access.ip, 'X-Market-Ticker': args.ticker,
+        'X-Market-Edge-Secret': process.env.MARKET_EDGE_SECRET || '', 'X-Market-Paper-Action': '1',
+        'X-Market-Country': access.country || '', 'X-Market-Client-IP': access.ip || '', 'X-Market-Ticker': args.ticker,
         Cookie: cookie,
       },
       body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/call', params: {name: paperTools[operation].name, arguments: args}}),
@@ -52,9 +52,10 @@ export async function POST(request) {
     if (!['draft', 'available', 'saved', 'discarded'].includes(packet.status)) throw new Error('Unexpected paper scenario outcome');
     return reply(packet);
   } catch (error) {
-    if (error.status === 401) return reply({error: 'Open a current guest workspace session first.'}, 401);
-    if (error.status === 429) return reply({error: 'The paper scenario allowance is temporarily exhausted.'}, 429);
-    if (error.status === 413) return reply({error: 'The paper scenario request exceeds its size limit.'}, 413);
+    const status = error && typeof error === 'object' && 'status' in error ? error.status : null;
+    if (status === 401) return reply({error: 'Open a current guest workspace session first.'}, 401);
+    if (status === 429) return reply({error: 'The paper scenario allowance is temporarily exhausted.'}, 429);
+    if (status === 413) return reply({error: 'The paper scenario request exceeds its size limit.'}, 413);
     if (error instanceof SyntaxError || error instanceof RangeError) return reply({error: 'Supply valid paper scenario JSON.'}, 400);
     return reply({error: 'The paper scenario workspace is temporarily unavailable.'}, 503);
   }
