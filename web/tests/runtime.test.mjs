@@ -87,6 +87,36 @@ test('multiplex SSE emits named latest-book events and cleans every subscription
   assert.equal((text.match(/event: book/g)||[]).length,2);assert.ok(text.includes('"sequence":9'));assert.ok(text.includes('event: status'));await reader.cancel();
   await new Promise(resolve=>setTimeout(resolve,30));assert.equal(listeners.size,0);assert.equal(removed,2);
 });
+test('abandoned portfolio stream admissions release capacity while their quotas are pending',async t=>{
+  const admission=Promise.withResolvers(),entered=Promise.withResolvers(),disconnected=Promise.withResolvers();
+  let admissions=0,closed=0,subscriptions=0;
+  const charged=[];
+  const storage={consume:async key=>{
+    charged.push(key);
+    if(/^(?:stream-opens|work)#/.test(key)&&++admissions<=3){if(admissions===3)entered.resolve();await admission.promise;}
+    return true;
+  }};
+  const feed={status:'connected',add:async()=>{subscriptions++;return()=>{};}};
+  const logger=(event,row)=>{
+    if(event==='request.finished'&&row.route==='/api/portfolio/stream'&&++closed===3)disconnected.resolve();
+  };
+  const url=await server(t,{feed,logger,storageEnabled:()=>true,storage:()=>storage});
+  const path=url+'/api/portfolio/stream?tickers=TEST-A',controllers=Array.from({length:3},()=>new AbortController());
+  const abandoned=controllers.map(controller=>fetch(path,{headers,signal:controller.signal}).catch(error=>error));
+  try{
+    await entered.promise;
+    for(const controller of controllers)controller.abort();
+    await disconnected.promise;
+    const replacement=await fetch(path,{headers,signal:AbortSignal.timeout(2000)});
+    assert.equal(replacement.status,200);
+    await replacement.body.cancel();
+  }finally{admission.resolve();}
+  for(const result of await Promise.all(abandoned))assert.equal(result.name,'AbortError');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(subscriptions,1);
+  assert.equal(charged.filter(key=>key.startsWith('stream-minutes#')).length,1);
+  assert.equal(charged.filter(key=>key.startsWith('stream-egress')).length,1);
+});
 test('portfolio admission bounds ticker lists, charges bytes once and preserves trace correlation',async t=>{
   const takes=[],logs=[];const storage={consume:async(key,limit,amount)=>{takes.push({key,limit,amount});return !key.startsWith('stream-egress');}};
   const url=await server(t,{storageEnabled:()=>true,storage:()=>storage,logger:(event,value)=>logs.push({event,...value})});

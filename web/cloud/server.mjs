@@ -143,11 +143,23 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
     const releaseCount=()=>{if(countReleased)return;countReleased=true;connections--;
       const count=(streamByIP.get(identity)||1)-1;if(count)streamByIP.set(identity,count);else streamByIP.delete(identity);};
+    res.once('close',releaseCount);
+    const disconnected=()=>{
+      if(!req.aborted&&!res.destroyed)return false;
+      releaseCount();return true;
+    };
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
-    try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw new LocalThrottle('Monthly streaming allowance reached','throttle_stream_allowance');}
+    try{
+      await quota(3);
+      if(disconnected())return;
+      const minuteAllowed=await consumeMinute();
+      if(disconnected())return;
+      const bytesAllowed=minuteAllowed&&await consumeBytes();
+      if(disconnected())return;
+      if(!bytesAllowed)throw new LocalThrottle('Monthly streaming allowance reached','throttle_stream_allowance');
+    }
     catch(error){releaseCount();throw error;}
-    if(req.aborted||res.destroyed){releaseCount();return;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
     const removers=[],latest=new Map();let ticks=0,closed=false,blockedSince=0,checking=false,refilling=false,bytesRemaining=65536;
     const refill=async()=>{if(refilling||closed)return;refilling=true;try{if(await consumeBytes())bytesRemaining+=65536;else res.end();}catch{res.end();}finally{refilling=false;}};
@@ -175,7 +187,8 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
           const value={...message,ticker,transport:message.transport||quoteTransport};
           if(value.kind==='quote')latest.set(ticker,value);
           else send(value,multiplex?'status':null);});
-        if(closed)remove();else removers.push(remove);
+        if(closed){remove();break;}
+        removers.push(remove);
       }
     }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',transport:quoteTransport,
       reason:publicFeed?'Public quote polling is unavailable. Direct snapshots remain available.':'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
