@@ -1,4 +1,16 @@
 const BUCKETS = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+const THROTTLE_REASONS = new Set([
+  'throttle_heavy_burst',
+  'throttle_general_admission',
+  'throttle_runtime_disabled',
+  'throttle_daily_work',
+  'throttle_assistant_allowance',
+  'throttle_stream_capacity',
+  'throttle_stream_allowance',
+]);
+export function throttleReason(reason) {
+  return THROTTLE_REASONS.has(reason) ? reason : 'throttle_upstream_or_unclassified';
+}
 
 class Distribution {
   constructor(sampleSize) {
@@ -23,6 +35,7 @@ export function createRuntimeTelemetry({routes = [], providers = [], sampleSize 
   if (routes.length > 64 || providers.length > 32) throw new RangeError('Too many telemetry dimensions');
   const sanitize = values => new Set(values.filter(value => typeof value === 'string' && /^[a-zA-Z0-9_./:-]{1,80}$/.test(value)));
   const allowedRoutes = sanitize(routes), allowedProviders = sanitize(providers), distributions = new Map(), errors = new Map();
+  const requestThrottles = new Map();
   function observe(kind, input, durationMs, failed) {
     const allow = kind === 'request' ? allowedRoutes : allowedProviders, label = allow.has(input) ? input : 'other', key = `${kind}:${label}`;
     if (!distributions.has(key)) distributions.set(key, new Distribution(sampleSize));
@@ -31,10 +44,21 @@ export function createRuntimeTelemetry({routes = [], providers = [], sampleSize 
     return true;
   }
   return {
-    observeRequest({route, durationMs, status}) { return observe('request', route, durationMs, status >= 500); },
+    observeRequest({route, durationMs, status, errorCode}) {
+      const recorded = observe('request', route, durationMs, status >= 500);
+      if (recorded && status === 429) {
+        const label = allowedRoutes.has(route) ? route : 'other', reason = throttleReason(errorCode);
+        if (!requestThrottles.has(label)) requestThrottles.set(label, new Map());
+        const counts = requestThrottles.get(label);
+        counts.set(reason, (counts.get(reason) || 0) + 1);
+      }
+      return recorded;
+    },
     observeProvider({provider, durationMs, failed = false}) { return observe('provider', provider, durationMs, failed); },
     snapshot() {
       return {quantile_scope: 'last bounded samples per process, not a fleet percentile', sample_capacity: sampleSize,
+        request_throttles_scope: 'process lifetime, resets on restart',
+        request_throttles: Object.fromEntries([...requestThrottles].map(([route, counts]) => [route, Object.fromEntries(counts)])),
         distributions: Object.fromEntries([...distributions].map(([key, value]) => [key, {...value.snapshot(), errors: errors.get(key) || 0}]))};
     },
     prometheus() {
@@ -48,12 +72,33 @@ export function createRuntimeTelemetry({routes = [], providers = [], sampleSize 
       for (const [key, count] of errors) {
         const colon = key.indexOf(':'); rows.push(`marketlab_errors_total{kind="${key.slice(0, colon)}",name="${key.slice(colon + 1)}"} ${count}`);
       }
+      rows.push('# HELP marketlab_request_throttles_total Backend HTTP 429 responses by reason.', '# TYPE marketlab_request_throttles_total counter');
+      for (const [route, counts] of requestThrottles) {
+        for (const [reason, count] of counts) rows.push(`marketlab_request_throttles_total{route="${route}",reason="${reason}"} ${count}`);
+      }
       return rows.join('\n') + '\n';
     }
   };
 }
 
-export const runtimeTelemetry = createRuntimeTelemetry({routes: ['/api/health', '/api/session', '/api/account/login', '/api/account/logout', '/api/account/profile', '/api/account/portfolio', '/api/book', '/api/market', '/api/markets', '/api/trades', '/api/history', '/api/stream', '/api/portfolio/stream', '/api/journal', '/api/paper/size', '/api/workspace/catalog', '/api/workspace/markets', '/api/workspace/portfolio-books', '/api/workspace/context', '/api/workspace/history', '/api/workspace/graphql', '/api/workspace/research', '/api/workspace/opinions', '/api/workspace/recommendations', '/api/workspace/position-review', '/api/workspace/search', '/api/workspace/evidence', '/api/workspace/evidence/search', '/mcp', '/internal/diagnostics', '/internal/assistant/reserve', '/internal/assistant/settle'], providers: ['kalshi', 'espn', 'apple_music', 'x', 'spotify', 'reddit', 'kworb', 'supabase_auth', 'postgres']});
+const operationalRoutes = new Set([
+  '/api/health', '/api/session', '/api/account/login', '/api/account/logout', '/api/account/profile', '/api/account/portfolio',
+  '/api/book', '/api/market', '/api/markets', '/api/trades', '/api/history', '/api/brief', '/api/fees', '/api/resolve',
+  '/api/stream', '/api/portfolio/stream', '/api/journal', '/api/paper/size', '/api/export.xlsx',
+  '/api/workspace/catalog', '/api/workspace/markets', '/api/workspace/portfolio-books', '/api/workspace/context',
+  '/api/workspace/history', '/api/workspace/graphql', '/api/workspace/research', '/api/workspace/execution-research',
+  '/api/workspace/opinions', '/api/workspace/recommendations', '/api/workspace/position-review', '/api/workspace/search',
+  '/api/workspace/sources', '/api/workspace/attribution', '/api/workspace/evidence', '/api/workspace/evidence/search',
+  '/api/intelligence', '/api/intelligence/catalog', '/api/intelligence/series', '/api/intelligence/candles',
+  '/api/intelligence/execution', '/api/intelligence/forward', '/api/intelligence/forward/start', '/api/intelligence/forward/checkpoint',
+  '/mcp', '/internal/diagnostics', '/internal/assistant/reserve', '/internal/assistant/reserve-azure',
+  '/internal/assistant/read-azure', '/internal/assistant/settle',
+]);
+export function operationalRoute(path) {
+  return operationalRoutes.has(path) ? path : 'other';
+}
+export const runtimeTelemetry = createRuntimeTelemetry({routes: [...operationalRoutes],
+  providers: ['kalshi', 'espn', 'apple_music', 'x', 'spotify', 'reddit', 'kworb', 'supabase_auth', 'postgres']});
 
 export async function observeProviderAttempt(provider, run, telemetry = runtimeTelemetry) {
   const started = performance.now(); let failed = true;

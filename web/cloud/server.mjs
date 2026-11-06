@@ -19,7 +19,7 @@ import {serviceAuthorized,reserveAssistant,parseAssistantInput} from '../lib/wor
 import {planResearchReadback} from '../lib/workspace/azure-research.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
 import {traceContext} from '../lib/runtime-observability.mjs';
-import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
+import {runtimeTelemetry,observeProviderAttempt,operationalRoute,throttleReason} from '../lib/runtime/telemetry.mjs';
 import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
 import {azureMode,azureOrigin} from '../lib/workspace/azure-mode.mjs';
@@ -29,6 +29,17 @@ import {HEADLINE_REPLAY_MAX_BYTES} from '../lib/workspace/proxy.mjs';
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
 const rateWindowMs=60000,azureHeavyRequestsPerWindow=12;
+const allowanceObservationMs=5*60*1000;
+class LocalThrottle extends Error {
+  constructor(message,reason){
+    super(message);this.status=429;this.reason=reason;
+  }
+}
+function foundryAllowance(){
+  const daily=Number(process.env.AZURE_FOUNDRY_DAILY_CALLS||0),monthly=Number(process.env.AZURE_FOUNDRY_MONTHLY_CALLS||0);
+  return process.env.AZURE_FOUNDRY_ENABLED==='1'&&Number.isInteger(daily)&&daily>=1&&daily<=30&&Number.isInteger(monthly)&&monthly>=daily&&monthly<=300
+    ? {daily,monthly} : null;
+}
 function json(res,value,status=200){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
 export function requestIdentity(req,edgeVerified=false){
   const claimed=String(req.headers['x-market-client-ip']||'').trim();
@@ -54,6 +65,40 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
   }
   const eventLoop=monitorEventLoopDelay({resolution:20});
   const isAzure=azureMode()==='live';
+  let lastAllowanceObservation=-Infinity, allowanceObservationActive=false;
+  async function usageAllowances(database,stamp=now()){
+    const as_of=new Date(stamp).toISOString(),month=as_of.slice(0,7),day=as_of.slice(0,10);
+    const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
+      ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
+      ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
+      ['daily_work','work#'+day,6000],['daily_cpu_ms','cpu-ms#'+day,1800000]];
+    const foundry=isAzure?foundryAllowance():null;
+    if(foundry)resources.push(['azure_foundry_calls_day','azure-assistant#foundry#'+day,foundry.daily],
+      ['azure_foundry_calls_month','azure-assistant#foundry#'+month,foundry.monthly]);
+    const {rows}=await database.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',
+      [resources.map(row=>row[1])]);
+    const used=new Map(rows.map(row=>[row.key,row.used]));
+    const allowances=resources.flatMap(([resource,key,limit])=>{
+      const value=used.get(key)??0;
+      return Number.isSafeInteger(limit)&&limit>=0&&Number.isSafeInteger(value)&&value>=0
+        ? [{resource,limit,used:value,remaining:Math.max(0,limit-value),warning:value>=limit*.8}] : [];
+    });
+    return {as_of,allowances,scope:'Reserved application allowances; provider invoices and included plan usage are separate.'};
+  }
+  async function observeAllowances(activeStorage){
+    const stamp=now();
+    if(allowanceObservationActive||stamp-lastAllowanceObservation<allowanceObservationMs)return;
+    allowanceObservationActive=true;
+    lastAllowanceObservation=stamp;
+    try{
+      if(activeStorage?.kind!=='postgres')return;
+      const snapshot=await usageAllowances(activeStorage.db,stamp);
+      if(!server.listening)return;
+      const record={event:'operator.allowances',...snapshot};
+      if(logger)logger(record.event,record);
+      else process.stdout.write(JSON.stringify(record)+'\n');
+    }catch{}finally{allowanceObservationActive=false;}
+  }
   const publicFeed=!injectedFeed&&isAzure&&authStatus()!=='configured'?new PublicBookFeed({now,
     reserve:stamp=>!disabled&&storageEnabled()&&storage().consume('azure-public-book-poll#'+new Date(stamp).toISOString().slice(0,10),2400,1,172800)}):null;
   const feed=injectedFeed||publicFeed||marketFeed,quoteTransport=feed.transport||'exchange-websocket';
@@ -86,13 +131,13 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
     return withinLimit('global',1200,slot)&&withinLimit(identity,120,slot);
   }
   async function quota(weight=1){
-    if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
-    if(storageEnabled()&&!await storage().consume('work#'+new Date(now()).toISOString().slice(0,10),6000,weight))throw Object.assign(new Error('Daily work allowance reached'),{status:429});
+    if(disabled)throw new LocalThrottle('Usage allowance reached; retry later','throttle_runtime_disabled');
+    if(storageEnabled()&&!await storage().consume('work#'+new Date(now()).toISOString().slice(0,10),6000,weight))throw new LocalThrottle('Daily work allowance reached','throttle_daily_work');
   }
   async function sse(req,res,tickers,identity,multiplex=false){
     tickers=[...new Set(tickers.map(validateTicker))];
     if(!tickers.length||tickers.length>(multiplex?12:1))throw new RangeError('Choose one to twelve unique portfolio tickers');
-    if(connections>=16||(streamByIP.get(identity)||0)>=3)throw Object.assign(new Error('Streaming capacity is currently full'),{status:429});
+    if(connections>=16||(streamByIP.get(identity)||0)>=3)throw new LocalThrottle('Streaming capacity is currently full','throttle_stream_capacity');
     if(!Number.isSafeInteger(streamMonthlyMinutes)||streamMonthlyMinutes<1||streamMonthlyMinutes>60000)throw new RangeError('Invalid streaming allowance');
     if(!Number.isSafeInteger(streamMonthlyBytes)||streamMonthlyBytes<65536||streamMonthlyBytes>100000000000)throw new RangeError('Invalid streaming byte allowance');
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
@@ -100,7 +145,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       const count=(streamByIP.get(identity)||1)-1;if(count)streamByIP.set(identity,count);else streamByIP.delete(identity);};
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
-    try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});}
+    try{await quota(3);if(!await consumeMinute()||!await consumeBytes())throw new LocalThrottle('Monthly streaming allowance reached','throttle_stream_allowance');}
     catch(error){releaseCount();throw error;}
     if(req.aborted||res.destroyed){releaseCount();return;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
@@ -151,8 +196,11 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
   }
   const server=createServer({maxHeaderSize:16384,headersTimeout:10000,requestTimeout:25000,keepAliveTimeout:5000},async(req,res)=>{
     headers(req,res);
-    const started=performance.now();let trace,route='unknown',reported=false;
-    const report=()=>{if(reported)return;reported=true;const durationMs=Math.round((performance.now()-started)*100)/100;telemetry.observeRequest({route,status:res.statusCode,durationMs});recordLog('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:durationMs,
+    const started=performance.now();let trace,route='other',reported=false,localThrottle;
+    const throttle=(reason,value)=>{localThrottle=reason;return json(res,value,429);};
+    const report=()=>{if(reported)return;reported=true;const durationMs=Math.round((performance.now()-started)*100)/100;
+      const errorCode=res.statusCode===429?throttleReason(localThrottle):undefined;
+      telemetry.observeRequest({route,status:res.statusCode,durationMs,errorCode});recordLog('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:durationMs,error_code:errorCode,
       trace_id:trace?.traceId,span_id:trace?.spanId,parent_id:trace?.parentId,baggage_dropped:trace?.baggageDropped,open_streams:connections});};
     res.once('finish',report);res.once('close',report);
     try{
@@ -160,9 +208,9 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       const url=new URL(req.url,'http://localhost'),edgeVerified=serviceAuthorized(req.headers['x-market-edge-secret'],edgeSecret);
       trace=traceContext(req.headers,{trusted:edgeVerified||serviceAuthorized(req.headers.authorization,serviceSecret)});
       res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
-      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|reserve-azure|read-azure|settle)))$/.test(url.pathname)?url.pathname:'unknown';
+      route=operationalRoute(url.pathname);
       const identity=requestIdentity(req,edgeVerified);
-      if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
+      if(!allowed(identity)){res.setHeader('Retry-After','60');return throttle('throttle_general_admission',{error:'Rate limit reached. Retry in one minute.'});}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
       if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:azureMode()==='live'?'Azure Container Apps':'Railway Node backend',market_data_only:true,
         streaming:{connections,transport:quoteTransport,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
@@ -176,17 +224,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
           if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'Public source retrieval includes body reads and decoding. Other HTTP adapter timings may stop at response headers. Supabase Auth measures SDK calls.'});
           if(input.operation==='runtime_metrics'){res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4; charset=utf-8','Cache-Control':'no-store'});return res.end(telemetry.prometheus());}
           if(!storageEnabled()||storage().kind!=='postgres')return json(res,{error:'The relational store is not configured'},503);
-          if(input.operation==='usage_allowances'){
-            const month=new Date(now()).toISOString().slice(0,7),day=new Date(now()).toISOString().slice(0,10);
-            const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
-              ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
-              ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
-              ['daily_work','work#'+day,6000],['daily_cpu_ms','cpu-ms#'+day,1800000]];
-            const rows=(await storage().db.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',[resources.map(row=>row[1])])).rows;
-            const used=new Map(rows.map(row=>[row.key,row.used]));
-            return json(res,{as_of:new Date(now()).toISOString(),allowances:resources.map(([resource,key,limit])=>({resource,limit,used:used.get(key)||0,
-              remaining:Math.max(0,limit-(used.get(key)||0)),warning:(used.get(key)||0)>=limit*.8})),scope:'Reserved application allowances; provider invoices and included plan usage are separate.'});
-          }
+          if(input.operation==='usage_allowances')return json(res,await usageAllowances(storage().db));
           if(input.operation!=='database_latency'||!Number.isInteger(input.samples)||input.samples<1||input.samples>9)throw new RangeError('Choose usage_allowances or database_latency with one through nine samples');
           await quota(3);const milliseconds=[];
           for(let i=0;i<input.samples;i++){const start=performance.now();await observeProviderAttempt('postgres',()=>storage().db.query('SELECT 1'),telemetry);milliseconds.push(Math.round((performance.now()-start)*100)/100);}
@@ -202,11 +240,10 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
           if(input.kind==='research'){
             await quota();
             const allowed=await consume(day+'#'+input.fingerprint,30,172800);
-            return json(res,{allowed},allowed?200:429);
+            return allowed?json(res,{allowed}):throttle('throttle_assistant_allowance',{allowed});
           }
-          const daily=Number(process.env.AZURE_FOUNDRY_DAILY_CALLS||0),monthly=Number(process.env.AZURE_FOUNDRY_MONTHLY_CALLS||0);
-          const enabled=process.env.AZURE_FOUNDRY_ENABLED==='1'&&Number.isInteger(daily)&&daily>=1&&daily<=30&&Number.isInteger(monthly)&&monthly>=daily&&monthly<=300;
-          const allowed=enabled&&await consume('foundry#'+day,daily,172800)&&await consume('foundry#'+month,monthly,45*86400);
+          const foundry=foundryAllowance();
+          const allowed=Boolean(foundry)&&await consume('foundry#'+day,foundry.daily,172800)&&await consume('foundry#'+month,foundry.monthly,45*86400);
           return json(res,{allowed});
         }
         if(url.pathname==='/internal/assistant/read-azure'){
@@ -220,7 +257,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
           const tools=planResearchReadback(question,scope);
           await quota(5+2*tools.length);
           if(!await storage().consume('azure-assistant#'+day+'#'+fingerprint,30,1,172800)){
-            return json(res,{error:'The research assistant allowance is exhausted. Market data remains available.'},429);
+            return throttle('throttle_assistant_allowance',{error:'The research assistant allowance is exhausted. Market data remains available.'});
           }
           const abort=new AbortController();
           const cancel=()=>abort.abort();
@@ -268,7 +305,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
         const current=now(),slot=Math.floor(current/rateWindowMs);
         if(!withinLimit('heavy#'+identity,azureHeavyRequestsPerWindow,slot)){
           res.setHeader('Retry-After',String(Math.ceil(((slot+1)*rateWindowMs-current)/1000)));
-          return json(res,{error:'Research requests are arriving too quickly. Retry shortly.'},429);
+          return throttle('throttle_heavy_burst',{error:'Research requests are arriving too quickly. Retry shortly.'});
         }
       }
       if(url.pathname==='/api/session'||url.pathname.startsWith('/api/account/')){
@@ -304,6 +341,7 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       res.writeHead(output.status,Object.fromEntries(output.headers));res.end(buffer);
     }catch(error){
       if(res.headersSent)return res.end();
+      if(error instanceof LocalThrottle)return throttle(error.reason,{error:error.message});
       const status=error.name==='ConditionalCheckFailedException'?409:error.status||(error instanceof SyntaxError||error instanceof RangeError||error instanceof URIError?400:503);
       const message=error instanceof SyntaxError?'Request body must be valid JSON':error.name==='ConditionalCheckFailedException'?'A forecast for this contract is already registered in this journal':
         status<500?error.message:'The data service is temporarily unavailable. Try again shortly.';
@@ -316,8 +354,10 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
       const memory=process.memoryUsage();let pool;try{pool=storageEnabled()?storage().db:null;}catch{}
       recordLog('runtime.health',{event_loop_p99_ms:Math.round(eventLoop.percentile(99)/1e4)/100,heap_mb:Math.round(memory.heapUsed/1048576),rss_mb:Math.round(memory.rss/1048576),open_streams:connections,pool_total:pool?.totalCount,pool_idle:pool?.idleCount,pool_waiting:pool?.waitingCount});eventLoop.reset();
       if(!storageEnabled())return;
-    try{const stop=await storage().get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await storage().consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
+    let activeStorage;
+    try{activeStorage=storage();const stop=await activeStorage.get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await activeStorage.consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
     catch{disabled=true;}
+    if(isAzure&&production)await observeAllowances(activeStorage);
   },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();publicFeed?.close();});
   return server;
 }
