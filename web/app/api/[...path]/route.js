@@ -42,7 +42,12 @@ export async function GET(request, context) {
     else if(endpoint==="export.xlsx") return new Response(await workbook(vertical),{headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=\"kalshi-live-research.xlsx\""}});
     else return Response.json({error:"Unknown API path"},{status:404,headers});
     return Response.json(result,{headers});
-  } catch(error) {return Response.json({error:error.message,status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});}
+  } catch(error) {
+    if(error.upstream_status===429&&Number.isSafeInteger(error.retry_after_seconds)&&error.retry_after_seconds>0){
+      return Response.json({error:error.message,status:"unavailable"},{status:429,headers:{...headers,"Retry-After":String(error.retry_after_seconds)}});
+    }
+    return Response.json({error:error.message,status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});
+  }
 }
 export async function POST(request,context) {
   const {path}=await context.params,endpoint=path.join("/"),headers={"Cache-Control":"no-store"};
