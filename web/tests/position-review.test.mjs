@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {usableForecast} from '../lib/workspace/positions.mjs';
 import {localPositionReview} from '../lib/workspace/mcp.mjs';
 import {parsePositionReview,reviewPaperPosition,summarizePositionFlow} from '../lib/workspace/position-review.mjs';
 import {screenAvailabilityForecast} from '../lib/workspace/nba-availability-feedback.mjs';
@@ -7,6 +8,14 @@ import {POST} from '../app/api/[...path]/route.js';
 import {proxyBackend} from '../lib/workspace/proxy.mjs';
 
 const date=now=>new Date(now).toISOString();
+test('a missing research packet is distinct from a mismatched contract',()=>{
+  const now=Date.now(),ticker='KXTEST-ALPHA';
+  const missing=usableForecast(undefined,now,ticker),mismatch=usableForecast({ticker:'KXTEST-BETA'},now,ticker);
+  assert.equal(missing.eligible,false);
+  assert.match(missing.reason,/no independent research packet/i);
+  assert.equal(mismatch.eligible,false);
+  assert.match(mismatch.reason,/does not match this exact contract/i);
+});
 function setup(ticker,options={}){
   const now=Date.now(),as_of=date(now-1000);
   const market={ticker,event_ticker:'same-event',status:options.status||'active',close_time:date(now+60000)};

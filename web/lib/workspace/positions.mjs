@@ -2,6 +2,7 @@ import {executionCurve} from './execution-curve.mjs';
 import {nflContractIdentity} from './nfl-source.mjs';
 
 export function usableForecast(research,now=Date.now(),expectedTicker) {
+  const missing=!research;
   const f=research?.forecast,p=f?.probability,range=f?.interval;
   const identity=!expectedTicker||Boolean((research?.ticker===expectedTicker||research?.market?.ticker===expectedTicker)&&(!research?.ticker||research.ticker===expectedTicker)&&(!research?.market?.ticker||research.market.ticker===expectedTicker));
   const valid=identity&&Number.isFinite(p)&&p>=0&&p<=1&&Array.isArray(range)&&range.length===2&&range.every(Number.isFinite)&&range[0]>=0&&range[0]<=p&&range[1]>=p&&range[1]<=1;
@@ -10,7 +11,12 @@ export function usableForecast(research,now=Date.now(),expectedTicker) {
   const start=Date.parse(research?.extensions?.sports?.event?.played_at||''),expiredDomain=!f?.inplay&&Number.isFinite(start)&&start<=now;
   const fresh=Number.isFinite(age)&&age>=-5000&&age<=maxAge&&!research?.error&&!expiredDomain;
   const eligible=valid&&f?.eligible!==false&&validated&&f?.evidence?.tier>=2&&fresh;
-  return {valid,eligible,fresh,experimental:Boolean(f?.experimental),probability:valid?p:null,interval:valid?range:null,model:f?.model_name||null,reason:!identity?'The research packet does not match this exact contract.':!valid?'No matched independent probability is available.':research?.error?'The research refresh failed. Cached estimates cannot drive a current position action.':expiredDomain?'This pregame estimate expired when the event started. Fresh in-play research is required.':!eligible?'The latest model has not met its release, coverage or freshness requirements.':null};
+  const reason=missing?'No independent research packet was available for this contract in this scan.':
+    !identity?'The research packet does not match this exact contract.':!valid?'No matched independent probability is available.':
+    research?.error?'The research refresh failed. Cached estimates cannot drive a current position action.':
+    expiredDomain?'This pregame estimate expired when the event started. Fresh in-play research is required.':
+    !eligible?'The latest model has not met its release, coverage or freshness requirements.':null;
+  return {valid,eligible,fresh,experimental:Boolean(f?.experimental),probability:valid?p:null,interval:valid?range:null,model:f?.model_name||null,reason};
 }
 
 export function nflPositionPayout(research,market,side,now,forecast){
