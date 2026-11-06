@@ -92,7 +92,7 @@ test('Azure live app paths require edge authorization and MCP remains a separate
     }},
     mcp: (request, response, body, options) => handleMCP(request, response, body, {...options, dependencies: {
       marketDetails: async () => { counters.tools++; return {market: {ticker, title: 'Fixture market'}, as_of: new Date().toISOString()}; },
-      book: async () => ({raw: {}, metrics: {book_ask: .42}, as_of: new Date().toISOString()}),
+      book: async () => ({ticker, raw: {}, metrics: {book_ask: .42}, as_of: new Date().toISOString()}),
     }}),
   });
   server.listen(0, '127.0.0.1');
