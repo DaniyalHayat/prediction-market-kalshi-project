@@ -35,6 +35,32 @@ try {
   browser = await chromium.launch({executablePath: process.env.CHROMIUM_EXECUTABLE || undefined, headless: true})
   const page = await browser.newPage({viewport: {width: 1180, height: 940}})
   const errors = []
+  let assessments = 0
+  await page.route(/\/api\/sre\?/, async route => {
+    const request = route.request()
+    const url = new URL(request.url())
+    assert.match(url.searchParams.get('review'), /^[a-f0-9]{64}$/)
+    assert.equal(request.headers().authorization, 'Bearer ' + token)
+    assessments += 1
+    await route.fulfill({json: {
+      findings: [
+        {kind: 'throttle_cause', certainty: 'observed', source: 'retained_log',
+          summary: 'A burst limit rejected one request.', recommendation: 'Space out optional calls.', count: 1},
+        {kind: 'azure_status_count', certainty: 'unattributed', source: 'azure_monitor', layer: 'front', count: 2,
+          summary: 'Two throttles were counted.', recommendation: 'Check the reason-coded events.'},
+      ],
+      usage: [{resource: 'daily_work', unit: 'work_units', scope: 'application_allowance', used: 1, limit: 2, percent: 50}],
+      usage_as_of: null,
+      operator_activity: {paused: 1, reused: 2},
+      limitations: ['Application allowances are separate from billed tokens.'],
+    }})
+  })
+  await page.route(/\/api\/reviews\?/, async route => {
+    const response = await route.fetch()
+    const {items} = await response.json()
+    const source = new URL(route.request().url()).searchParams.get('q') ? 'local-fallback' : 'azure-search'
+    await route.fulfill({response, json: {items, source}})
+  })
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto('http://127.0.0.1:' + server.address().port)
   await page.getByRole('heading', {name: 'Operations review'}).waitFor()
@@ -47,6 +73,15 @@ try {
   await page.getByLabel('Profile name').fill('Readiness check')
   await page.getByRole('button', {name: 'Run and archive'}).click()
   await page.getByRole('heading', {name: title}).waitFor()
+  await page.getByLabel('Search source Azure AI Search and local archive').waitFor()
+  const advisor = page.getByRole('region', {name: 'SRE advisor'})
+  await advisor.getByText('A burst limit rejected one request.').waitFor()
+  assert.ok(await advisor.getByText('Cause unverified').isVisible())
+  assert.ok(await advisor.getByText('Daily application work').isVisible())
+  assert.ok(await advisor.getByText('Observations reused').isVisible())
+  await advisor.getByRole('button', {name: 'Refresh assessment'}).click()
+  await advisor.getByText('A burst limit rejected one request.').waitFor()
+  assert.equal(assessments, 2)
   const grid = page.getByRole('grid', {name: 'Connector readings'})
   assert.equal(await grid.getByRole('row').count(), 3)
   await page.getByText('Conditional formatting', {exact: false}).click()
@@ -58,6 +93,7 @@ try {
   await page.getByLabel('Search archive').fill('no matching title')
   await page.getByRole('button', {name: 'Search', exact: true}).click()
   await page.getByText('No saved review matched this search.').waitFor()
+  await page.getByLabel('Search source Local search fallback').waitFor()
   await page.getByLabel('Search archive').fill('readiness')
   await page.getByRole('button', {name: 'Search', exact: true}).click()
   await page.getByRole('button', {name: 'Open ' + title}).click()
@@ -75,6 +111,7 @@ try {
   await page.getByRole('button', {name: 'Clear access'}).click()
   assert.equal(await tokenInput.inputValue(), '')
   assert.equal(await page.getByRole('grid').count(), 0)
+  assert.equal(await page.getByRole('region', {name: 'SRE advisor'}).count(), 0)
   assert.deepEqual(await page.evaluate(() => [localStorage.length, sessionStorage.length]), [0, 0])
   const files = await readdir(folder)
   assert.equal(files.length, 1)

@@ -6,18 +6,20 @@ on:
     paths:
       - 'ops-ui/**'
       - 'web/lib/runtime/operator*.mjs'
-      - 'web/tools/operator.mjs'
+      - 'web/tools/operator*.mjs'
       - 'web/tests/operator*.test.mjs'
       - 'terraform/azure/hosted/export-operator-metrics.mjs'
+      - 'terraform/azure/hosted/operator-search.arm.json'
       - 'terraform/azure/hosted/tests/operator-metrics.test.mjs'
       - '.github/workflows/operator-checks.yml'
   pull_request:
     paths:
       - 'ops-ui/**'
       - 'web/lib/runtime/operator*.mjs'
-      - 'web/tools/operator.mjs'
+      - 'web/tools/operator*.mjs'
       - 'web/tests/operator*.test.mjs'
       - 'terraform/azure/hosted/export-operator-metrics.mjs'
+      - 'terraform/azure/hosted/operator-search.arm.json'
       - 'terraform/azure/hosted/tests/operator-metrics.test.mjs'
       - '.github/workflows/operator-checks.yml'
 

@@ -27,6 +27,8 @@ export type ReviewSummary = {
 }
 
 export type Review = ReviewSummary & {checks: Reading[]}
+export type ArchiveSource = 'azure-search' | 'local' | 'local-fallback'
+export type Archive = {items: ReviewSummary[]; source: ArchiveSource}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -65,11 +67,12 @@ export function parseReview(value: unknown): Review {
   return {...value, checks: value.checks}
 }
 
-export function parseArchive(value: unknown): ReviewSummary[] {
+export function parseArchive(value: unknown): Archive {
   if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(isSummary)) {
     throw new Error('The server returned an unreadable archive.')
   }
-  return value.items
+  const source = value.source === 'azure-search' || value.source === 'local-fallback' ? value.source : 'local'
+  return {items: value.items, source}
 }
 
 export async function readOperatorJson(path: string, token: string, signal: AbortSignal, body?: object): Promise<unknown> {

@@ -24,7 +24,7 @@ node web/tools/operator.mjs
 
 Open [the local workbench](http://127.0.0.1:8790), paste the local operator token, and select the checks you want. Clear the clipboard after pasting. Export Azure metrics again when the snapshot ages past 30 minutes. To include process percentiles and retained throttle counts, set `OPERATOR_SNAPSHOT_PATH` to an explicitly exported `runtime_snapshot` from the existing private diagnostics endpoint. These are bounded process samples. Counts of retained 429 records can be lower than actual throttles.
 
-The review action makes bounded reads of the configured public Azure frontend and uses the existing MCP source-coverage route. It never takes provider addresses or Azure credentials from the browser. The operator server binds to loopback and requires a separate token. Azure checks use the CLI export. The evidence archive keeps up to 256 local, content-addressed records and indexes generated labels, statuses, connectors, and safe dimensions. It stores no raw logs, model replies, connection strings, or provider tokens. The public trading interface has no management entry point. [Fluent UI v9](https://github.com/microsoft/fluentui) · [Formik validation](https://formik.org/docs/guides/validation) · [Azure Monitor metrics](https://learn.microsoft.com/azure/container-apps/metrics)
+The review action makes bounded reads of the configured public Azure frontend and uses the existing MCP source-coverage route. The operator server binds to loopback and requires a separate token. Azure checks use the CLI export. The evidence archive keeps up to 256 local, content-addressed records. The public trading interface has no management entry point. [Fluent UI v9](https://github.com/microsoft/fluentui) · [Formik validation](https://formik.org/docs/guides/validation) · [Azure Monitor metrics](https://learn.microsoft.com/azure/container-apps/metrics)
 
 ## Interpreting the traffic check
 
@@ -34,9 +34,22 @@ The Azure runtime shares a per-client budget of 12 full evidence, headline repla
 
 The backend reached a one-minute mean working set of about 601 MiB during the measured day. A move to the smaller 512 MiB profile would put the observed workload above its memory allocation. Revisit compute sizing with peak measurements and cold-start checks before changing the warm deployment. [Container Apps billing](https://learn.microsoft.com/azure/container-apps/billing) · [Container Apps scaling](https://learn.microsoft.com/azure/container-apps/scale-app)
 
-## Extending the evidence store
+## Azure Search and the SRE advisor
 
-Azure Blob Storage would fit an access-controlled, shared receipt archive. Azure AI Search would add cross-document retrieval if the collection outgrows the local index. Both are optional extensions. The current workload generates metadata from bounded structured observations, which keeps capture reproducible and avoids a model call for each receipt. [Blob indexer and field mappings](https://learn.microsoft.com/azure/search/search-indexer-overview)
+The Free Azure AI Search index supports operational keyword searches such as `throttle`, `health`, and `p99`. It receives receipt digests, generated allowlisted tags, status, capture time and counts. The workbench loads full matching records from the local archive, which stays authoritative during indexing delays and service outages. Private profile titles, arbitrary search terms, raw logs, model replies and credentials stay local. The dedicated service uses Entra authentication and disables API keys. [Free tier](https://learn.microsoft.com/azure/search/search-try-for-free) · [Azure Search RBAC](https://learn.microsoft.com/azure/search/search-security-rbac)
+
+Use the existing signed-in Azure CLI account with scoped Search Service Contributor and Search Index Data Contributor permissions on the dedicated service. Add these settings before starting the local workbench. The initialization command validates the dedicated schema and synchronizes up to 50 recent local receipts. Repeat it to recover a delayed or unavailable index update.
+
+```powershell
+$env:OPERATOR_SEARCH_ENDPOINT = 'https://predictirazv2k8lc-ops-search.search.windows.net'
+$env:OPERATOR_AZURE_LOG_GROUP = 'predictirazv2k8lc-rg'
+$env:OPERATOR_AZURE_LOG_APP = 'predictirazv2k8lc-backend'
+node web/tools/operator.mjs --init-search
+```
+
+The SRE advisor reads a bounded Azure console snapshot on demand. Set `OPERATOR_LOG_DRAIN_PATH` to an existing filtered NDJSON export if you also want the advisor to inspect it. Recognized reason codes identify the guard that rejected an observed request. The advisor keeps process counters, retained log samples, and aggregate Azure totals separate. The backend emits a small allowance summary at most every five minutes. An optional private `usage_allowances` export can be supplied with `OPERATOR_USAGE_SNAPSHOT_PATH`. These values are application usage and reservations. Provider-billed tokens require provider telemetry.
+
+The advisor uses deterministic rules. After a 429 it pauses its optional MCP probe until the retry window elapses and leaves the health and catalog checks available. A successful observation can be reused for 20 seconds. A reused check is labeled separately and carries no fresh latency measurement. The advisor can recommend infrastructure changes. The automatic actions affect only local probe scheduling. [Container Apps log streaming](https://learn.microsoft.com/azure/container-apps/log-streaming)
 
 Kusto can attribute a future throttling burst to an allowlisted route and revision if Container Apps ingress logs are retained. The current deployment uses platform metrics and on-demand console streaming. This query is a template for a workspace with the documented `ContainerAppHTTPLogs` table.
 

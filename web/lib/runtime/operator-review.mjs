@@ -1,5 +1,6 @@
 import {readJSON} from '../transport.mjs';
 import {buildOperatorReport} from './operator.mjs';
+import {operatorProbeBackoff} from './operator-sre.mjs';
 
 export const reviewChecks = ['runtime', 'azure', 'http', 'mcp'];
 export const reviewName = /^[A-Za-z0-9][A-Za-z0-9 _-]{1,46}[A-Za-z0-9]$/;
@@ -96,6 +97,8 @@ async function readText(response, maximum) {
 
 export function createOperatorReview({origin, readSnapshot, readAzure, fetcher = fetch, now = Date.now} = {}) {
   const target = publicOrigin(origin);
+  const activity = {paused: 0, reused: 0};
+  let pausedUntil = 0, mcpCacheUntil = 0;
 
   async function probe(connector, check, path, verify, {signal, body, maximum = 131072} = {}) {
     if (!target) return {check: reading(connector, check, 'unavailable')};
@@ -113,7 +116,8 @@ export function createOperatorReview({origin, readSnapshot, readAzure, fetcher =
       if (!response.ok) {
         await response.body?.cancel();
         return {check: reading(connector, check, statusCode === 429 || statusCode === 403 ? 'unavailable' : 'fail',
-          {status_code: statusCode, latency_ms: Math.round(performance.now() - start)})};
+          {status_code: statusCode, latency_ms: Math.round(performance.now() - start)}),
+          retryAfter: response.headers.get('retry-after')};
       }
       const packet = body ? await readText(response, maximum) : (await readJSON(response, {maximumBytes: maximum})).data;
       return {check: reading(connector, check, verify(packet, response.headers) ? 'pass' : 'fail',
@@ -125,6 +129,14 @@ export function createOperatorReview({origin, readSnapshot, readAzure, fetcher =
   }
 
   async function mcpCheck(signal) {
+    if (now() < pausedUntil) {
+      activity.paused++;
+      return [reading('mcp', 'source_status_cooldown', 'unavailable', {value: pausedUntil - now(), unit: 'ms'})];
+    }
+    if (now() < mcpCacheUntil) {
+      activity.reused++;
+      return [reading('mcp', 'source_status_cached', 'pass')];
+    }
     const markets = await probe('mcp', 'open_contract', '/api/workspace/markets?category=sports',
       value => value.category === 'sports' && Array.isArray(value.markets), {signal, maximum: 3 * 1024 * 1024});
     if (markets.check.status !== 'pass') return [markets.check];
@@ -136,10 +148,14 @@ export function createOperatorReview({origin, readSnapshot, readAzure, fetcher =
       ['MCP In-Process', 'MCP Streamable HTTP'].includes(headers.get('x-research-transport')) &&
       headers.get('x-research-model') === 'azure-deterministic',
     {signal, body: {ticker: market.ticker, messages: [{role: 'user', content: 'What is the provider and warehouse coverage?'}]}});
+    const pause = operatorProbeBackoff({check: coverage.check.check, status: coverage.check.status_code,
+      retryAfter: coverage.retryAfter, now: now()});
+    if (pause) pausedUntil = pause.until;
+    if (coverage.check.status === 'pass') mcpCacheUntil = now() + 20000;
     return [markets.check, coverage.check];
   }
 
-  return async function runReview(input, {signal} = {}) {
+  async function runReview(input, {signal} = {}) {
     const profile = parseReviewProfile(input);
     const captured_at = new Date(now()).toISOString();
     const tasks = {
@@ -160,5 +176,6 @@ export function createOperatorReview({origin, readSnapshot, readAzure, fetcher =
     }));
     signal?.throwIfAborted();
     return {profile: profile.name, captured_at, checks: groups.flat()};
-  };
+  }
+  return Object.assign(runReview, {activity: () => ({...activity})});
 }

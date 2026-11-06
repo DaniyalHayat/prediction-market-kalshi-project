@@ -5,8 +5,9 @@ import {
 } from '@fluentui/react-components'
 import {useFormik} from 'formik'
 import {capturedDate, ReviewArchive, ReviewReadings, StatusBadge} from './grids'
-import {checks, parseArchive, parseReview, readOperatorJson, type Check, type Review, type ReviewSummary} from './reviews'
+import {checks, parseArchive, parseReview, readOperatorJson, type Archive, type ArchiveSource, type Check, type Review} from './reviews'
 import {connectors, describeRule, measurementKey, measurementLabel, normalizeReadings, numericFields, validateRule, type NumericPath, type Rule, type RuleInput} from './rules'
+import {SreAdvisor} from './sre-advisor'
 import './operator.css'
 
 const checkLabels: Record<Check, string> = {
@@ -17,6 +18,11 @@ type Task = 'capture' | 'archive' | 'open'
 const emptyProfile: Profile = {name: 'Release verification', token: '', checks: ['http', 'mcp']}
 const initialRule: RuleInput = {connector: 'api', path: 'timing.latency_ms', comparison: 'at_least', threshold: '1000', metric: ''}
 const maxRules = 8
+const archiveSources: Record<ArchiveSource, string> = {
+  'azure-search': 'Azure AI Search and local archive',
+  local: 'Local archive',
+  'local-fallback': 'Local search fallback',
+}
 
 function validateToken(token: string) {
   return /^[\x21-\x7e]{32,256}$/.test(token) ? undefined : 'Enter a 32–256 character operator token without spaces.'
@@ -142,7 +148,7 @@ function Operator() {
   const [message, setMessage] = useState('')
   const [failure, setFailure] = useState('')
   const [query, setQuery] = useState('')
-  const [items, setItems] = useState<ReviewSummary[] | null>(null)
+  const [archive, setArchive] = useState<Archive | null>(null)
   const [review, setReview] = useState<Review>()
   const [rules, setRules] = useState<Rule[]>([])
   const pending = useRef<AbortController | null>(null)
@@ -184,11 +190,11 @@ function Operator() {
       signal.throwIfAborted()
       setReview(result)
       setQuery('')
-      setItems(null)
+      setArchive(null)
       setMessage('Review captured and archived.')
       const archive = await loadArchive(values.token, '', signal)
       signal.throwIfAborted()
-      setItems(archive)
+      setArchive(archive)
     }),
   })
   const accessToken = profile.values.token
@@ -219,8 +225,8 @@ function Operator() {
     void perform('archive', async signal => {
       const result = await loadArchive(accessToken, query, signal)
       signal.throwIfAborted()
-      setItems(result)
-      setMessage(result.length === 1 ? 'One review found.' : `${result.length} reviews found.`)
+      setArchive(result)
+      setMessage(result.items.length === 1 ? 'One review found.' : `${result.items.length} reviews found.`)
     })
   }
 
@@ -238,7 +244,7 @@ function Operator() {
     pending.current?.abort()
     pending.current = null
     setBusy(null)
-    setItems(null)
+    setArchive(null)
     setReview(undefined)
     setQuery('')
     setMessage('Operator access cleared.')
@@ -279,7 +285,7 @@ function Operator() {
             validationState={validation('token') ? 'error' : 'none'} hint="Kept in memory for this tab.">
             <Input {...profile.getFieldProps('token')} type="password" autoComplete="off" spellCheck={false}
               maxLength={256} disabled={Boolean(busy)} ref={tokenInput} onChange={event => {
-                setItems(null)
+                setArchive(null)
                 setReview(undefined)
                 setMessage('')
                 setFailure('')
@@ -301,25 +307,31 @@ function Operator() {
           <div className="actions">
             <Button type="submit" appearance="primary" disabled={Boolean(busy)}>Run and archive</Button>
             <Button disabled={Boolean(busy) || !review} onClick={reuseProfile}>Reuse profile</Button>
-            <Button appearance="subtle" disabled={!accessToken && !items && !review} onClick={clearAccess}>Clear access</Button>
+            <Button appearance="subtle" disabled={!accessToken && !archive && !review} onClick={clearAccess}>Clear access</Button>
           </div>
         </form>
       </section>
       <div className="workspace-results">
         <section className="surface" aria-labelledby="archive-title">
           <div className="eyebrow">Recall</div>
-          <h2 id="archive-title">Saved reviews</h2>
+          <div className="sre-header">
+            <h2 id="archive-title">Saved reviews</h2>
+            {archive && <Badge appearance="outline" shape="rounded" aria-label={'Search source ' + archiveSources[archive.source]}>
+              {archiveSources[archive.source]}
+            </Badge>}
+          </div>
           <form className="archive-search" onSubmit={search}>
-            <Field label="Search archive" hint="Up to eight terms.">
+            <Field label="Search archive" hint="Up to eight terms. Title searches stay local.">
               <Input value={query} onChange={(_, data) => setQuery(data.value)} disabled={Boolean(busy)}
                 placeholder="Title, status or connector" maxLength={120} />
             </Field>
             <Button type="submit" disabled={Boolean(busy)}>Search</Button>
           </form>
-          {items === null ? <p className="empty">Search with your operator token to load saved reviews.</p> :
-            items.length === 0 ? <p className="empty">No saved review matched this search.</p> :
-            <ReviewArchive items={items} selected={review?.id} disabled={Boolean(busy)} open={open} />}
+          {archive === null ? <p className="empty">Search with your operator token to load saved reviews.</p> :
+            archive.items.length === 0 ? <p className="empty">No saved review matched this search.</p> :
+            <ReviewArchive items={archive.items} selected={review?.id} disabled={Boolean(busy)} open={open} />}
         </section>
+        {review && <SreAdvisor key={review.id} id={review.id} token={accessToken} />}
         <section className="surface" aria-labelledby="detail-title">
           <div className="eyebrow">Inspect</div>
           <h2 id="detail-title">Review evidence</h2>

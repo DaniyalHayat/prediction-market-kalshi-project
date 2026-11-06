@@ -31,6 +31,35 @@ test('profiles validate nested check choices and Azure gaps remain distinct from
   assert.equal(azureReadings(azure, stamp + 31 * 60_000)[0].status, 'unavailable');
 });
 
+test('optional MCP work honors Retry-After and briefly reuses a successful observation', async () => {
+  let clock = stamp, pending429 = true;
+  const calls = [];
+  const run = createOperatorReview({origin: target, now: () => clock, fetcher: async url => {
+    calls.push(url.pathname);
+    if (url.pathname === '/api/workspace/markets') return Response.json({category: 'sports',
+      markets: [{ticker: 'SPORT-TEST', status: 'open', close_time: new Date(stamp + 1800000).toISOString()}]});
+    if (url.pathname === '/api/health') return Response.json({status: 'ok', runtime: 'Azure Container Apps'});
+    if (url.pathname === '/api/workspace/catalog') return Response.json({categories: Array(8).fill({})});
+    if (pending429) return new Response(null, {status: 429, headers: {'Retry-After': '45'}});
+    return new Response('Warehouse coverage: 50 public rows.', {headers: {
+      'Content-Type': 'text/plain', 'X-Research-Transport': 'MCP In-Process', 'X-Research-Model': 'azure-deterministic',
+    }});
+  }});
+  const config = {name: 'Probe controls', checks: ['http', 'mcp']};
+  assert.ok((await run(config)).checks.some(row => row.status_code === 429));
+  clock += 10000;
+  assert.ok((await run(config)).checks.some(row => row.check === 'source_status_cooldown' && row.value === 35000));
+  assert.equal(calls.filter(path => path === '/api/assistant').length, 1);
+  assert.equal(calls.filter(path => path === '/api/health').length, 2);
+  pending429 = false;
+  clock += 35000;
+  assert.ok((await run(config)).checks.some(row => row.check === 'source_status' && row.status === 'pass'));
+  clock += 10001;
+  assert.ok((await run(config)).checks.some(row => row.check === 'source_status_cached'));
+  assert.equal(calls.filter(path => path === '/api/assistant').length, 2);
+  assert.deepEqual(run.activity(), {paused: 1, reused: 1});
+});
+
 test('operator flow runs scoped live-style API and MCP checks and saves searchable projected evidence', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'operator-review-'));
   const readSnapshot = async () => ({telemetry: {distributions: {'provider:kalshi': {p95_ms: 7, p99_ms: 11, window_count: 100}}},
@@ -56,6 +85,7 @@ test('operator flow runs scoped live-style API and MCP checks and saves searchab
   });
   const token = 'local-operator-test-'.repeat(3);
   const server = createOperatorServer({token, readSnapshot, runReview, evidence: createOperatorEvidenceStore(directory), now: () => clock,
+    readSre: async saved => ({observed_id: saved.id}),
     assets: {js: '/* bundle */', css: 'body{}'}});
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => {
@@ -87,6 +117,9 @@ test('operator flow runs scoped live-style API and MCP checks and saves searchab
   assert.deepEqual(search.items.map(row => row.id), [receipt.id]);
   assert.equal(search.items[0].checks, undefined);
   assert.deepEqual(await (await fetch(base + '/api/reviews/' + receipt.id, {headers: auth})).json(), receipt);
+  const sre = base + '/api/sre?review=' + receipt.id;
+  assert.equal((await fetch(sre)).status, 401);
+  assert.deepEqual(await (await fetch(sre, {headers: auth})).json(), {observed_id: receipt.id});
   assert.equal((await post(profile)).status, 429);
   assert.equal(calls.length, 4);
   clock += 10001;

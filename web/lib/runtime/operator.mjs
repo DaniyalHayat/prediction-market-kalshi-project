@@ -50,7 +50,7 @@ function json(res, body, status = 200) {
   res.end(JSON.stringify(body));
 }
 
-export function createOperatorServer({token, readSnapshot, assets, runReview, evidence, now = Date.now}) {
+export function createOperatorServer({token, readSnapshot, assets, runReview, evidence, archiveSearch, readSre, now = Date.now}) {
   if (typeof token !== 'string' || !/^[\x21-\x7e]{32,256}$/.test(token) || typeof readSnapshot !== 'function') {
     throw new TypeError('A separate operator token and snapshot reader are required');
   }
@@ -74,7 +74,8 @@ export function createOperatorServer({token, readSnapshot, assets, runReview, ev
     if (path === '/operator.css' && assets) { res.setHeader('Content-Type', 'text/css; charset=utf-8'); res.end(assets.css); return; }
     const receipt = hasReviews && /^\/api\/reviews\/([a-f0-9]{64})$/.exec(path);
     const collection = hasReviews && path === '/api/reviews';
-    if (path !== '/api/report' && !collection && !receipt) { res.writeHead(404); res.end(); return; }
+    const sre = hasReviews && path === '/api/sre' && typeof readSre === 'function';
+    if (path !== '/api/report' && !collection && !receipt && !sre) { res.writeHead(404); res.end(); return; }
     const authorization = req.headers.authorization || '';
     if (authorization.length > 512 || !authorization.startsWith('Bearer ') || !timingSafeEqual(digest(authorization.slice(7)), expected)) { res.writeHead(401); res.end(); return; }
     try {
@@ -83,7 +84,16 @@ export function createOperatorServer({token, readSnapshot, assets, runReview, ev
         const result = await evidence.read(receipt[1]);
         return result ? json(res, result) : json(res, {error: 'Review not found.'}, 404);
       }
-      if (!reviewWrite) return json(res, {items: await evidence.search({query: url.searchParams.get('q') ?? ''})});
+      if (sre) {
+        const id = url.searchParams.get('review') || '';
+        if (!/^[a-f0-9]{64}$/.test(id)) return json(res, {error: 'Choose a saved review.'}, 400);
+        const saved = await evidence.read(id);
+        return saved ? json(res, await readSre(saved)) : json(res, {error: 'Review not found.'}, 404);
+      }
+      if (!reviewWrite) {
+        const query = url.searchParams.get('q') ?? '';
+        return json(res, archiveSearch ? await archiveSearch.find({query}) : {items: await evidence.search({query})});
+      }
       if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') {
         return json(res, {error: 'Send a JSON review profile.'}, 415);
       }
@@ -101,7 +111,9 @@ export function createOperatorServer({token, readSnapshot, assets, runReview, ev
         const result = await runReview(input, {signal});
         signal.throwIfAborted();
         nextReviewAt = now() + 10000;
-        return json(res, await evidence.save(result), 201);
+        const saved = await evidence.save(result);
+        archiveSearch?.index(saved);
+        return json(res, saved, 201);
       } finally {
         res.off('close', cancel);
         active = false;
