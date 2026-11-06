@@ -35,37 +35,40 @@ function Candidate({row,budget,onOpen,experimental}){
   </article>;
 }
 export default function Recommendations({category='sports',categoryName='Sports',model='validated',onOpen}){
-  const [input,setInput]=useState('20'),[budget,setBudget]=useState(20),[value,setValue]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0),[showAll,setShowAll]=useState(false),[clock,setClock]=useState(Date.now());
+  const [input,setInput]=useState('20'),[budget,setBudget]=useState(20),[screen,setScreen]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0),[showAll,setShowAll]=useState(false),[clock,setClock]=useState(Date.now());
+  const requestedBudget=Number(input),valid=Number.isFinite(requestedBudget)&&requestedBudget>=1&&requestedBudget<=10000;
+  const requestKey=JSON.stringify([category,budget,model,revision]);
+  const budgetPending=valid&&requestedBudget!==budget;
+  const value=!budgetPending&&screen?.requestKey===requestKey?screen.result:null;
   useEffect(()=>{const number=Number(input);if(!Number.isFinite(number)||number<1||number>10000)return;const timer=setTimeout(()=>setBudget(number),350);return()=>clearTimeout(timer);},[input]);
   useEffect(()=>{
     let stopped=false,nextDue=0;
-    setValue(null);setError('');setBusy(true);
+    setScreen(null);setError('');setBusy(true);
     const refresher=createVisibleRefresh(async(signal,force)=>{
       if(!force&&Date.now()<nextDue)return;setBusy(true);nextDue=Date.now()+20000;
       try{const result=await api('/api/workspace/recommendations?'+new URLSearchParams({category,budget:String(budget),model}),{signal:AbortSignal.any([signal,AbortSignal.timeout(60000)])});
         if(!stopped&&!signal.aborted&&!document.hidden){const now=Date.now(),expiry=[...(result.candidates||[]),...(result.paper_scenarios||[]),...(result.watchlist||[])].map(row=>screenFreshness(row,{now,checkedAt:result.as_of}).expires_at).filter(Number.isFinite);
-          nextDue=Math.max(now+10000,Math.min(now+screenRefreshDelay(result),expiry.length?Math.min(...expiry)-5000:Infinity));setClock(now);setValue(result);setError('');}}
+          nextDue=Math.max(now+10000,Math.min(now+screenRefreshDelay(result),expiry.length?Math.min(...expiry)-5000:Infinity));setClock(now);setScreen({requestKey,result});setError('');}}
       catch(e){if(!stopped&&!signal.aborted&&!document.hidden){setError(e.name==='TimeoutError'?'This screen took too long. Retry when the sources are ready.':e.message);nextDue=Date.now()+20000;}}
       finally{if(!stopped)setBusy(false);}
     },{visible:()=>!document.hidden&&!stopped});
     const tick=()=>{if(!document.hidden){setClock(Date.now());refresher.refresh();}},visible=()=>{if(!document.hidden)setClock(Date.now());refresher.visibilityChanged();};
     setClock(Date.now());refresher.refresh(true);const timer=setInterval(tick,5000);document.addEventListener('visibilitychange',visible);
     return()=>{stopped=true;refresher.stop();clearInterval(timer);document.removeEventListener('visibilitychange',visible);};
-  },[category,budget,model,revision]);
+  },[category,budget,model,requestKey]);
   const ranked=Array.isArray(value?.candidates)?value.candidates:[],separateWatchlist=Array.isArray(value?.watchlist);
   const labelFreshness=row=>({...row,_freshness:screenFreshness(row,{now:clock,checkedAt:value?.as_of,error})});
   const rankedRows=ranked.map(labelFreshness),qualified=rankedRows.filter(row=>row._freshness.current&&(separateWatchlist||row.eligible||model==='challenger'&&row.scenario_eligible));
   const scenarios=(value?.paper_scenarios||[]).map(labelFreshness),scenarioTickers=new Set(scenarios.map(row=>row.ticker));
   const withheld=rankedRows.filter(row=>!qualified.includes(row)),watchlist=(separateWatchlist?[...withheld,...value.watchlist.map(labelFreshness)]:withheld).filter(row=>!scenarioTickers.has(row.ticker)),candidates=[...qualified,...scenarios,...watchlist],staleCount=candidates.filter(row=>!row._freshness.current).length;
-  const valid=Number.isFinite(Number(input))&&Number(input)>=1&&Number(input)<=10000;
   return <section className="workspace-page recommendations-page" aria-labelledby="recommendations-title">
     <div className="page-heading"><div><span className="eyebrow">{categoryName} · paper trading</span><h1 id="recommendations-title">Recommended trades</h1><p>Compare model-backed ideas and priced paper setups at the latest observed depth.</p></div><button className="secondary" onClick={()=>setRevision(v=>v+1)} disabled={busy}><RefreshCw size={15} className={busy?'spin':''}/>Refresh screen</button></div>
     <div className="screen-controls"><label><span>Paper budget per scenario</span><div className="currency-input"><b>$</b><input type="number" min="1" max="10000" step="1" value={input} onChange={e=>setInput(e.target.value)} aria-describedby="budget-explanation"/></div></label><div><strong>{model==='challenger'?'Experimental ensemble':'Validated model view'}</strong><p id="budget-explanation">Each card uses the same budget independently. The cards do not form a jointly funded portfolio.</p></div><span className="screen-count"><SlidersHorizontal size={16}/>{qualified.length} current · {candidates.length} screened{staleCount?' · '+staleCount+' stale':''}</span></div>
     {!valid&&<p className="notice" role="status">Enter a paper budget from $1 to $10,000. The last valid screen stays visible.</p>}
     {model==='challenger'&&<p className="notice experimental-note"><strong>Experimental paper research.</strong> This model has a measured holdout comparison, with statistical uncertainty. Experimental scenarios remain separate from validated release gates.</p>}
     {error&&<p className="notice error" role="alert">{error}<button className="text-button" onClick={()=>setRevision(v=>v+1)}>Try again</button></p>}
-    {busy&&!value&&<div className="workspace-empty" role="status"><Loader2 size={25} className="spin"/><h2>Screening matching contracts</h2><p>Checking independent models, fresh depth and budget-sized costs.</p></div>}
-    {value&&<><div className="screen-result-heading"><h2>{qualified.length?'Model-backed entries':scenarios.length?'Ranked paper setups':'Watchlist'}</h2><small>Checked {dateLabel(value.as_of)}{busy?' · refreshing':''}</small></div>
+    {(busy||budgetPending)&&!value&&<div className="workspace-empty" role="status"><Loader2 size={25} className="spin"/><h2>Screening matching contracts</h2><p>Checking independent models, fresh depth and budget-sized costs.</p></div>}
+    {value&&<><div className="screen-result-heading"><h2>{qualified.length?'Model-backed entries':scenarios.length?'Ranked paper setups':'Watchlist'}</h2><small>{dollars(budget)} per setup · Checked {dateLabel(value.as_of)}{busy?' · refreshing':''}</small></div>
       {!qualified.length&&scenarios.length>0&&<p className="notice">Model ideas rank by estimated value after cost. Where outcome evidence is thin, the closest break-even setups rank first.</p>}
       <div className="recommendation-grid">{qualified.map(row=><Candidate key={row.ticker+'#'+row.side} row={row} budget={budget} experimental={model==='challenger'} onOpen={onOpen}/>)}</div>
       {qualified.length>0&&scenarios.length>0&&<h2 className="watchlist-title">More paper setups</h2>}
