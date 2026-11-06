@@ -1,0 +1,74 @@
+name: Research component verification
+
+on:
+  push:
+    branches: [azure-edition]
+    paths: ['components/**', 'web/research-data/settlement-calibration-archive.json', '.github/workflows/research-components.yml']
+  pull_request:
+    paths: ['components/**', 'web/research-data/settlement-calibration-archive.json', '.github/workflows/research-components.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      mongo:
+        image: mongo:8.0.12
+        ports: ['27017/tcp']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ping:1}).ok ? 0 : 2)'"
+          --health-interval 5s --health-timeout 4s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.10'
+          working-directory: components/receipts
+          bundler-cache: true
+      - name: Verify Go replay
+        working-directory: components/depth
+        run: go test ./... && go vet ./...
+      - name: Verify Java scoring
+        run: |
+          jar="$RUNNER_TEMP/jackson-core.jar"
+          curl --fail --silent --show-error --max-time 30 'https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.21.6/jackson-core-2.21.6.jar' --output "$jar"
+          printf '%s  %s\n' 36111c3a4372cd5c2be6f4ec44a050382487920f3fc38ca3015c9c1678bd7c56 "$jar" | sha256sum --check
+          echo "PREDICTIR_JACKSON_JAR=$jar" >> "$GITHUB_ENV"
+          javac -cp "$jar" -d "$RUNNER_TEMP" components/calibration/Calibration.java components/calibration/CalibrationTest.java
+          java -cp "$jar:$RUNNER_TEMP" CalibrationTest
+      - name: Verify Ruby and real MongoDB archival
+        working-directory: components/receipts
+        env:
+          PREDICTIR_RECEIPTS_TEST_MONGODB_URI: mongodb://127.0.0.1:${{ job.services.mongo.ports[27017] }}
+        run: bundle exec ruby receipt_test.rb
+      - name: Run archived public holdout across the three components
+        env:
+          PREDICTIR_RECEIPTS_MONGODB_URI: mongodb://127.0.0.1:${{ job.services.mongo.ports[27017] }}
+        run: |
+          node components/run-research.mts --archive > "$RUNNER_TEMP/receipt.json"
+          node --input-type=module - "$RUNNER_TEMP/receipt.json" <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const {id,receipt}=JSON.parse(readFileSync(process.argv[2],'utf8'));
+          assert.match(id,/^[a-f0-9]{64}$/);
+          assert.equal(receipt.depth.quote_count,48);
+          assert.equal(receipt.calibration.sample_count,48);
+          assert.ok(Math.abs(receipt.calibration.brier_score-.1468421875)<1e-10);
+          console.log('Verified public holdout receipt '+id);
+          JS

@@ -1,0 +1,19 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    bson (5.2.0)
+    mongo (2.26.0)
+      base64
+      bson (>= 4.14.1, < 6.0.0)
+
+PLATFORMS
+  ruby
+  x64-mingw-ucrt
+  x86_64-linux
+
+DEPENDENCIES
+  mongo (= 2.26.0)
+
+BUNDLED WITH
+   2.5.22
