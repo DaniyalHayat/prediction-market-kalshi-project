@@ -1,0 +1,22 @@
+{
+  "name": "predictir-operator-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && esbuild src/operator.tsx --bundle --minify --target=es2022 --legal-comments=eof --outfile=dist/operator.js"
+  },
+  "dependencies": {
+    "@fluentui/react-components": "9.75.1",
+    "formik": "2.4.9",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

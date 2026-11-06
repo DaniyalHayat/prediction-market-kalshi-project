@@ -1,0 +1,56 @@
+name: Maintenance workbench verification
+
+on:
+  push:
+    branches: [azure-edition]
+    paths:
+      - 'ops-ui/**'
+      - 'web/lib/runtime/operator*.mjs'
+      - 'web/tools/operator.mjs'
+      - 'web/tests/operator*.test.mjs'
+      - 'terraform/azure/hosted/export-operator-metrics.mjs'
+      - 'terraform/azure/hosted/tests/operator-metrics.test.mjs'
+      - '.github/workflows/operator-checks.yml'
+  pull_request:
+    paths:
+      - 'ops-ui/**'
+      - 'web/lib/runtime/operator*.mjs'
+      - 'web/tools/operator.mjs'
+      - 'web/tests/operator*.test.mjs'
+      - 'terraform/azure/hosted/export-operator-metrics.mjs'
+      - 'terraform/azure/hosted/tests/operator-metrics.test.mjs'
+      - '.github/workflows/operator-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: ops-ui/package-lock.json
+      - name: Verify review server, evidence and Azure metrics
+        run: node --test web/tests/operator*.test.mjs terraform/azure/hosted/tests/operator-metrics.test.mjs
+      - name: Build React workbench and test rule evaluation
+        working-directory: ops-ui
+        run: |
+          npm ci
+          npm run build
+          node --test tests/review-rules.test.mjs
+      - name: Exercise the local workbench in Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/operator-browser" --no-audit --no-fund --ignore-scripts playwright@1.61.1
+          if command -v google-chrome >/dev/null; then
+            export CHROMIUM_EXECUTABLE="$(command -v google-chrome)"
+          else
+            "$RUNNER_TEMP/operator-browser/node_modules/.bin/playwright" install chromium
+          fi
+          PLAYWRIGHT_CORE_PATH="$RUNNER_TEMP/operator-browser/node_modules/playwright-core/index.mjs" node ops-ui/tests/operator.browser.mjs
