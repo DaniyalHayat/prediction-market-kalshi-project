@@ -67,6 +67,15 @@ test('stale, wrong-event and narrative inputs cannot affect a forecast', () => {
   }
 });
 
+test('reports for both teams are checked even when the first listed players lack history', () => {
+  const value = input();
+  const early = Array.from({length: 8}, (_, i) => ({player_id:String(i+20), team_id:'2', name:'Other player '+i, status:'Out'}));
+  value.current.rows.unshift(...early);
+  const result = nbaAvailabilityFeedback(value);
+  assert.equal(result.status, 'available');
+  assert.deepEqual(result.scenarios.map(row => row.player_id), ['8']);
+});
+
 test('opponent-adjusted residuals are calculated independently for each player', () => {
   const value = input();
   const games = value.games.map((game, index) => {
