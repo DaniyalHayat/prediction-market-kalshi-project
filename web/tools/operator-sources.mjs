@@ -55,7 +55,7 @@ function logEnvelopes(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > maximumBytes) return [];
   return decodeRows(text).flatMap(envelope => {
     try {
-      const inner = typeof envelope?.Log === 'string' ? JSON.parse(envelope.Log) : envelope;
+      const inner = typeof envelope?.Log === 'string' ? JSON.parse(envelope.Log.replace(/^F (?=\{)/, '')) : envelope;
       return [{inner, stamp: envelope?.TimeStamp}];
     } catch { return []; }
   });

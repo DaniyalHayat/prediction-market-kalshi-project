@@ -11,7 +11,7 @@ const record = {event: 'request.finished', time: timestamp, status: 429, route: 
   error_code: 'throttle_heavy_burst', trace_id: 'a'.repeat(32), span_id: 'b'.repeat(16), raw: 'PRIVATE_BODY'};
 const usage = {event: 'operator.allowances', as_of: timestamp, allowances: [{resource: 'daily_work', used: 100, limit: 6000,
   secret: 'PRIVATE_BODY'}]};
-const envelope = row => JSON.stringify({TimeStamp: timestamp, Log: JSON.stringify(row)});
+const envelope = (row, prefix = '') => JSON.stringify({TimeStamp: timestamp, Log: prefix + JSON.stringify(row)});
 
 test('Azure console and drain samples are sanitized, deduplicated and cached together', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'operator-sources-'));
@@ -23,7 +23,7 @@ test('Azure console and drain samples are sanitized, deduplicated and cached tog
     cli: async args => {
       calls++;
       assert.deepEqual(args.slice(0, 7), ['containerapp', 'logs', 'show', '-g', 'demo-rg', '-n', 'demo-backend']);
-      return {stdout: envelope(record) + '\n' + envelope(usage)};
+      return {stdout: envelope(record, 'F ') + '\n' + envelope(usage, 'F ')};
     }});
   const [first, second] = await Promise.all([read(), read()]);
   assert.deepEqual(first, second);
@@ -35,6 +35,7 @@ test('Azure console and drain samples are sanitized, deduplicated and cached tog
   assert.deepEqual(await read(), first);
   assert.equal(calls, 1);
   assert.equal(parseOperatorAllowanceExport(JSON.stringify({...usage, as_of: 'invalid'})), undefined);
+  assert.equal(parseOperatorAllowanceExport(envelope(usage, 'P ')), undefined);
   assert.throws(() => createOperatorLogReader({group: 'test & whoami', app: 'demo-backend'}), TypeError);
 });
 
