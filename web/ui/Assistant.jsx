@@ -1,13 +1,14 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {ArrowUp,Check,MessageSquare,Square,X} from 'lucide-react';
 import {contractTitle} from './selection.mjs';
 import {usePanelFocus} from './Modal.jsx';
 import {assistantPayload} from './assistant-context.mjs';
-function Answer({text}) {
+import {newsURL} from './news-reading.mjs';
+export function Answer({text}) {
   return <div className="answer">{text.split('\n').filter(line=>line.trim()).map((line,i)=>line.startsWith('## ')?
     <h3 key={i}>{line.slice(3)}</h3>:<p key={i}>{line.split(/(\[[^\]]+\]\(https:\/\/[^\s)]+\))/g).map((part,j)=>{
-    const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/);return link?<a key={j} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>:part;
+    const link=part.match(/^\[([^\]]+)\]\((https:\/\/[^\s)]+)\)$/),url=link&&newsURL(link[2]);return url?<a key={j} href={url} target="_blank" rel="noreferrer">{link[1]}</a>:part;
   })}</p>)}</div>;
 }
 function requestHistory(history) {
