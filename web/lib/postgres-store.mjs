@@ -14,11 +14,11 @@ export function makePostgresStore({connectionString=process.env.DATABASE_URL, po
   bucket=process.env.MARKET_STORAGE_BUCKET || 'market-lab-evidence'} = {}) {
   const remote=connectionString && !['localhost','127.0.0.1','[::1]'].includes(new URL(connectionString).hostname);
   const keepWarm = remote && process.env.PREDICTIR_MODE==='live' && process.env.PREDICTIR_KEEP_CATALOG_WARM==='1';
-  const db = pool || new pg.Pool({connectionString,max:4,min:keepWarm?1:0,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir',
+  const db = pool || new pg.Pool({connectionString,max:4,min:keepWarm?1:0,idleTimeoutMillis:30000,connectionTimeoutMillis:10000,query_timeout:20000,application_name:'predictir-market-lab',
     ...(remote ? {ssl:{rejectUnauthorized:true,...(process.env.DATABASE_CA_CERT?{ca:process.env.DATABASE_CA_CERT}:{})}} : {})});
   const storage = storageURL && storageKey ? createClient(storageURL,storageKey,{auth:{persistSession:false,autoRefreshToken:false}}).storage.from(bucket) : null;
   const listeners=new Set(),cacheInflight=new Map();let closePromise;
-  db.on?.('error',()=>structuredLog('database.pool_error',{error_code:'IDLE_CONNECTION_ERROR'}));
+  db.on?.('error',error=>structuredLog('database.pool_error',{error_code:error?.code==='57P01'?'ADMIN_SHUTDOWN':'IDLE_CONNECTION_ERROR'}));
   async function transaction(fn) {
     const client=await db.connect();
     try { await client.query('BEGIN'); const value=await fn(client); await client.query('COMMIT'); return value; }
