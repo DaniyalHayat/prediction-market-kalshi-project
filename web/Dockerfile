@@ -1,4 +1,8 @@
 FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && test "$(dpkg-query -W -f='${Version}' zlib1g)" = "1:1.3.dfsg+really1.3.1-1+deb13u1" \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,id=predictir-public-npm,target=/root/.npm npm pkg delete dependencies.next dependencies.react dependencies.react-dom dependencies.lucide-react dependencies.uplot dependencies.payload 'dependencies.@payloadcms/db-sqlite' \

@@ -1,4 +1,10 @@
-FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS build
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS build-base
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && test "$(dpkg-query -W -f='${Version}' zlib1g)" = "1:1.3.dfsg+really1.3.1-1+deb13u1" \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM build-base AS build
 WORKDIR /app
 ARG PREDICTIR_BUILD_MODE=replay
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -11,7 +17,7 @@ RUN case "$PREDICTIR_BUILD_MODE" in replay|live) ;; *) exit 1 ;; esac \
 RUN NODE_OPTIONS=--max-old-space-size=1024 PREDICTIR_SEPARATE_TYPECHECK=1 PREDICTIR_MODE="$PREDICTIR_BUILD_MODE" npm run build -- --webpack \
     && printf '%s\n' "$PREDICTIR_BUILD_MODE" > .predictir-edition
 
-FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS geography
+FROM build-base AS geography
 ADD --checksum=sha256:75fe430010f6d38a8c4331c202bf0df6ce3221a6e6d823b9e5a6d951e4cf9758 https://download.db-ip.com/free/dbip-country-lite-2026-11.mmdb.gz /country.mmdb.gz
 RUN node -e "const fs = require('node:fs'); fs.writeFileSync('/country.mmdb', require('node:zlib').gunzipSync(fs.readFileSync('/country.mmdb.gz')))"
 
@@ -43,7 +49,7 @@ EXPOSE 3000
 ENTRYPOINT ["/nodejs/bin/node"]
 CMD ["cloud/azure-front.mjs"]
 
-FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS backend-dependencies
+FROM build-base AS backend-dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,id=predictir-public-npm,target=/root/.npm npm pkg delete dependencies.next dependencies.react dependencies.react-dom dependencies.lucide-react dependencies.uplot dependencies.payload 'dependencies.@payloadcms/db-sqlite' \
