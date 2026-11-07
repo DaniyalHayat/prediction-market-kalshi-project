@@ -36,7 +36,7 @@ export async function buildExecutionPDF(value){
   function rule(y){page.drawLine({start:{x:margin,y},end:{x:pageWidth-margin,y},color:line,thickness:.7});}
   function newPage(){
     page=document.addPage([pageWidth,pageHeight]);y=715;
-    draw('Predictir',margin,750,10,bold,accent);
+    draw('PREDICTIR',margin,750,10,bold,accent);
     draw('PAPER RESEARCH',462,750,10,bold,accent);
     rule(738);
   }
