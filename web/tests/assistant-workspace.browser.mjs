@@ -134,12 +134,15 @@ try{
   await newsPanel.getByText('Another publisher',{exact:true}).waitFor();
   assert.equal(await newsPanel.getByText('This duplicate should disappear.').count(),0);
   assert.equal(await newsPanel.getByText('Coverage and limits',{exact:true}).count(),0);
+  const retrievedNews=events.filter(row=>row[0]==='news').length;
   await newsPanel.getByRole('button',{name:'Long read'}).click();
   await newsPanel.getByText('Coverage and limits',{exact:true}).waitFor();
   assert.equal(await newsPanel.getByText('The old generated lead should disappear.').count(),0);
-  assert.ok(events.some(row=>row.join('|')==='news|KXTEST-ALPHA|challenger|1'));
-  assert.ok(!events.some(row=>row[0]==='news'&&row[3]==='0'),'Changing reading length does not fetch paid sources');
+  assert.ok(events.some(row=>row.join('|')==='news|KXTEST-ALPHA|challenger|0'),'Selection retrieves and retains full reporting');
+  assert.ok(!events.some(row=>row[0]==='news'&&row[3]!=='0'),'Reporting does not use the empty preview path');
+  assert.equal(events.filter(row=>row[0]==='news').length,retrievedNews,'Changing reading length reuses the retrieved reporting');
   await ask('Ask why about this contract news','evidence','KXTEST-ALPHA','full');
+  assert.equal(events.filter(row=>row[0]==='news').length,retrievedNews,'Ask Why reuses retained reporting');
   const retained=events.findIndex(row=>row.join('|')==='news|KXTEST-ALPHA|challenger|0');
   assert.ok(retained>=0&&retained<events.findIndex(row=>row.join('|')==='assistant|KXTEST-ALPHA|evidence'));
   await page.getByRole('tab',{name:'Rules & sources'}).click();
