@@ -25,7 +25,9 @@ test('minute forecast recognizes only exact index, time zone, strike and referen
   const bars = Array.from({length: 300}, (_, i) => [now - (299 - i) * 60000, 76000 + Math.sin(i) * 30 + i / 10, 76000 + Math.sin(i - .2) * 30 + i / 10]);
   const forecast = distribution(market, categoryById('crypto'), {sources: [{series: market.series, bars}]}, new Map(), now);
   assert.equal(forecast.inputs.horizon_minutes, 8);
-  assert.equal(forecast.backtest.holdout.n, 184);
+  assert.equal(forecast.backtest.holdout.n, 1985);
+  assert.deepEqual(forecast.inputs.calibrated_profile, receipt.by_series.KXBTC15M.selected_profile);
+  assert.equal(minuteCryptoForecast(contract, bars, now - 60000, receipt.by_series.KXBTC15M.selected_profile).calibrated_profile, null);
   assert.equal(forecast.eligible, false);
   assert.equal(forecast.independent_forecast, true);
   assert.match(estimateMinuteCrypto(market, {series:'KXETH15M', bars}, now).reason, /matching/i);
@@ -41,12 +43,18 @@ test('completed candles and retrospective forecasts reject future values and ref
   assert.deepEqual(parseClosedMinuteBars([[60, 9, 13, 10, 12], [0, 9, 12, 10, 11]], 60000), [[60000, 11, 10.5]]);
 });
 
-test('minute replay reproduces the real BTC and ETH holdouts without granting release', () => {
+test('minute replay reproduces both independently timed holdouts and checks fee-adjusted releases', () => {
   assert.deepEqual(evaluateCryptoMinuteArchive(archive), receipt);
   for (const result of Object.values(receipt.by_series)) {
-    assert.equal(result.holdout.n, 184);
-    assert.equal(result.missing_origin_rows, 0);
-    assert.ok(result.holdout.brier < result.holdout.static_brier);
+    assert.ok(result.holdout.n >= 1978);
+    assert.equal(result.held_out_days, 21);
+    assert.ok(result.missing_origin_rows <= 2);
+    assert.ok(result.holdout.brier < result.holdout.baseline_brier);
+    assert.ok(result.holdout.paired_brier_gain_95[0] > 0);
+    assert.equal(result.midpoint_benchmark.n, result.holdout.n);
+    assert.ok(result.midpoint_benchmark.baseline_brier < result.midpoint_benchmark.brier);
+    assert.ok(result.paper_replay.net_pnl_dollars < 0);
+    assert.equal(result.release_gates.verified_historical_depth, false);
     assert.equal(result.release_eligible, false);
   }
 });
