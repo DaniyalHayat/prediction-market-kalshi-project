@@ -78,7 +78,7 @@ async def _get_json(
     params: dict[str, str | int] | None = None,
 ) -> dict:
     try:
-        async with httpx.AsyncClient(timeout=15.0, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 Predictir/4.0"}) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=False, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 Predictir/4.0"}) as client:
             for attempt in range(3):
                 response = await client.get(f"{KALSHI_API}{path}", params=params)
                 if response.status_code == 429 and attempt < 2:
@@ -187,7 +187,7 @@ def _quantity(market: dict, fixed_key: str, legacy_key: str) -> float | None:
 
 
 def _validate_ticker(ticker: str) -> None:
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", ticker) or ".." in ticker:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", ticker) or ".." in ticker or ticker == ".":
         raise HTTPException(status_code=400, detail="Invalid public market ticker.")
 
 

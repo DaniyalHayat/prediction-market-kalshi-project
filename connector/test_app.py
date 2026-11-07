@@ -1,3 +1,7 @@
+import asyncio
+
+import httpx
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
@@ -207,7 +211,7 @@ def test_crossed_book_has_no_assumed_fill_and_invalid_book_returns_upstream_erro
     assert "invalid fixed-point" in response.json()["detail"]
 
 
-@pytest.mark.parametrize("ticker", ["../portfolio/balance", "TEST..NAME", "TEST/NAME"])
+@pytest.mark.parametrize("ticker", ["../portfolio/balance", "TEST..NAME", "TEST/NAME", ".", "https://other.test", "//other.test", "TEST%2fNAME", "TEST?next=evil", "TEST#fragment", "TEST\\NAME", "TEST\n"])
 def test_invalid_tickers_never_reach_provider(ticker, monkeypatch) -> None:
     async def never_called(*args, **kwargs):
         pytest.fail("Invalid ticker reached provider")
@@ -215,6 +219,26 @@ def test_invalid_tickers_never_reach_provider(ticker, monkeypatch) -> None:
     for route in ["book", "market", "trades"]:
         response = TestClient(connector.app).get(f"/api/{route}", params={"ticker": ticker})
         assert response.status_code == 400
+
+
+def test_provider_redirect_is_rejected_without_contacting_its_destination(monkeypatch) -> None:
+    reads = []
+    original_client = httpx.AsyncClient
+
+    def respond(request):
+        reads.append(str(request.url))
+        assert request.url.host == "external-api.kalshi.com"
+        return httpx.Response(307, headers={"location": "http://169.254.169.254/private"})
+
+    def client(**options):
+        assert options["follow_redirects"] is False
+        return original_client(**options, transport=httpx.MockTransport(respond))
+
+    monkeypatch.setattr(connector.httpx, "AsyncClient", client)
+    with pytest.raises(HTTPException) as failure:
+        asyncio.run(connector._get_json("/markets/REDIRECT-FIXTURE"))
+    assert failure.value.status_code == 502
+    assert len(reads) == 1
 
 
 @pytest.mark.parametrize("quantity", [float("nan"), float("inf"), True, 0, -1])
