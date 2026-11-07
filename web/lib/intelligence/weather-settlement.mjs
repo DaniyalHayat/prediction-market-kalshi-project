@@ -52,7 +52,7 @@ export async function weatherMosSource(series, {now = Date.now()} = {}) {
   if (!site) throw new RangeError('Unknown daily-high series');
   const day = isoDay(now);
   if (now < Date.parse(day) + 6 * HOUR || localDay(now, site.zone) !== day) return null;
-  const response = await sourceText(weatherMosURL(site.station, day + 'T00:00Z', day + 'T00:30Z'), HOUR,
+  const response = await sourceText(weatherMosURL(site.station, day + 'T00:00Z', day + 'T06:00Z'), HOUR,
     (url, options) => fetch(url, {...options, signal: AbortSignal.any([options.signal, AbortSignal.timeout(2400)])}));
   const high = gfsDailyHighs(response.text, site.station).get(day);
   if (!Number.isInteger(high)) return null;
