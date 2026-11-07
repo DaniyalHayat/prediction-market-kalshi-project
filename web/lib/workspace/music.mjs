@@ -79,6 +79,10 @@ export function musicIdentity(market){
   const artistContract=/\bartist\b/i.test([market.title,market.rules_primary].join(' '))&&!/\b(?:song|track)\b/i.test(market.title||'');
   const label=typeof market.yes_sub_title==='string'?market.yes_sub_title.trim():'';
   if(!label||/^(yes|no|other)$/i.test(label))return {artist:null,song:null,kind:'unverified_song_or_other'};
+  const event=market.event_ticker;
+  const billboard=typeof event==='string'&&event.startsWith('KXRANKLIST1SONG-')&&market.ticker?.startsWith(event+'-')&&
+    /^If (.+) is the #1 on Billboard Hot 100 in [A-Za-z]+ \d{4}, then the market resolves to Yes\.$/i.exec(market.rules_primary||'');
+  if(billboard&&identity(billboard[1])===identity(label))return {artist:null,song:label,kind:'track'};
   return artistContract?{artist:label,song:null,kind:'artist'}:/\b(?:song|track)\b/i.test(market.title||'')?{artist:null,song:label,kind:'track'}:{artist:null,song:null,kind:'unverified_song_or_other'};
 }
 export async function musicResearch(market,{includeSpotify=true,includeAlternatives=true}={}){

@@ -110,8 +110,7 @@ function asksSportsAvailability(query){
   return /\b(?:injur\w*|lineups?|starters?|starting (?:quarterback|pitcher)|questionable|ruled out|will miss|sidelined|player availability)\b/i.test(query)&&
     !/\b(?:settle\w*|payout|rules?|void|resolve\w*|resolution)\b/i.test(query);
 }
-function localLexical(rows,query){
-  const words=queryTerms(query);
+function localLexical(rows,words){
   return rows.map(row=>{
     const title=new Set(terms(row.title)),content=new Set(terms(row.content));
     return {...row,lexical_score:words.reduce((sum,word)=>sum+(title.has(word)?2:Number(content.has(word))),0)};
@@ -179,6 +178,9 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
   }
   async function search(ticker,query,{limit=6}={}){
     validateTicker(ticker);if(typeof query!=='string'||query.trim().length<3||query.length>300||!Number.isInteger(limit)||limit<1||limit>8)throw new RangeError('Use a 3–300 character public evidence query and one to eight citations');query=query.trim();
+    const sportsGame=/^KX(?:NBA|NFL|EPL)GAME-/.test(ticker);
+    const availability=sportsGame&&asksSportsAvailability(query);
+    const words=[...new Set([...queryTerms(query),...(availability?['injury','ruled','downgraded','questionable','sidelined','inactive','scratch']:[])])];
     let rows=[],lexical=[],hasEmbeddings=false;
     if(db){try{
       const count=await db.query('SELECT count(*)::int AS n, bool_or(embedding IS NOT NULL AND model_id=$2 AND model_revision=$3) AS embedded FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now()',[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision]);if(!count.rows[0]?.n)return emptySearch(ticker,query,'No retained evidence exists for this contract. Use Load contract news first.');
@@ -188,10 +190,10 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
           SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,
           2*ts_rank_cd(search_document,phrase)+coalesce(ts_rank_cd(search_document,terms),0) AS lexical_score
           FROM market_lab.public_evidence_chunks CROSS JOIN search WHERE ticker=$1 AND expires_at>now()
-          AND (search_document@@phrase OR search_document@@terms) ORDER BY lexical_score DESC,retrieved_at DESC,id LIMIT 32`,[ticker,query,queryTerms(query).join(' | ')]);
+          AND (search_document@@phrase OR search_document@@terms) ORDER BY lexical_score DESC,retrieved_at DESC,id LIMIT 32`,[ticker,query,words.join(' | ')]);
       lexical=result.rows;
     }catch{return emptySearch(ticker,query,'The retained public evidence store or migration 006 is unavailable.');}}
-    else{rows=(memory.get(ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());if(!rows.length)return emptySearch(ticker,query,'No retained evidence exists in this process. Use Load contract news first.');lexical=localLexical(rows,query);hasEmbeddings=rows.some(row=>row.model_id===EMBEDDING_MODEL.id&&row.model_revision===EMBEDDING_MODEL.revision&&validVector(row.embedding));}
+    else{rows=(memory.get(ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());if(!rows.length)return emptySearch(ticker,query,'No retained evidence exists in this process. Use Load contract news first.');lexical=localLexical(rows,words);hasEmbeddings=rows.some(row=>row.model_id===EMBEDDING_MODEL.id&&row.model_revision===EMBEDDING_MODEL.revision&&validVector(row.embedding));}
     const denseDisabled=embed===embedPublicTexts&&process.env.SEMANTIC_MODEL_ENABLED==='0';
     const emptyDense={rows:[],status:denseDisabled?'disabled':embeddingBackfills.has(ticker)?'refreshing':'unavailable',schema:null};
     const dense=hasEmbeddings&&!denseDisabled?await boundedDenseSearch(async signal=>{
@@ -211,8 +213,6 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
       }
       return {rows:ranked.filter(row=>row.cosine_similarity>=.15),status:'available',schema};
     }).catch(()=>({...emptyDense,status:'unavailable'})):emptyDense;
-    const sportsGame=/^KX(?:NBA|NFL|EPL)GAME-/.test(ticker);
-    const availability=sportsGame&&asksSportsAvailability(query);
     const current=rows=>rows.filter(row=>{
       if(!publicURL(row.source_url)||explicitlyHistorical(row.title,row.source_url,now()))return false;
       if(!sportsGame)return true;
