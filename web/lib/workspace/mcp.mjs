@@ -11,6 +11,7 @@ import {searchRetainedEvidence} from './semantic.mjs';
 import {workspaceExecutionResearch,executionToolPacket} from './execution-service.mjs';
 import {normalizeExecutionControls} from './execution-research.mjs';
 import {contractEvidence} from './evidence.mjs';
+import {evidenceModelContext} from './evidence-model-context.mjs';
 import {parsePositionReview,reviewPaperPosition} from './position-review.mjs';
 
 export function publicResearch(value){
@@ -41,9 +42,18 @@ export function boundPacket(value,maximum=14000){
   }
   const lean={ticker:value.ticker,title:value.title,as_of:value.as_of,summary:value.summary,opinion:value.opinion,
     account_balances_available:value.account_balances_available,units:value.units,forecast:value.forecast,decision:value.decision,
-    paper_scenarios:value.paper_scenarios,market_signal:value.market_signal,evidence:value.evidence,sources:value.sources,
+    paper_scenarios:value.paper_scenarios,market_signal:value.market_signal,evidence:value.evidence,model_context:value.model_context,sources:value.sources,
     scope:'Additional details omitted to keep the research packet bounded.'};
   if(Buffer.byteLength(JSON.stringify(lean))<=maximum)return lean;
+  const forecast=value.forecast,compact={ticker:value.ticker,title:String(value.title||'').slice(0,180),as_of:value.as_of,
+    summary:String(value.summary||'').slice(0,1200),opinion:value.opinion,
+    forecast:forecast?Object.fromEntries(['probability','interval','eligible','independent_forecast','experimental','model_name',
+      'source_as_of','source_url','max_source_age_seconds','reason','outcomes','expected_settlement_value','interval_kind','evidence',
+      'release_reason'].filter(key=>forecast[key]!==undefined).map(key=>[key,forecast[key]])):undefined,
+    evidence:(value.evidence||[]).slice(0,5),model_context:value.model_context,sources:(value.sources||[]).filter(row=>typeof row.url==='string'&&row.url.length<=1800).slice(0,6),
+    paper_scenarios:(value.paper_scenarios||[]).slice(0,2),
+    scope:'Large model diagnostics omitted; current forecast, dated reporting and paper scenarios retained.'};
+  if(Buffer.byteLength(JSON.stringify(compact))<=maximum)return compact;
   return {ticker:String(value.ticker||'').slice(0,140),reason:'The source packet exceeded the display bound. Ask for specific rules, prices or source status.'};
 }
 export function createResearchServer({tickerScope,modelScope='baseline',executionScope,positionScope,dependencies={}}={}) {
@@ -91,16 +101,17 @@ export function createResearchServer({tickerScope,modelScope='baseline',executio
           'A fresh, matching order book was unavailable.'},
       sources:[{label:'Kalshi contract',url:detail.source_url,retrieved_at:detail.as_of},...(depth?[{label:'Kalshi order book',url:depth.source_url,retrieved_at:depth.as_of}]:[])]};
   });
-  register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker},async({ticker})=>{
+  register('get_research','Read public research, paper scenarios, price history models and attributed reporting for the selected contract.',{ticker,include_reporting:z.boolean().default(true)},async({ticker,include_reporting})=>{
     const research=await deps.workspaceResearch(ticker,{assistant:true,model:modelScope,
-      ...(/^KXNBAGAME-/.test(ticker)?{refreshAvailability:true}:{})}),packet=publicResearch(research);
-    if(research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
-    const evidence=await deps.contractEvidence(research.market,{enabled:true,selectedTicker:ticker,redditEnabled:false,includeX:false,headlineMode:'official',
+      ...(/^KXNBAGAME-/.test(ticker)&&include_reporting?{refreshAvailability:true}:{})}),packet=publicResearch(research);
+    if(!include_reporting||research.market?.ticker!==ticker||(Object.keys(dependencies).length&&!dependencies.contractEvidence))return packet;
+    const evidence=await deps.contractEvidence(research.market,{enabled:true,selectedTicker:ticker,redditEnabled:false,includeX:false,headlineMode:'full',
       sports:research.extensions?.sports,settlementSources:research.rules?.settlement_sources}).catch(()=>null);
-    const matches=[...(evidence?.items||[]),...(evidence?.related_items||[])].filter(row=>row.url&&row.title).slice(0,3);
+    const matches=[...(evidence?.items||[]),...(evidence?.official_observations||[]),...(evidence?.related_items||[])].filter(row=>row.url&&row.title).slice(0,5);
     const links=(evidence?.source_links||[]).filter(row=>row.url).slice(0,2);
-    return {...packet,evidence:matches.map(row=>({title:String(row.title).slice(0,180),url:row.url,publisher:row.publisher,
-      excerpt:String(row.excerpt||'').slice(0,300),match_scope:row.match_scope})),
+    return {...packet,model_context:evidenceModelContext(evidence,research),evidence:matches.map(row=>({title:String(row.title).slice(0,180),url:row.url,publisher:row.publisher,
+      excerpt:String(row.excerpt||'').slice(0,650),why_relevant:String(row.why_relevant||'').slice(0,350),impact:String(row.impact||'').slice(0,350),
+      match_scope:row.match_scope,published_at:row.published_at,retrieved_at:row.retrieved_at||row.as_of})),
       sources:[...links,...matches.map(row=>({label:row.publisher||'Attributed reporting',url:row.url})),...packet.sources].slice(0,8)};
   });
   register('get_price_history','Read observed exchange candle closes. Gaps are not filled and quote midpoints are labeled.',{ticker,hours:z.enum(['24','168']).default('24')},async({ticker,hours})=>{

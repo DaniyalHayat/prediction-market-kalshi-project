@@ -36,7 +36,7 @@ function explainLineup(forecast,ticker,now,fixtureId){
   return `The team-strength baseline stays at ${pct(forecast.probability)} YES. ${player} is listed ${row.status.toLowerCase()}. Stress-testing that absence gives ${pct(row.conditional_probability)} YES. The decision range of ${range.map(pct).join(' to ')} is used to compare paper entry against the fill price, fees and safety buffer. The lineup test can weaken a trade case, while its historical comparisons cannot establish a causal player effect. ${citation}`;
 }
 
-export function explainContract(packet,ticker,now=Date.now()){
+export function explainContract(packet,ticker,now=Date.now(),full=false){
   if(packet?.ticker!==ticker)return 'The selected contract’s research did not load. Try again from its Analysis tab.';
   const forecast=packet.forecast,age=now-Date.parse(forecast?.source_as_of||'');
   const fresh=Number.isFinite(age)&&age>=-5000&&age<=(forecast.max_source_age_seconds??86400)*1000;
@@ -64,18 +64,39 @@ export function explainContract(packet,ticker,now=Date.now()){
   if(signal?.status==='available'&&now-Date.parse(signal.observed_at)<180000){
     lines.push(`The one-minute price model projects a YES midpoint of ${price(signal.prediction)} from ${price(signal.last_midpoint)}${signal.interval?', with a replay-based range of '+signal.interval.map(price).join(' to '):' from '+signal.updates+' recent quote changes'}. This describes quote movement.`);
   }
-  const evidence=(packet.evidence||[]).slice(0,3);
+  const evidence=(packet.evidence||[]).slice(0,full?5:3);
   if(evidence.length){
     lines.push('What to read before acting');
     for(const row of evidence)try{
       const url=new URL(row.url);
       if(url.protocol!=='https:'||url.username||url.password)continue;
-      lines.push(sourceLinks([{url:url.href,label:row.title}]).replace(/^Sources checked: /,'')+(row.excerpt?' — '+row.excerpt:''));
+      const timestamp=Date.parse(row.published_at||row.retrieved_at||'');
+      lines.push(sourceLinks([{url:url.href,label:row.title}]).replace(/^Sources checked: /,'')+
+        (Number.isFinite(timestamp)?' · '+(row.published_at?'published ':'checked ')+new Date(timestamp).toISOString():'')+
+        (row.excerpt?' — '+row.excerpt:'')+(full&&row.why_relevant?' '+row.why_relevant:'')+(full&&row.impact?' '+row.impact:''));
     }catch{}
   }
   if(!rows.length&&packet.rules?.primary)lines.push('Settlement rule: '+packet.rules.primary);
   if(lines.length===1)lines.push('The current source check did not return usable depth or outcome data. Open the Rules tab to check the settlement trigger.');
-  return lines.join('\n\n');
+  if(!full)return lines.join('\n\n');
+  const sections=[lines[0],'## The short answer',...lines.slice(1)];
+  const yes=packet.quotes?.yes_ask_usd,no=packet.quotes?.no_ask_usd,quoteAge=now-Date.parse(packet.quote_as_of||'');
+  if([yes,no].every(p=>Number.isFinite(p)&&p>=0&&p<=1)&&yes+no>=1-1e-8&&quoteAge>=-5000&&quoteAge<=90000){
+    const midpoint=(yes+1-no)/2;
+    sections.push('## Your model beside the market',`The current YES midpoint is ${pct(midpoint)}. Visible asks are ${price(yes)} for YES and ${price(no)} for NO before fees and depth-dependent fill costs.`);
+    if(fresh&&Number.isFinite(forecast.probability)){
+      const gap=100*(forecast.probability-midpoint);
+      sections.push(`The independent model estimates ${pct(forecast.probability)} YES, ${Math.abs(gap).toFixed(1)} percentage points ${gap>=0?'above':'below'} the midpoint. The paper entry must still cover the spread, fees and the uncertainty range.`);
+    }
+  }
+  if(fresh&&Number.isFinite(forecast.probability))sections.push('## Check the numbers',explainResearchMath(packet,ticker,now));
+  const drivers=(packet.drivers||[]).filter(row=>row.name&&row.detail).slice(0,5);
+  if(drivers.length)sections.push('## What drives the estimate',...drivers.map(row=>row.name+'. '+row.detail));
+  const context=packet.model_context;
+  if(context?.reason)sections.push('## How reporting fits the model',context.reason);
+  const changes=[forecast?.reason,forecast?.release_reason,forecast?.validation?.reason,...(forecast?.warnings||[]).slice(0,3)].filter(Boolean);
+  if(changes.length)sections.push('## What could change the view',...new Set(changes));
+  return sections.join('\n\n');
 }
 export function explainResearchMath(packet,ticker,now=Date.now()){
   if(packet?.ticker!==ticker)return 'The matching research packet is unavailable. Refresh the selected contract before using its figures.';
@@ -132,7 +153,10 @@ export function parseAssistantInput(value){
     return {role:row.role,content:row.content};
   });
   if(messages.at(-1).role!=='user'||Buffer.byteLength(JSON.stringify(messages))>16000)throw new RangeError('Chat context exceeds the limit');
-  return {ticker,messages,model:model==='validated'?'baseline':model,...(value.execution_controls!==undefined?{executionControls:normalizeExecutionControls(value.execution_controls)}:{})};
+  if(value.panel!==undefined&&!['analysis','paper','evidence','execution','rules','sources','history'].includes(value.panel))throw new RangeError('Choose a supported research panel');
+  if(value.detail!==undefined&&!['brief','full'].includes(value.detail))throw new RangeError('Choose brief or full detail');
+  return {ticker,messages,model:model==='validated'?'baseline':model,...(value.panel!==undefined?{panel:value.panel}:{}),
+    ...(value.detail!==undefined?{detail:value.detail}:{}),...(value.execution_controls!==undefined?{executionControls:normalizeExecutionControls(value.execution_controls)}:{})};
 }
 export async function reserveAssistant(fingerprint,{storage,monthlyDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),now=Date.now()}={}){
   if(!/^[a-f0-9]{64}$/.test(fingerprint||''))throw new RangeError('A private request fingerprint is required');
@@ -166,14 +190,14 @@ export async function assistantResponse(request,{createClient,generate=streamTex
     const reader=request.body?.getReader(),chunks=[];let bytes=0;
     if(reader){try{while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>20000){await reader.cancel();throw new RangeError('Chat request too large');}chunks.push(value);}}finally{reader.releaseLock();}}
     const text=Buffer.concat(chunks).toString('utf8');
-    const {ticker,messages,model:researchModel,executionControls}=parseAssistantInput(JSON.parse(text)),backend=process.env.MARKET_BACKEND_URL,secret=process.env.ASSISTANT_SERVICE_SECRET;
+    const {ticker,messages,model:researchModel,executionControls,panel,detail}=parseAssistantInput(JSON.parse(text)),backend=process.env.MARKET_BACKEND_URL,secret=process.env.ASSISTANT_SERVICE_SECRET;
     if(!backend||!secret)return Response.json({error:'The research assistant is not connected yet. Market research remains available.'},{status:503});
     const address=new URL(backend);if(address.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(address.hostname))throw new Error('The backend address is invalid');
     const ip=request.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim()||'unknown';
     const fingerprint=createHash('sha256').update(secret+new Date().toISOString().slice(0,10)+ip).digest('hex');
     const headers={Authorization:'Bearer '+secret,'Content-Type':'application/json'};
     const question=messages.at(-1).content.trim();
-    const contractIntent=/^(?:explain the research view|why this research view|why did (?:you|u) (?:pick|choose|recommend)|what would change this view|which source matters for settlement)/i.test(question);
+    const contractIntent=Boolean(panel&&panel!=='execution')||/^(?:explain the research view|why this research view|why did (?:you|u) (?:pick|choose|recommend)|what would change this view|which source matters for settlement)/i.test(question);
     const executionIntent=/^explain the execution lab(?: result\b|(?: with my selected settings)?[.!?]?$)/i.test(question);
     const mathIntent=/^explain the probability range and costs[.!?]?$/i.test(question);
     const reserve=()=>fetcher(new URL('/internal/assistant/reserve',backend),{method:'POST',headers,body:JSON.stringify({fingerprint}),signal:AbortSignal.timeout(12000)});
@@ -184,7 +208,7 @@ export async function assistantResponse(request,{createClient,generate=streamTex
     async function readTool(name,input){
       if(++calls>3)return {status:'limit',reason:'Three research reads per answer are allowed'};
       if(input.ticker&&input.ticker!==ticker)return {status:'unavailable',reason:'Use the selected contract'};
-      const result=await client.callTool({name,arguments:input});
+      const result=await client.callTool({name,arguments:input},undefined,{signal:request.signal,timeout:17000});
       const text=result.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n')||'No source response';
       if(Buffer.byteLength(text)>14000)return {status:'unavailable',reason:'The source packet exceeded the context limit'};
       try{const packet=JSON.parse(text);
@@ -197,8 +221,12 @@ export async function assistantResponse(request,{createClient,generate=streamTex
       return new Response(answer+(uncited.length?'\n\n'+sourceLinks(uncited):''),{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Research-Model':name,'X-Research-Transport':'MCP Streamable HTTP'}});
     };
     if(contractIntent||executionIntent||mathIntent){
-      const packet=await readTool(executionIntent?'analyze_execution_lab':'get_research',{ticker});
-      const answer=executionIntent?explainExecutionMath(packet,ticker):mathIntent?explainResearchMath(packet,ticker):explainContract(packet,ticker);
+      const [packet,contract]=await Promise.all([
+        readTool(executionIntent?'analyze_execution_lab':'get_research',{ticker,include_reporting:!executionIntent}),
+        contractIntent&&detail==='full'?readTool('get_contract',{ticker}):null,
+      ]);
+      const enriched=contract?.ticker===ticker?{...packet,quotes:contract.quotes,quote_as_of:contract.book?.as_of}:packet;
+      const answer=executionIntent?explainExecutionMath(packet,ticker):mathIntent?explainResearchMath(packet,ticker):explainContract(enriched,ticker,Date.now(),detail==='full');
       await client.close();
       return readback(answer,executionIntent?'deterministic-execution-readback':mathIntent?'deterministic-research-readback':'deterministic-contract-brief');
     }
