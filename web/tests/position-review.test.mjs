@@ -147,7 +147,7 @@ test('the proxy forwards timings, enforces same origin and keeps inputs out of c
   const request=origin=>new Request('https://predictir.dev/api/workspace/position-review',{method:'POST',
     headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'});
   assert.equal((await proxyBackend(request('https://evil.test'),path,{fetcher:()=>assert.fail('cross-site request forwarded')})).status,403);
-  const reply=await proxyBackend(request('https://predictir.dev'),path,{fetcher:async()=>new Response('{}',{headers:{'Server-Timing':'total;dur=620'}})});
+  const reply=await proxyBackend(request('https://predictir.dev'),path,{fetcher:async()=>Response.json({},{headers:{'Server-Timing':'total;dur=620'}})});
   assert.equal(reply.headers.get('server-timing'),'total;dur=620');
   assert.equal(reply.headers.get('cache-control'),'no-store');
 });

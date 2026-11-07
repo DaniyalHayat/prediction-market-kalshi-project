@@ -23,7 +23,7 @@ test('missing market and candle data return 404 from exact-contract routes',asyn
   for(const route of ['market','workspace/context','workspace/research','workspace/evidence','workspace/history','brief']){
     const response=await get(route);
     assert.equal(response.status,404,route);
-    assert.equal((await response.json()).error,message);
+    assert.equal((await response.json()).error,'The selected contract was not found.');
   }
   await assert.rejects(marketFees(ticker),{status:404,upstream_status:404,message});
 });
@@ -48,7 +48,7 @@ test('timeouts and upstream 500s stay unavailable, while the provider preserves 
   fetcher.mock.mockImplementation(async()=>Response.json({error:'outage'},{status:500}));
   const outage=await get('market','TEST-OUTAGE');
   assert.equal(outage.status,503);
-  assert.match((await outage.json()).error,/HTTP 500/);
+  assert.equal((await outage.json()).error,'Market data could not be refreshed. Try again shortly.');
   fetcher.mock.mockImplementation(async()=>Response.json({error:'limited'},{status:429,headers:{'Retry-After':'90'}}));
   await assert.rejects(request('/markets/TEST-THROTTLE'),{
     upstream_status:429,retry_after_seconds:90,
