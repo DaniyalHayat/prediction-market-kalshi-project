@@ -4,6 +4,24 @@ import {azureMode,azureOrigin} from './azure-mode.mjs';
 import {azureAccess} from './azure-access.mjs';
 const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|portfolio-books|context|history|graphql|research|execution-research|position-review|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
 export const STREAM_CONNECT_TIMEOUT_MS=5000,STREAM_LIFETIME_MS=750000;
+export const JSON_TIMEOUT_MS=50000,UPSTREAM_MAX_BYTES=8*1024*1024;
+function unavailableResponse(status=503,error='The data service is temporarily unavailable. Try again shortly.'){
+  return Response.json({error,status:'unavailable'},{status,headers:{'Cache-Control':'no-store','Retry-After':'5','X-Content-Type-Options':'nosniff'}});
+}
+async function readUpstreamBody(result){
+  if(!result.body)return null;
+  if(Number(result.headers.get('content-length'))>UPSTREAM_MAX_BYTES){await result.body.cancel();throw new Error('Upstream response exceeds the limit');}
+  const reader=result.body.getReader(),chunks=[];let size=0;
+  try{
+    while(true){
+      const {value,done}=await reader.read();if(done)break;
+      size+=value.byteLength;
+      if(size>UPSTREAM_MAX_BYTES){await reader.cancel();throw new Error('Upstream response exceeds the limit');}
+      chunks.push(value);
+    }
+  }finally{reader.releaseLock();}
+  return Buffer.concat(chunks,size);
+}
 export const AZURE_STREAM_CONNECT_TIMEOUT_MS=12000,AZURE_STREAM_LIFETIME_MS=210000;
 export const HEADLINE_REPLAY_MAX_BYTES=1024,HEADLINE_REPLAY_TIMEOUT_MS=9000;
 export function applicationOriginMatches(origin,url,{development=process.env.NODE_ENV==='development'}={}){
@@ -38,7 +56,7 @@ function relayEventStream(body,{requestSignal,abortUpstream,lifetimeMs,onUnexpec
     cancel(){return finish(false);}
   },{highWaterMark:1});
 }
-export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTimeoutMs,streamLifetimeMs,countryLookup,
+export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSON_TIMEOUT_MS,streamConnectTimeoutMs,streamLifetimeMs,countryLookup,
   onStreamError=values=>structuredLog('proxy.stream_error',values)}={}){
   const edition=azureMode();
   const connectLimit=edition==='live'?AZURE_STREAM_CONNECT_TIMEOUT_MS:STREAM_CONNECT_TIMEOUT_MS;
@@ -90,11 +108,12 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
       if(!Number.isInteger(streamConnectTimeoutMs)||streamConnectTimeoutMs<1||streamConnectTimeoutMs>connectLimit||!Number.isInteger(streamLifetimeMs)||streamLifetimeMs<1||streamLifetimeMs>lifetimeLimit)throw new RangeError('Invalid stream deadline');
       upstream=new AbortController();connectTimer=setTimeout(()=>upstream.abort(),streamConnectTimeoutMs);
     }
-    const timeout=positionReview?7600:headlineReplay?HEADLINE_REPLAY_TIMEOUT_MS+3000:50000;
+    if(!Number.isSafeInteger(jsonTimeoutMs)||jsonTimeoutMs<1||jsonTimeoutMs>JSON_TIMEOUT_MS)throw new RangeError('Invalid data deadline');
+    const timeout=Math.min(jsonTimeoutMs,positionReview?7600:headlineReplay?HEADLINE_REPLAY_TIMEOUT_MS+3000:JSON_TIMEOUT_MS);
     const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,streaming?upstream.signal:AbortSignal.timeout(timeout)])});
     clearTimeout(connectTimer);
     const type=result.headers.get('content-type')||'';
-    if(/text\/html/i.test(type)){upstream?.abort();return Response.json({error:'The data service returned a web page instead of data. Try again shortly.'},{status:502});}
+    if(/text\/html/i.test(type)){upstream?.abort();await result.body?.cancel();return unavailableResponse(502,'The data service returned a web page instead of data. Try again shortly.');}
     const outputHeaders={'Cache-Control':'no-store','Content-Type':result.headers.get('content-type')||'application/json','X-Content-Type-Options':'nosniff',traceparent:trace.traceparent};
     if(result.headers.has('retry-after'))outputHeaders['Retry-After']=result.headers.get('retry-after');
     if(positionReview&&result.headers.has('server-timing'))outputHeaders['Server-Timing']=result.headers.get('server-timing');
@@ -104,10 +123,16 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
       if(/text\/event-stream/i.test(type))outputBody=relayEventStream(result.body,{requestSignal:request.signal,abortUpstream:()=>upstream.abort(),lifetimeMs:streamLifetimeMs,
         onUnexpectedError:()=>onStreamError({route,error_code:'UPSTREAM_STREAM_INTERRUPTED',trace_id:trace.traceId})});
       else{connectTimer=setTimeout(()=>upstream.abort(),streamLifetimeMs);outputBody=result.body===null?null:await result.arrayBuffer();upstream.abort();}
+    }else{
+      outputBody=await readUpstreamBody(result);
+      if(outputBody&&route!=='/export.xlsx'){
+        if(!/application\/(?:[\w.+-]+\+)?json\b/i.test(type))return unavailableResponse(502,'The data service returned an unexpected response. Try again shortly.');
+        try{JSON.parse(outputBody.toString('utf8'));}catch{return unavailableResponse(502,'The data service returned incomplete data. Try again shortly.');}
+      }
     }
     const output=new Response(outputBody,{status:result.status,headers:outputHeaders});
     if(privateRoute){output.headers.set('Vary','Cookie');for(const cookie of result.headers.getSetCookie())output.headers.append('Set-Cookie',cookie);}
     return output;
-  }catch(error){upstream?.abort();return Response.json({error:error.status===413?'Request too large':'The data service is temporarily unavailable. Try again shortly.'},{status:error.status===413?413:503});}
+  }catch(error){upstream?.abort();return error.status===413?Response.json({error:'Request too large'},{status:413,headers:{'Cache-Control':'no-store'}}):unavailableResponse();}
   finally{clearTimeout(connectTimer);}
 }

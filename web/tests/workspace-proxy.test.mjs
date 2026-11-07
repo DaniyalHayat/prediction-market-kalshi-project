@@ -41,6 +41,48 @@ test('public response headers contain bounded source policy and no framing or ev
   assert.match(byKey['Content-Security-Policy'],/frame-ancestors 'none'/);assert.match(byKey['Content-Security-Policy'],/https:\/\/www\.googletagmanager\.com/);
   if(process.env.NODE_ENV!=='development')assert.ok(!byKey['Content-Security-Policy'].includes("'unsafe-eval'"));
   assert.ok(!byKey['Content-Security-Policy'].includes('connect-src https:'));assert.match(byKey['Strict-Transport-Security'],/max-age=31536000/);
+  assert.equal(byKey['Cross-Origin-Opener-Policy'],'same-origin');
+  const scripts=byKey['Content-Security-Policy'].split('; ').find(value=>value.startsWith('script-src '));
+  if(process.env.NODE_ENV!=='development')assert.ok(!scripts.includes("'unsafe-inline'"));
+});
+
+test('cold starts time out before success headers and return safe retry guidance without replaying writes',async t=>{
+  environment(t);let writes=0;
+  const server=createServer((request,response)=>{
+    if(request.url==='/body'){response.writeHead(200,{'Content-Type':'application/json'});response.write('{"pending":');}
+    if(request.method==='POST')writes++;
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+  for(const path of ['/headers','/body']){
+    const response=await proxyBackend(new Request('https://predictir.dev/api/journal',{method:'POST',headers,body:'{}'}),['journal'],{jsonTimeoutMs:100,
+      fetcher:(url,init)=>fetch('http://127.0.0.1:'+server.address().port+path,init)});
+    assert.equal(response.status,503);assert.equal(response.headers.get('retry-after'),'5');
+    assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.json()).status,'unavailable');
+  }
+  assert.equal(writes,2);
+});
+
+test('malformed and oversized upstream JSON is rejected before a successful response is exposed',async t=>{
+  environment(t);
+  for(const body of ['{"unfinished":','<!doctype html>unexpected']){
+    const response=await proxyBackend(new Request('https://predictir.dev/api/book',{headers}),['book'],{fetcher:async()=>new Response(body,{headers:{'Content-Type':'application/json'}})});
+    assert.equal(response.status,502);assert.equal((await response.json()).status,'unavailable');
+  }
+  let cancelled=false;
+  const body=new ReadableStream({pull(controller){controller.enqueue(new Uint8Array(1024*1024));},cancel(){cancelled=true;}});
+  const response=await proxyBackend(new Request('https://predictir.dev/api/book',{headers}),['book'],{fetcher:async()=>new Response(body,{headers:{'Content-Type':'application/json'}})});
+  assert.equal(response.status,503);assert.equal(cancelled,true);
+});
+
+test('verification assets bypass app routing and retain both approved Google ownership markers',async()=>{
+  assert.equal(config.rewrites,undefined);
+  const redirects=await config.redirects();assert.ok(!redirects.some(row=>row.source.includes('google')||row.source.includes(':path')));
+  assert.equal((await readFile(new URL('../public/google7653305cfae6f81b.html',import.meta.url),'utf8')).trim(),'google-site-verification: google7653305cfae6f81b.html');
+  const head=(await readFile(new URL('../public/lab.html',import.meta.url),'utf8')).split('</head>')[0];
+  assert.ok(head.includes('<meta name="google-site-verification" content="google7653305cfae6f81b" />'));
+  assert.ok(head.includes('<meta name="google-site-verification" content="FCoPfWp2NwEtKCMJq_AW6Cx2itHdrAZcG9PkS0PdpFQ" />'));
+  assert.match(head,/<meta name="description" content="Independent.*Not affiliated with, endorsed by, or operated by the exchange/);
 });
 
 test('SSE rotation fits the paid Fluid route duration with room for the separate connect deadline',async()=>{
