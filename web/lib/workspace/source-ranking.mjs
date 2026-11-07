@@ -5,6 +5,7 @@ const sportsTopics=new Set(['nfl','nba','epl']);
 const specificUpdate=/\b(out|ruled out|questionable|doubtful|injury|injured|starting|lineup|minutes|confirmed|postponed|cancelled|review|presales|tickets|opening|gross|streams|chart|trade|starter|quarterback|practice|reps)\b/;
 const availabilityUpdate=/\b(?:injur(?:y|ies|ed)|player availability|availability (?:report|update|status)|ruled (?:out|in)|sidelined|(?:listed as|is|remains) (?:questionable|doubtful|probable)|(?:questionable|doubtful|probable) (?:for|vs|against|to play|with)|(?:expected|cleared|set) to (?:play|start|miss)|will (?:play|miss)|(?:will not|won t) (?:play|start)|out (?:vs|against|for (?:tonight|the (?:game|season|rest of)|\d+ (?:games?|weeks?)))|(?:confirmed|starting|projected) line ?up|starting xi|starting (?:five|quarterback|goalkeeper)|(?:did not|didn t|limited in|returned to|full) practice|minutes restriction|(?:serves?|serving) (?:a |an )?suspension|suspended for)\b/;
 const scheduleUpdate=/\b(?:postponed|canceled|cancelled|rescheduled|venue change|kickoff moved|tip ?off moved)\b/;
+const availabilityStatusChange=/\b(?:upgraded to|downgraded to|listed as) (?:out|available|probable|questionable|doubtful)\b/;
 const fixturePage=/\b(?:game preview|match preview|game details)\b/;
 const fixturePreview=/\b(?:matchup|face off|prepare(?:s|d)? for)\b/;
 const fixtureRecap=/\b(?:game summary|match report|box ?score|live score|game recap|highlights)\b/;
@@ -30,7 +31,7 @@ export function sportsEvidenceClaim(title,excerpt,{exactFixture=false,fixtureUpc
 function classifySportsEvidence(headline,text,exactFixture,fixtureUpcoming){
   if(sportsNoise.test(headline)||fixturePage.test(headline)&&!exactFixture||
     fixtureRecap.test(headline)&&(!exactFixture||fixtureUpcoming))return null;
-  if(availabilityUpdate.test(text))return 'availability_report';
+  if(availabilityUpdate.test(text)||availabilityStatusChange.test(text))return 'availability_report';
   if(exactFixture&&scheduleUpdate.test(text))return 'schedule_report';
   if(exactFixture&&(fixturePage.test(headline)||fixturePreview.test(headline)||fixtureRecap.test(headline)))return 'fixture_report';
   return null;
@@ -86,6 +87,15 @@ export function evidenceSearchTerms(market,{sports}={}){
   return [...new Set(names)].slice(0,8);
 }
 export function safePublicURL(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
+export function canonicalPublicURL(value){
+  const safe=safePublicURL(value);
+  if(!safe)return null;
+  const url=new URL(safe);
+  url.hash='';
+  for(const name of [...url.searchParams.keys()])if(/^(utm_.+|fbclid|gclid)$/i.test(name))url.searchParams.delete(name);
+  url.searchParams.sort();
+  return url.href;
+}
 function interpretation(text,topic,claim){
   if(claim==='availability_report'){
     const impact=topic==='nfl'&&/\b(qb|quarterback)\b/.test(text)?
@@ -145,8 +155,7 @@ export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={})
   for(const row of ranked){
     const suffix=row.title.match(/^(.*?)\s+[-–—|]\s+([^\n]+)$/),publisher=normalize(row.publisher);
     const title=normalize(suffix&&normalize(suffix[2])===publisher?suffix[1]:row.title).replace(/\b(espn|reuters|associated press|variety|the hollywood reporter)\b/g,'').trim();
-    const url=new URL(row.url);url.hash='';for(const key of [...url.searchParams.keys()])if(/^(utm_.+|fbclid|gclid)$/i.test(key))url.searchParams.delete(key);
-    url.searchParams.sort();const canonical=url.href;
+    const canonical=canonicalPublicURL(row.url);
     if(seen.has(title)||urls.has(canonical))continue;
     seen.add(title);urls.add(canonical);
     const n=counts.get(row.publisher)||0;if(n>=2)overflow.push(row);else{diverse.push(row);counts.set(row.publisher,n+1);}

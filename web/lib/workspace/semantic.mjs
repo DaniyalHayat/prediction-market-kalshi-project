@@ -3,12 +3,13 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {validateTicker} from '../live.mjs';
-import {safePublicURL,explicitlyHistorical,sportsEvidenceClaim} from './source-ranking.mjs';
+import {safePublicURL,canonicalPublicURL,explicitlyHistorical,sportsEvidenceClaim} from './source-ranking.mjs';
 export const EMBEDDING_MODEL=Object.freeze({id:'Xenova/all-MiniLM-L6-v2',revision:'751bff37182d3f1213fa05d7196b954e230abad9',dimensions:384,dtype:'q8',pooling:'mean',normalize:true,device:'cpu'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 const clean=(value,maximum)=>String(value||'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,' ').trim().slice(0,maximum);
 const memory=new Map(),vectorCache=new Map(),capabilities=new WeakMap(),dailyUsage=new Map();
 const embeddingBackfills=new Set();
+const DENSE_SEARCH_TIMEOUT_MS=900;
 let modelPromise,modelLoadedAt=null,modelFailureUntil=0,queue=Promise.resolve(),queued=0;
 export function embeddingStatus(){return {...EMBEDDING_MODEL,status:process.env.SEMANTIC_MODEL_ENABLED==='0'?'disabled':modelLoadedAt?'loaded':modelFailureUntil>Date.now()?'cooldown':'not_loaded',loaded_at:modelLoadedAt,max_parallel_inferences:1,max_queued_requests:4};}
 const validVector=value=>Array.isArray(value)&&value.length===384&&value.every(Number.isFinite)&&Math.abs(value.reduce((s,v)=>s+v*v,0)-1)<.01;
@@ -71,13 +72,44 @@ async function evidenceTransaction(storage,db,run){
   if(typeof storage?.transaction==='function')return storage.transaction(run);
   const client=await db.connect();try{await client.query('BEGIN');const result=await run(client);await client.query('COMMIT');return result;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }
-export function reciprocalRankFusion(lexical,semantic,{limit=6,constant=60}={}){
-  const fused=new Map();for(const [kind,list] of [['lexical',lexical],['semantic',semantic]])list.forEach((row,index)=>{const current=fused.get(row.id)||{...row,rrf_score:0,lexical_rank:null,semantic_rank:null};current.rrf_score+=1/(constant+index+1);current[kind+'_rank']=index+1;if(row.cosine_similarity!==undefined)current.cosine_similarity=row.cosine_similarity;fused.set(row.id,current);});
+export function reciprocalRankFusion(lexical,semantic,{limit=6,constant=60,key=row=>row.id}={}){
+  const fused=new Map();
+  for(const [kind,list] of [['lexical',lexical],['semantic',semantic]]){
+    const seen=new Set();
+    for(const row of list){
+      const id=key(row);
+      if(!id||seen.has(id))continue;
+      seen.add(id);
+      const current=fused.get(id)||{...row,rrf_score:0,lexical_rank:null,semantic_rank:null};
+      current.rrf_score+=1/(constant+seen.size);
+      current[kind+'_rank']=seen.size;
+      if(kind==='semantic'){
+        current.source_cosine_similarity=row.cosine_similarity;
+        if(current.id===row.id)current.cosine_similarity=row.cosine_similarity;
+      }
+      fused.set(id,current);
+    }
+  }
   return [...fused.values()].sort((a,b)=>b.rrf_score-a.rrf_score||a.id.localeCompare(b.id)).slice(0,limit);
+}
+function boundedDenseSearch(run){
+  const controller=new AbortController();
+  let timer;
+  const deadline=new Promise(resolve=>{
+    timer=setTimeout(()=>{
+      controller.abort();
+      resolve({rows:[],status:'timed_out',schema:null});
+    },DENSE_SEARCH_TIMEOUT_MS);
+  });
+  return Promise.race([run(controller.signal),deadline]).finally(()=>clearTimeout(timer));
 }
 const terms=text=>String(text).toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[];
 const questionWords=new Set(['can','could','does','explain','give','help','how','just','please','tell','the','this','what','when','where','which','why','would','you','your']);
 const queryTerms=value=>[...new Set(terms(value))].filter(word=>!questionWords.has(word)).slice(0,16);
+function asksSportsAvailability(query){
+  return /\b(?:injur\w*|lineups?|starters?|starting (?:quarterback|pitcher)|questionable|ruled out|will miss|sidelined|player availability)\b/i.test(query)&&
+    !/\b(?:settle\w*|payout|rules?|void|resolve\w*|resolution)\b/i.test(query);
+}
 function localLexical(rows,query){
   const words=queryTerms(query);
   return rows.map(row=>{
@@ -147,38 +179,68 @@ export function createEvidenceRepository({storage=null,embed=embedPublicTexts,no
   }
   async function search(ticker,query,{limit=6}={}){
     validateTicker(ticker);if(typeof query!=='string'||query.trim().length<3||query.length>300||!Number.isInteger(limit)||limit<1||limit>8)throw new RangeError('Use a 3–300 character public evidence query and one to eight citations');query=query.trim();
-    let rows=[],lexical=[],schema=null,hasEmbeddings=false;
+    let rows=[],lexical=[],hasEmbeddings=false;
     if(db){try{
       const count=await db.query('SELECT count(*)::int AS n, bool_or(embedding IS NOT NULL AND model_id=$2 AND model_revision=$3) AS embedded FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now()',[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision]);if(!count.rows[0]?.n)return emptySearch(ticker,query,'No retained evidence exists for this contract. Use Load contract news first.');
       hasEmbeddings=count.rows[0].embedded===true;
-      const [vectorStore,result]=await Promise.all([hasEmbeddings?vectorSchema(db):null,
-        db.query(`WITH search AS (SELECT websearch_to_tsquery('english',$2) AS phrase,
+      const result=await db.query(`WITH search AS (SELECT websearch_to_tsquery('english',$2) AS phrase,
           CASE WHEN $3='' THEN NULL ELSE to_tsquery('english',$3) END AS terms)
           SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,
           2*ts_rank_cd(search_document,phrase)+coalesce(ts_rank_cd(search_document,terms),0) AS lexical_score
           FROM market_lab.public_evidence_chunks CROSS JOIN search WHERE ticker=$1 AND expires_at>now()
-          AND (search_document@@phrase OR search_document@@terms) ORDER BY lexical_score DESC,retrieved_at DESC,id LIMIT 30`,[ticker,query,queryTerms(query).join(' | ')])]);
-      schema=vectorStore;lexical=result.rows;
-      if(hasEmbeddings&&!schema)rows=(await db.query('SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding,model_id,model_revision FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() ORDER BY retrieved_at DESC LIMIT 256',[ticker])).rows;
+          AND (search_document@@phrase OR search_document@@terms) ORDER BY lexical_score DESC,retrieved_at DESC,id LIMIT 32`,[ticker,query,queryTerms(query).join(' | ')]);
+      lexical=result.rows;
     }catch{return emptySearch(ticker,query,'The retained public evidence store or migration 006 is unavailable.');}}
     else{rows=(memory.get(ticker)||[]).filter(row=>Date.parse(row.expires_at)>now());if(!rows.length)return emptySearch(ticker,query,'No retained evidence exists in this process. Use Load contract news first.');lexical=localLexical(rows,query);hasEmbeddings=rows.some(row=>row.model_id===EMBEDDING_MODEL.id&&row.model_revision===EMBEDDING_MODEL.revision&&validVector(row.embedding));}
-    let vector=null,semantic=[],semanticStatus='unavailable';
-    if(hasEmbeddings){
-      if(await quota(storage,1,now))try{[vector]=await embed([query]);if(!validVector(vector))throw new Error('Invalid vector');semanticStatus='available';}catch{semanticStatus='unavailable';}else semanticStatus='budget_reached';
-    }else if(embeddingBackfills.has(ticker))semanticStatus='refreshing';
-    try{
-      if(vector&&schema){semantic=(await db.query(`WITH scoped AS MATERIALIZED(SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding_vector FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding_vector IS NOT NULL ORDER BY retrieved_at DESC LIMIT 256) SELECT *,1-(embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector) AS cosine_similarity FROM scoped ORDER BY embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector LIMIT 30`,[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision,'['+vector.join(',')+']'])).rows.filter(row=>row.cosine_similarity>=.15);}
-      else if(vector)semantic=rows.filter(row=>validVector(row.embedding)&&row.model_revision===EMBEDDING_MODEL.revision&&row.model_id===EMBEDDING_MODEL.id).map(row=>({...row,cosine_similarity:cosineSimilarity(vector,row.embedding)})).filter(row=>row.cosine_similarity>=.15).sort((a,b)=>b.cosine_similarity-a.cosine_similarity).slice(0,30);
-    }catch{semantic=[];semanticStatus='unavailable';}
+    const denseDisabled=embed===embedPublicTexts&&process.env.SEMANTIC_MODEL_ENABLED==='0';
+    const emptyDense={rows:[],status:denseDisabled?'disabled':embeddingBackfills.has(ticker)?'refreshing':'unavailable',schema:null};
+    const dense=hasEmbeddings&&!denseDisabled?await boundedDenseSearch(async signal=>{
+      if(!await quota(storage,1,now))return {...emptyDense,status:'budget_reached'};
+      signal.throwIfAborted();
+      const [[vector],schema]=await Promise.all([embed([query]),db?vectorSchema(db).catch(()=>null):null]);
+      signal.throwIfAborted();
+      if(!validVector(vector))throw new Error('Invalid vector');
+      let ranked;
+      if(schema){
+        ranked=(await db.query(`WITH scoped AS MATERIALIZED(SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding_vector FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding_vector IS NOT NULL ORDER BY retrieved_at DESC,id LIMIT 256) SELECT *,1-(embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector) AS cosine_similarity FROM scoped ORDER BY embedding_vector OPERATOR("${schema}".<=>) $4::"${schema}".vector,id LIMIT 32`,[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision,'['+vector.join(',')+']'])).rows;
+      }else{
+        const candidates=db?(await db.query('SELECT id::text,ticker,source_url,title,content,publisher,source_kind,published_at,retrieved_at,expires_at,embedding FROM market_lab.public_evidence_chunks WHERE ticker=$1 AND expires_at>now() AND model_id=$2 AND model_revision=$3 AND embedding IS NOT NULL ORDER BY retrieved_at DESC,id LIMIT 256',[ticker,EMBEDDING_MODEL.id,EMBEDDING_MODEL.revision])).rows:
+          rows.filter(row=>row.model_revision===EMBEDDING_MODEL.revision&&row.model_id===EMBEDDING_MODEL.id);
+        ranked=candidates.filter(row=>validVector(row.embedding)).map(row=>({...row,cosine_similarity:cosineSimilarity(vector,row.embedding)}))
+          .sort((a,b)=>b.cosine_similarity-a.cosine_similarity||a.id.localeCompare(b.id)).slice(0,32);
+      }
+      return {rows:ranked.filter(row=>row.cosine_similarity>=.15),status:'available',schema};
+    }).catch(()=>({...emptyDense,status:'unavailable'})):emptyDense;
     const sportsGame=/^KX(?:NBA|NFL|EPL)GAME-/.test(ticker);
-    const current=rows=>rows.filter(row=>!explicitlyHistorical(row.title,row.source_url,now())&&
-      (!sportsGame||row.source_kind==='public_contract_rules'||sportsEvidenceClaim(row.title,row.content,{exactFixture:!row.source_kind?.startsWith('related_')})));
-    const seenSources=new Set();
-    const citations=reciprocalRankFusion(current(lexical),current(semantic),{limit:60}).filter(row=>{
-      if(seenSources.has(row.source_url))return false;
-      seenSources.add(row.source_url);return true;
-    }).slice(0,limit).map((row,index)=>({citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,cosine_similarity:row.cosine_similarity??null}));
-    return {ticker,query,status:citations.length?'available':'no_matches',citations,sources:citations.map(c=>({label:c.citation_id+' · '+c.publisher,url:c.url,retrieved_at:c.retrieved_at})),retrieval:{mode:semanticStatus==='available'?'hybrid_rrf':'lexical_only',semantic_status:semanticStatus,storage:db?(schema?'postgres_pgvector':'postgres_array'):'process_memory',fusion_constant:60,candidate_limit:256,model:EMBEDDING_MODEL},as_of:new Date(now()).toISOString(),scope:'Only retained public evidence for this exact ticker. Search makes no feed, news, X, Reddit or market requests. Cosine/RRF are retrieval ranks, not factual confidence or trading probabilities.'};
+    const availability=sportsGame&&asksSportsAvailability(query);
+    const current=rows=>rows.filter(row=>{
+      if(!publicURL(row.source_url)||explicitlyHistorical(row.title,row.source_url,now()))return false;
+      if(!sportsGame)return true;
+      if(row.source_kind==='public_contract_rules')return !availability;
+      const claim=sportsEvidenceClaim(row.title,row.content,{exactFixture:!row.source_kind?.startsWith('related_')});
+      return availability?claim==='availability_report':Boolean(claim);
+    });
+    const fused=reciprocalRankFusion(current(lexical),current(dense.rows),{limit:64,key:row=>canonicalPublicURL(row.source_url)});
+    const ranked=availability?[...fused.filter(row=>!row.source_kind?.startsWith('related_')),
+      ...fused.filter(row=>row.source_kind?.startsWith('related_'))]:fused;
+    const citations=ranked.slice(0,limit).map((row,index)=>({
+      citation_id:'E'+(index+1),id:row.id,ticker,title:row.title,text:row.content,url:row.source_url,publisher:row.publisher,
+      source_kind:row.source_kind,published_at:row.published_at,retrieved_at:row.retrieved_at,expires_at:row.expires_at,
+      rrf_score:row.rrf_score,lexical_rank:row.lexical_rank,semantic_rank:row.semantic_rank,
+      cosine_similarity:row.cosine_similarity??null,source_cosine_similarity:row.source_cosine_similarity??null,
+    }));
+    return {
+      ticker,query,status:citations.length?'available':'no_matches',citations,
+      sources:citations.map(c=>({label:c.citation_id+' · '+c.publisher,url:c.url,retrieved_at:c.retrieved_at})),
+      retrieval:{
+        mode:dense.status==='available'?'hybrid_rrf':'lexical_only',semantic_status:dense.status,
+        storage:db?(dense.schema?'postgres_pgvector':'postgres_array'):'process_memory',
+        intent:availability?'sports_availability':'general',fusion_unit:'source_url',fusion_constant:60,
+        candidate_limit:256,model:EMBEDDING_MODEL,
+      },
+      as_of:new Date(now()).toISOString(),
+      scope:'Only retained public evidence for this exact ticker. Search makes no feed, news, X, Reddit or market requests. Cosine/RRF describe retrieval, independent of factual confidence and trading probabilities.',
+    };
   }
   return {index,search};
 }
