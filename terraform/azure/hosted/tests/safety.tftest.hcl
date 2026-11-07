@@ -220,17 +220,27 @@ run "live_runtime_uses_referenced_secrets" {
       account_secret_uri   = "https://fixturevault.vault.azure.net/secrets/account/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       database_url_uri     = "https://fixturevault.vault.azure.net/secrets/db-url/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       database_ca_uri      = "https://fixturevault.vault.azure.net/secrets/db-ca/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      provider_secret_uris = {
+        spotify-client-id     = "https://fixturevault.vault.azure.net/secrets/spotify-id/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        spotify-client-secret = "https://fixturevault.vault.azure.net/secrets/spotify-secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        x-bearer-token        = "https://fixturevault.vault.azure.net/secrets/x-token/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        reddit-access-token   = "https://fixturevault.vault.azure.net/secrets/reddit-token/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        reddit-user-agent     = "https://fixturevault.vault.azure.net/secrets/reddit-agent/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+      reddit_data_api_approved = true
     }
   }
 
   assert {
     condition = (
       length(azurerm_user_assigned_identity.app) == 2 &&
-      length(azurerm_role_assignment.key_vault_secret) == 7 &&
+      length(azurerm_role_assignment.key_vault_secret) == 12 &&
       toset([for s in azurerm_container_app.front[0].secret : s.name]) == toset(["edge", "assistant"]) &&
-      toset([for s in azurerm_container_app.backend[0].secret : s.name]) == toset(["edge", "assistant", "account", "database", "database-ca"]) &&
+      toset([for s in azurerm_container_app.backend[0].secret : s.name]) == toset(["edge", "assistant", "account", "database", "database-ca", "spotify-client-id", "spotify-client-secret", "x-bearer-token", "reddit-access-token", "reddit-user-agent"]) &&
       contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_DATABASE_HOST") &&
-      toset([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name if env.secret_name != null && env.secret_name != ""]) == toset(["MARKET_EDGE_SECRET", "ASSISTANT_SERVICE_SECRET", "ACCOUNT_COOKIE_SECRET", "DATABASE_URL", "DATABASE_CA_CERT"])
+      toset([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name if env.secret_name != null && env.secret_name != ""]) == toset(["MARKET_EDGE_SECRET", "ASSISTANT_SERVICE_SECRET", "ACCOUNT_COOKIE_SECRET", "DATABASE_URL", "DATABASE_CA_CERT", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "X_BEARER_TOKEN", "REDDIT_ACCESS_TOKEN", "REDDIT_USER_AGENT"]) &&
+      one([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.value if env.name == "X_MONTHLY_COST_CENTS"]) == "150" &&
+      one([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.value if env.name == "REDDIT_DATA_API_APPROVED"]) == "true"
     )
     error_message = "Live secrets must be Key Vault references scoped to the relevant app identity."
   }

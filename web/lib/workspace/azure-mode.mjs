@@ -1,4 +1,8 @@
 export const AZURE_STREAM_LIFETIME_MS = 210000;
+export const providerCredentialNames = [
+  'SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'X_BEARER_TOKEN',
+  'REDDIT_ACCESS_TOKEN', 'REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_REFRESH_TOKEN',
+];
 
 export function azureMode(value = process.env.PREDICTIR_MODE) {
   if (!value) return null;
@@ -44,8 +48,8 @@ export function validateAzureFrontend(env, builtMode) {
     throw new Error('Use the private backend in this Azure Container Apps environment');
   }
   if ((mode === 'live' || !allowLoopback) && !azureOrigin(env.APP_ORIGIN)) throw new Error('Set the canonical Azure application origin');
-  const backendOnly = ['DATABASE_URL', 'DATABASE_CA_CERT', 'PREDICTIR_DATABASE_HOST', 'ACCOUNT_COOKIE_SECRET', 'KALSHI_API_KEY_ID', 'KALSHI_PRIVATE_KEY'];
-  if (backendOnly.some(name => env[name])) throw new Error('Azure frontend cannot receive database, exchange or account credentials');
+  const backendOnly = ['DATABASE_URL', 'DATABASE_CA_CERT', 'PREDICTIR_DATABASE_HOST', 'ACCOUNT_COOKIE_SECRET', 'KALSHI_API_KEY_ID', 'KALSHI_PRIVATE_KEY', ...providerCredentialNames];
+  if (backendOnly.some(name => env[name])) throw new Error('Azure frontend cannot receive database, exchange, account or provider credentials');
   if (mode === 'live') assertAzureServiceSecrets(env);
   if (mode === 'replay' && (env.MARKET_EDGE_SECRET || env.ASSISTANT_SERVICE_SECRET)) throw new Error('Azure replay does not use service credentials');
   return {mode, backendOrigin};

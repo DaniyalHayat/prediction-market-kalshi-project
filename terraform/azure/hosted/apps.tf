@@ -24,14 +24,26 @@ locals {
     PREDICTIR_DATABASE_HOST  = azurerm_postgresql_flexible_server.live[0].fqdn
     MARKET_STREAM_MINUTES    = "2400"
     MARKET_STREAM_BYTE_LIMIT = "1000000000"
-  } : {}, local.live && var.keep_apps_warm ? { PREDICTIR_KEEP_CATALOG_WARM = "1" } : {}, local.live ? local.owner_backend_environment : {})
+    } : {}, local.live && var.keep_apps_warm ? { PREDICTIR_KEEP_CATALOG_WARM = "1" } : {}, local.live ? local.owner_backend_environment : {},
+    contains(keys(local.backend_secrets), "x-bearer-token") ? {
+      X_MONTHLY_POST_READ_LIMIT = "250"
+      X_MONTHLY_COST_CENTS      = "150"
+  } : {}, try(local.live && var.live_secrets.reddit_data_api_approved, false) ? { REDDIT_DATA_API_APPROVED = "true" } : {})
 
   secret_environment = {
-    edge        = "MARKET_EDGE_SECRET"
-    assistant   = "ASSISTANT_SERVICE_SECRET"
-    account     = "ACCOUNT_COOKIE_SECRET"
-    database    = "DATABASE_URL"
-    database-ca = "DATABASE_CA_CERT"
+    edge                  = "MARKET_EDGE_SECRET"
+    assistant             = "ASSISTANT_SERVICE_SECRET"
+    account               = "ACCOUNT_COOKIE_SECRET"
+    database              = "DATABASE_URL"
+    database-ca           = "DATABASE_CA_CERT"
+    spotify-client-id     = "SPOTIFY_CLIENT_ID"
+    spotify-client-secret = "SPOTIFY_CLIENT_SECRET"
+    x-bearer-token        = "X_BEARER_TOKEN"
+    reddit-client-id      = "REDDIT_CLIENT_ID"
+    reddit-client-secret  = "REDDIT_CLIENT_SECRET"
+    reddit-access-token   = "REDDIT_ACCESS_TOKEN"
+    reddit-refresh-token  = "REDDIT_REFRESH_TOKEN"
+    reddit-user-agent     = "REDDIT_USER_AGENT"
   }
 }
 

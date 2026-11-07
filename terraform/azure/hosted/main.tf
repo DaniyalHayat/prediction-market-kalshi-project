@@ -156,13 +156,13 @@ locals {
     assistant = var.live_secrets.assistant_secret_uri
   } : {}
 
-  backend_secrets = local.live && var.live_secrets != null ? {
+  backend_secrets = local.live && var.live_secrets != null ? merge({
     edge        = var.live_secrets.edge_secret_uri
     assistant   = var.live_secrets.assistant_secret_uri
     account     = var.live_secrets.account_secret_uri
     database    = var.live_secrets.database_url_uri
     database-ca = var.live_secrets.database_ca_uri
-  } : {}
+  }, var.live_secrets.provider_secret_uris) : {}
 
   secret_grants = merge(
     { for name, uri in local.front_secrets : "front/${name}" => { app = "front", uri = uri } },

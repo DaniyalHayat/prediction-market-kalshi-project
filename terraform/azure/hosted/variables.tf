@@ -144,12 +144,14 @@ variable "postgres_admin_password_version" {
 variable "live_secrets" {
   description = "Existing RBAC-enabled Key Vault and references to runtime secrets. Use an application database login in DATABASE_URL, separate from the provisioning administrator."
   type = object({
-    vault_resource_id    = string
-    edge_secret_uri      = string
-    assistant_secret_uri = string
-    account_secret_uri   = string
-    database_url_uri     = string
-    database_ca_uri      = string
+    vault_resource_id        = string
+    edge_secret_uri          = string
+    assistant_secret_uri     = string
+    account_secret_uri       = string
+    database_url_uri         = string
+    database_ca_uri          = string
+    provider_secret_uris     = optional(map(string), {})
+    reddit_data_api_approved = optional(bool, false)
   })
   default = null
 
@@ -157,13 +159,33 @@ variable "live_secrets" {
     condition = var.live_secrets == null ? true : (
       can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.KeyVault/vaults/[a-zA-Z0-9-]+$", var.live_secrets.vault_resource_id)) &&
       alltrue([
-        for uri in [var.live_secrets.edge_secret_uri, var.live_secrets.assistant_secret_uri, var.live_secrets.account_secret_uri, var.live_secrets.database_url_uri, var.live_secrets.database_ca_uri] :
+        for uri in concat([var.live_secrets.edge_secret_uri, var.live_secrets.assistant_secret_uri, var.live_secrets.account_secret_uri, var.live_secrets.database_url_uri, var.live_secrets.database_ca_uri], values(var.live_secrets.provider_secret_uris)) :
         can(regex("^https://[a-z0-9-]+\\.vault\\.azure\\.net/secrets/[a-zA-Z0-9-]+/[a-f0-9]{32}$", uri)) &&
         startswith(uri, "https://${lower(element(reverse(split("/", var.live_secrets.vault_resource_id)), 0))}.vault.azure.net/secrets/")
       ]) &&
-      length(distinct([for uri in [var.live_secrets.edge_secret_uri, var.live_secrets.assistant_secret_uri, var.live_secrets.account_secret_uri, var.live_secrets.database_url_uri, var.live_secrets.database_ca_uri] : try(lower(split("/", uri)[4]), "")])) == 5
+      length(distinct([
+        for uri in concat([var.live_secrets.edge_secret_uri, var.live_secrets.assistant_secret_uri, var.live_secrets.account_secret_uri, var.live_secrets.database_url_uri, var.live_secrets.database_ca_uri], values(var.live_secrets.provider_secret_uris)) :
+        try(lower(split("/", uri)[4]), "")
+      ])) == 5 + length(var.live_secrets.provider_secret_uris)
     )
-    error_message = "Provide distinct, version-pinned edge, assistant, account, database URL and database CA references from the specified Key Vault."
+    error_message = "Provide distinct, version-pinned runtime references from the specified Key Vault."
+  }
+
+  validation {
+    condition = var.live_secrets == null ? true : (
+      alltrue([for name in keys(var.live_secrets.provider_secret_uris) : contains([
+        "spotify-client-id", "spotify-client-secret", "x-bearer-token", "reddit-client-id", "reddit-client-secret",
+        "reddit-access-token", "reddit-refresh-token", "reddit-user-agent",
+      ], name)]) &&
+      contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-id") == contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-secret") &&
+      contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-id") == contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret") &&
+      (!contains(keys(var.live_secrets.provider_secret_uris), "reddit-refresh-token") || contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret")) &&
+      (var.live_secrets.reddit_data_api_approved ? (
+        contains(keys(var.live_secrets.provider_secret_uris), "reddit-user-agent") &&
+        (contains(keys(var.live_secrets.provider_secret_uris), "reddit-access-token") || contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret"))
+      ) : !anytrue([for name in keys(var.live_secrets.provider_secret_uris) : startswith(name, "reddit-")]))
+    )
+    error_message = "Provide complete Spotify or approved Reddit credential sets and use only supported backend provider references."
   }
 }
 

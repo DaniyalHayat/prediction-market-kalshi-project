@@ -27,6 +27,9 @@ test('Azure front enforces the built edition, private ingress, and separate serv
   assert.throws(() => validateAzureFrontend({...front, MARKET_BACKEND_URL: privateOrigin + '/mcp'}, 'live'), /private Azure backend/);
   assert.throws(() => validateAzureFrontend({...front, CONTAINER_APP_ENV_DNS_SUFFIX: 'another.eastus2.azurecontainerapps.io'}, 'live'), /this Azure Container Apps environment/);
   assert.throws(() => validateAzureFrontend({...front, DATABASE_URL: backend.DATABASE_URL}, 'live'), /cannot receive/);
+  for (const name of ['SPOTIFY_CLIENT_SECRET', 'X_BEARER_TOKEN', 'REDDIT_CLIENT_SECRET', 'REDDIT_REFRESH_TOKEN', 'REDDIT_ACCESS_TOKEN']) {
+    assert.throws(() => validateAzureFrontend({...front, [name]: 'fixture'}, 'live'), /cannot receive/);
+  }
   assert.throws(() => validateAzureFrontend({...front, ASSISTANT_SERVICE_SECRET: edge}, 'live'), /distinct/);
   const local = {...front, MARKET_BACKEND_URL: 'http://127.0.0.1:8780', PREDICTIR_AZURE_LOCAL: '1'};
   assert.equal(validateAzureFrontend(local, 'live').backendOrigin, local.MARKET_BACKEND_URL);
@@ -51,6 +54,12 @@ test('Azure live rejects admin, other databases, TLS overrides, weak keys and ha
   assert.throws(() => validateAzureLive({...backend, SUPABASE_URL: 'https://supabase.example'}), /own application origin and provider/);
   assert.throws(() => validateAzureLive({...backend, KALSHI_API_KEY_ID: 'only-id'}), /both optional/);
   assert.throws(() => validateAzureLive({...backend, KALSHI_API_KEY_ID: 'fixture-id', KALSHI_PRIVATE_KEY: 'invalid'}), /private key is invalid/);
+  assert.throws(() => validateAzureLive({...backend, SPOTIFY_CLIENT_ID: 'fixture'}), /both optional Spotify/);
+  assert.throws(() => validateAzureLive({...backend, REDDIT_ACCESS_TOKEN: 'fixture'}), /approved Reddit/);
+  assert.throws(() => validateAzureLive({...backend, REDDIT_DATA_API_APPROVED: 'true', REDDIT_USER_AGENT: 'fixture', REDDIT_REFRESH_TOKEN: 'fixture'}), /approved Reddit/);
+  assert.equal(validateAzureLive({...backend, SPOTIFY_CLIENT_ID: 'fixture', SPOTIFY_CLIENT_SECRET: 'fixture',
+    X_BEARER_TOKEN: 'fixture', REDDIT_DATA_API_APPROVED: 'true', REDDIT_USER_AGENT: 'fixture',
+    REDDIT_CLIENT_ID: 'fixture', REDDIT_CLIENT_SECRET: 'fixture'}).host, host);
 });
 
 test('private DNS and database preflight reject public answers, absent TLS and nonrestricted roles', async () => {
