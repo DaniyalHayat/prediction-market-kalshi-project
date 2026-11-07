@@ -26,4 +26,5 @@ test('Railway runtime keeps dependencies in its builder and runs without OS pack
   assert.match(stage, /CMD \["--max-old-space-size=384", "cloud\/railway\.mjs"\]/);
   assert.match(stage, /COPY --from=dependencies.*node_modules/);
   assert.match(stage, /COPY --from=dependencies.*\/tmp\/market-lab-models/);
+  assert.doesNotMatch(source, /--mount=type=cache,id=predictir-public-npm/);
 });
