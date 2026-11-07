@@ -17,10 +17,10 @@ export function parseApple(payload,now=Date.now()) {
   return {tracks,scope:'US · Apple Music most-played songs',measurement_date:new Date(stamp).toISOString().slice(0,10),source_updated:new Date(stamp).toISOString(),
     source_url:appleURL,note:'An ordinal song ranking snapshot. It does not report stream counts, monthly artist totals, Spotify rankings or a completed calendar-day close.'};
 }
-export async function appleChart(){
-  const source=await sourceJSON('Apple Music US chart',appleURL,{ttl:3600}),value=parseApple(source.data);
+export async function appleChart({get=sourceJSON,publish=publishDataset}={}){
+  const source=await get('Apple Music US chart',appleURL,{ttl:3600,timeoutMs:4000}),value=parseApple(source.data);
   const rows=value.tracks.map(row=>({entity:row.id,scope:'us-songs',metric:'ordinal_rank_snapshot',measurement_date:value.measurement_date,value:row.rank,unit:'rank'}));
-  const persistence=await publishDataset('apple-music',{url:appleURL,as_of:value.source_updated},source.data,rows,'observations').catch(()=>({persisted:false}));
+  const persistence=await publish('apple-music',{url:appleURL,as_of:value.source_updated},source.data,rows,'observations').catch(()=>({persisted:false}));
   return {...value,as_of:source.as_of,persistence};
 }
 export function rankPersistence(rows,horizon=1) {
@@ -85,10 +85,10 @@ export function musicIdentity(market){
   if(billboard&&identity(billboard[1])===identity(label))return {artist:null,song:label,kind:'track'};
   return artistContract?{artist:label,song:null,kind:'artist'}:/\b(?:song|track)\b/i.test(market.title||'')?{artist:null,song:label,kind:'track'}:{artist:null,song:null,kind:'unverified_song_or_other'};
 }
-export async function musicResearch(market,{includeSpotify=true,includeAlternatives=true}={}){
+export async function musicResearch(market,{includeSpotify=true,includeAlternatives=true,getAppleChart=appleChart}={}){
   if(!musicContract(market))return null;
   const {artist,song,kind}=musicIdentity(market);
-  const [apple,spotify,alternatives]=await Promise.all([appleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&(artist||song)?spotifyReferences(song||artist,{kind,artist}).catch(error=>({status:'unavailable',references:[],reason:error.message})):
+  const [apple,spotify,alternatives]=await Promise.all([getAppleChart().catch(error=>({tracks:[],error:error.message})),includeSpotify&&(artist||song)?spotifyReferences(song||artist,{kind,artist}).catch(error=>({status:'unavailable',references:[],reason:error.message})):
     {status:'not_queried',references:[],reason:'An identified artist or track is required for catalog references.'},includeAlternatives?alternativeMusicSources(market,{artist,song}):null]);
   const matched=apple.tracks?.filter(track=>song?identity(track.name)===identity(song)&&(!artist||identity(track.artist)===identity(artist)):artist?identity(track.artist)===identity(artist):false)||[],history=matched.length===1?await chartHistory('apple-music','us-songs','ordinal_rank_snapshot',matched[0].id):[];
   return {scope:'Dated source references',apple,spotify,alternatives,matched_tracks:matched,history,
