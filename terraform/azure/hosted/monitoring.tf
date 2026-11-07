@@ -15,11 +15,23 @@ resource "azurerm_log_analytics_workspace" "runtime" {
 resource "azurerm_monitor_diagnostic_setting" "runtime" {
   count = local.saved_logs ? 1 : 0
 
-  name                           = "predictir-runtime-logs"
-  target_resource_id             = azurerm_container_app_environment.edition[0].id
-  log_analytics_workspace_id     = azurerm_log_analytics_workspace.runtime[0].id
+  name                       = "predictir-runtime-logs"
+  target_resource_id         = azurerm_container_app_environment.edition[0].id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.runtime[0].id
 
   enabled_log {
     category_group = "allLogs"
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "vault_audit" {
+  count = local.saved_logs && var.live_secrets != null ? 1 : 0
+
+  name                       = "predictir-vault-audit"
+  target_resource_id         = var.live_secrets.vault_resource_id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.runtime[0].id
+
+  enabled_log {
+    category = "AuditEvent"
   }
 }

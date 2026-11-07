@@ -11,7 +11,7 @@ variable "keep_apps_warm" {
 }
 
 variable "enable_saved_logs" {
-  description = "Opt in to Azure Monitor console and system log storage for the live edition. Retention is 30 days with a 0.05 GB daily ingestion quota and a $5 monthly review reserve. Azure daily quotas can overshoot and are not a hard billing cap."
+  description = "Opt in to Azure Monitor console, system and configured Key Vault AuditEvent storage for the live edition. Retention is 30 days with a shared 0.05 GB daily ingestion quota and a $5 monthly review reserve. Azure daily quotas can overshoot and are not a hard billing cap."
   type        = bool
   default     = false
 }

@@ -1,4 +1,10 @@
 mock_provider "azurerm" {
+  mock_resource "azurerm_log_analytics_workspace" {
+    override_during = plan
+    defaults = {
+      id = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/fixture/providers/Microsoft.OperationalInsights/workspaces/fixturelogs"
+    }
+  }
   mock_resource "azurerm_container_app_environment" {
     defaults = {
       default_domain = "fixture.eastus2.azurecontainerapps.io"
@@ -36,6 +42,7 @@ run "default_is_zero_azure_resources" {
       length(azurerm_container_app_environment.edition) == 0 &&
       length(azurerm_log_analytics_workspace.runtime) == 0 &&
       length(azurerm_monitor_diagnostic_setting.runtime) == 0 &&
+      length(azurerm_monitor_diagnostic_setting.vault_audit) == 0 &&
       length(azurerm_container_app.front) == 0 &&
       length(azurerm_container_app.backend) == 0 &&
       length(azurerm_postgresql_flexible_server.live) == 0 &&
@@ -128,6 +135,41 @@ run "saved_logs_require_the_additional_reviewed_reserve" {
   }
 
   expect_failures = [terraform_data.release_approval]
+}
+
+run "vault_logging_uses_only_audit_events_in_the_reviewed_workspace" {
+  command = plan
+
+  variables {
+    azure_enabled           = true
+    profile                 = "live"
+    enable_saved_logs       = true
+    postgres_admin_password = "isolated-mock-input-not-a-secret"
+    spend_approval = {
+      approved_monthly_usd     = 25
+      reviewed_monthly_usd     = 25
+      accepts_metered_overages = true
+    }
+    live_secrets = {
+      vault_resource_id    = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/fixture/providers/Microsoft.KeyVault/vaults/fixturevault"
+      edge_secret_uri      = "https://fixturevault.vault.azure.net/secrets/edge/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      assistant_secret_uri = "https://fixturevault.vault.azure.net/secrets/assistant/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      account_secret_uri   = "https://fixturevault.vault.azure.net/secrets/account/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      database_url_uri     = "https://fixturevault.vault.azure.net/secrets/db-url/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      database_ca_uri      = "https://fixturevault.vault.azure.net/secrets/db-ca/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+
+  assert {
+    condition = (
+      length(azurerm_monitor_diagnostic_setting.vault_audit) == 1 &&
+      azurerm_monitor_diagnostic_setting.vault_audit[0].target_resource_id == var.live_secrets.vault_resource_id &&
+      azurerm_monitor_diagnostic_setting.vault_audit[0].log_analytics_workspace_id == azurerm_log_analytics_workspace.runtime[0].id &&
+      one(azurerm_monitor_diagnostic_setting.vault_audit[0].enabled_log).category == "AuditEvent" &&
+      length(azurerm_monitor_diagnostic_setting.vault_audit[0].enabled_metric) == 0
+    )
+    error_message = "Key Vault access auditing must reuse the bounded workspace and must not enable metrics or policy-event collection."
+  }
 }
 
 run "hosted_replay_consumption_and_private_backend" {
