@@ -110,6 +110,18 @@ test('sports availability favors exact fixture updates over related reports and 
   assert.equal(mixed.retrieval.intent,'general');
   assert.ok(mixed.citations.some(c=>c.source_kind==='public_contract_rules'));
 });
+test('sports availability retrieves equivalent wording while dense inference is unavailable',async()=>{
+  const ticker='KXNBAGAME-LEXICAL-'+randomUUID(),m={...market,ticker};
+  const query='which starters are sidelined';
+  const repository=createEvidenceRepository({now:()=>NOW,embed:texts=>
+    texts.includes(query)?Promise.reject(new Error('model unavailable')):fixtureEmbed(texts)});
+  const items=[{title:'Lakers center downgraded to out for Celtics matchup',excerpt:'A twisted ankle keeps him on the bench.',
+    url:'https://example.org/lexical-matchup',publisher:'Fixture sports source',as_of:evidence.as_of,source_tier:'reported'}];
+  await repository.index(m,{ticker,as_of:evidence.as_of,items},{enabled:true,selectedTicker:ticker});
+  const result=await repository.search(ticker,query);
+  assert.equal(result.retrieval.mode,'lexical_only');
+  assert.equal(result.citations[0]?.url,'https://example.org/lexical-matchup');
+});
 test('evidence route propagates exact selected trade and Reddit opt-in, while retained search performs no source load',async()=>{
   const calls=[],sources=[{name:'Fixture',url:'https://example.org/rules'}];
   const deps={marketDetails:async t=>{assert.equal(t,ticker);return {market};},request:async path=>{assert.equal(path,'/series/KXNBAGAME');return {data:{series:{settlement_sources:sources}}};},

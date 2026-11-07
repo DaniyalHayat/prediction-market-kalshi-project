@@ -160,3 +160,11 @@ test('a Billboard song outcome cannot become a Spotify artist search identity',(
   assert.equal(musicIdentity({ticker:'KXRANKLIST1SONG-26NOV28-THR',title:'Which song will be #1 on Billboard Hot 100?',yes_sub_title:'Thriller',rules_primary:'If Thriller is the number one song, then Yes.'}).artist,null);
   assert.equal(musicIdentity({title:'Who will be the top Spotify artist this year?',yes_sub_title:'BTS',custom_strike:{Artist:'BTS'}}).artist,'BTS');
 });
+
+test('a named Billboard Hot 100 settlement maps to a track without the word song in its title',()=>{
+  const market={ticker:'KXRANKLIST1SONG-26NOV28-THR',event_ticker:'KXRANKLIST1SONG-26NOV28',
+    title:'Will Thriller be #1 on the Billboard Hot 100 in November 2026?',yes_sub_title:'Thriller',
+    rules_primary:'If Thriller is the #1 on Billboard Hot 100 in November 2026, then the market resolves to Yes.'};
+  assert.deepEqual(musicIdentity(market),{artist:null,song:'Thriller',kind:'track'});
+  assert.equal(musicIdentity({...market,yes_sub_title:'A different title'}).song,null);
+});
