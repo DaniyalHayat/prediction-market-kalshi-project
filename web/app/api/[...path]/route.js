@@ -39,14 +39,14 @@ export async function GET(request, context) {
     else if(endpoint==="market") result=await marketDetails(ticker);
     else if(endpoint==="trades") result=await trades(ticker);
     else if(endpoint==="history") result=history(vertical);
-    else if(endpoint==="export.xlsx") return new Response(await workbook(vertical),{headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=\"kalshi-live-research.xlsx\""}});
+    else if(endpoint==="export.xlsx") return new Response(await workbook(vertical),{headers:{...headers,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=\"predictir-market-research.xlsx\""}});
     else return Response.json({error:"Unknown API path"},{status:404,headers});
     return Response.json(result,{headers});
   } catch(error) {
     if(error.upstream_status===429&&Number.isSafeInteger(error.retry_after_seconds)&&error.retry_after_seconds>0){
-      return Response.json({error:error.message,status:"unavailable"},{status:429,headers:{...headers,"Retry-After":String(error.retry_after_seconds)}});
+      return Response.json({error:"The market data source is cooling down. Try again shortly.",status:"unavailable"},{status:429,headers:{...headers,"Retry-After":String(error.retry_after_seconds)}});
     }
-    return Response.json({error:error.message,status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});
+    return Response.json({error:error instanceof RangeError?error.message:error.status===404?"The selected contract was not found.":"Market data could not be refreshed. Try again shortly.",status:"unavailable"},{status:error.status || (error instanceof RangeError?400:503),headers});
   }
 }
 export async function POST(request,context) {
