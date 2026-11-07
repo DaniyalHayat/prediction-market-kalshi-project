@@ -16,6 +16,7 @@ function teamPhrases(name){
   if(!team)return [];
   const nickname=team.endsWith('trail blazers')?'trail blazers':team.split(' ').at(-1);
   const phrases=[team];
+  if(team.startsWith('la '))phrases.push(team.replace(/^la /,'los angeles '));
   if(nickname.length>=5&&!genericNicknames.has(nickname))phrases.push(nickname);
   if(team==='philadelphia 76ers')phrases.push('sixers');
   return phrases;
@@ -119,7 +120,8 @@ export function rankEvidence(items,market,{sports,now=Date.now(),maximum=20}={})
   const roster=[...(sports?.availability||[]),...(sports?.teams||[]).flatMap(t=>(sports?.player_stats||[]).filter(p=>p.team_id===t.id).slice(0,3))].map(p=>p.name).filter(Boolean);
   const entities=[...new Set([...evidenceEntities(market,{sports}),...roster])].slice(0,14),topic=evidenceTopic(market),isSport=sportsTopics.has(topic),ranked=[];
   const teams=(sports?.teams||[]).map(team=>team.name),fixtureUpcoming=Date.parse(sports?.event?.played_at)>now;
-  const entityTerms=entities.map(entity=>({entity,terms:isSport?(teams.includes(entity)?teamPhrases(entity):[normalize(entity)]):words(entity)}));
+  const entityTerms=entities.map(entity=>({entity,terms:isSport?(teams.includes(entity)?[...new Set([...teamPhrases(entity),
+    ...((sports?.teams||[]).find(team=>team.name===entity)?.aliases||[]).map(normalize).filter(alias=>alias.length>=4&&!genericNicknames.has(alias))])]:[normalize(entity)]):words(entity)}));
   const titleTerms=topicWords(market?.title).slice(0,6),topicGroups=evidenceTopicGroups(market),assetContext=topicGroups.length===1;
   const hoursToClose=(Date.parse(market?.close_time)-now)/3600000;
   for(const item of (items||[]).slice(0,200)){
