@@ -118,7 +118,7 @@ test('assistant cost reservation is atomic at the storage interface and fails cl
 test('concurrent streams enforce per-visitor slots and release them on disconnect',async t=>{
   const listeners=new Set();let removed=0,done;const disconnected=new Promise(resolve=>{done=resolve;});
   const feed={status:'connected',add:async(ticker,listener)=>{listeners.add(listener);listener({kind:'connection',status:'connected'});return()=>{listeners.delete(listener);if(++removed===3)done();};}};
-  const url=await listen(t,{feed}),values=await Promise.all(Array.from({length:4},()=>fetch(url+'/api/stream?ticker='+ticker,{headers:edgeHeaders})));
+  const url=await listen(t,{feed,streamMaxPerIP:3}),values=await Promise.all(Array.from({length:4},()=>fetch(url+'/api/stream?ticker='+ticker,{headers:edgeHeaders})));
   assert.equal(values.filter(r=>r.status===200).length,3);assert.equal(values.filter(r=>r.status===429).length,1);
   await Promise.all(values.filter(r=>r.status===200).map(r=>r.body.cancel()));
   let timeout;await Promise.race([disconnected,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Stream cleanup did not finish')),1000);})]);clearTimeout(timeout);

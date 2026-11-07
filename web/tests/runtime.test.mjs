@@ -117,6 +117,24 @@ test('abandoned portfolio stream admissions release capacity while their quotas 
   assert.equal(charged.filter(key=>key.startsWith('stream-minutes#')).length,1);
   assert.equal(charged.filter(key=>key.startsWith('stream-egress')).length,1);
 });
+test('several browser tabs share streaming capacity while excess connections receive bounded retry guidance',async t=>{
+  const active=new Set(),responses=[];
+  const feed={status:'connected',add:async(_ticker,listener)=>{active.add(listener);listener({kind:'connection',status:'connected'});return()=>active.delete(listener);}};
+  const url=await server(t,{feed});
+  try{
+    for(let i=0;i<8;i++){
+      const response=await fetch(url+'/api/stream?ticker=TEST-A',{headers,signal:AbortSignal.timeout(5000)});
+      assert.equal(response.status,200);responses.push(response);
+    }
+    const excess=await fetch(url+'/api/stream?ticker=TEST-A',{headers});
+    assert.equal(excess.status,429);assert.equal(excess.headers.get('retry-after'),'15');
+    assert.equal(active.size,8);
+    await responses.pop().body.cancel();
+    await new Promise(resolve=>setTimeout(resolve,30));
+    const replacement=await fetch(url+'/api/stream?ticker=TEST-A',{headers,signal:AbortSignal.timeout(5000)});
+    assert.equal(replacement.status,200);responses.push(replacement);
+  }finally{await Promise.all(responses.map(response=>response.body.cancel()));}
+});
 test('portfolio admission bounds ticker lists, charges bytes once and preserves trace correlation',async t=>{
   const takes=[],logs=[];const storage={consume:async(key,limit,amount)=>{takes.push({key,limit,amount});return !key.startsWith('stream-egress');}};
   const url=await server(t,{storageEnabled:()=>true,storage:()=>storage,logger:(event,value)=>logs.push({event,...value})});

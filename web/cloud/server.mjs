@@ -56,7 +56,10 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
   getRoute=GET,postRoute=POST,mcp=handleMCP,researchReadback=localResearchReadback,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
+  streamMaxConnections=Number(process.env.MARKET_STREAM_MAX_CONNECTIONS||32),streamMaxPerIP=Number(process.env.MARKET_STREAM_MAX_PER_IP||8),
   monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger,telemetry=runtimeTelemetry,accountOptions={}}={}){
+  if(!Number.isInteger(streamMaxConnections)||streamMaxConnections<1||streamMaxConnections>128||
+    !Number.isInteger(streamMaxPerIP)||streamMaxPerIP<1||streamMaxPerIP>16||streamMaxPerIP>streamMaxConnections)throw new RangeError('Invalid streaming connection limits');
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
   const recentLogs=[],logPipeline=createLogPipeline({write:line=>{const record=JSON.parse(line);recentLogs.push(record);if(recentLogs.length>200)recentLogs.shift();if(production&&!logger)process.stdout.write(line+'\n');}});
   function recordLog(event,values){
@@ -137,7 +140,10 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
   async function sse(req,res,tickers,identity,multiplex=false){
     tickers=[...new Set(tickers.map(validateTicker))];
     if(!tickers.length||tickers.length>(multiplex?12:1))throw new RangeError('Choose one to twelve unique portfolio tickers');
-    if(connections>=16||(streamByIP.get(identity)||0)>=3)throw new LocalThrottle('Streaming capacity is currently full','throttle_stream_capacity');
+    if(connections>=streamMaxConnections||(streamByIP.get(identity)||0)>=streamMaxPerIP){
+      res.setHeader('Retry-After','15');
+      throw new LocalThrottle('Streaming capacity is currently full. Live snapshots remain available.','throttle_stream_capacity');
+    }
     if(!Number.isSafeInteger(streamMonthlyMinutes)||streamMonthlyMinutes<1||streamMonthlyMinutes>60000)throw new RangeError('Invalid streaming allowance');
     if(!Number.isSafeInteger(streamMonthlyBytes)||streamMonthlyBytes<65536||streamMonthlyBytes>100000000000)throw new RangeError('Invalid streaming byte allowance');
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
