@@ -1,0 +1,107 @@
+{
+  "version": "crypto-minute-settlement-replay-v1",
+  "independent_forecast": true,
+  "release_eligible": false,
+  "archive_sha256": "719b3f10950ab89e21fdbd942209dcbf22f6aaf4dce8ba0df63ed6950db1523d",
+  "start": "2026-11-03T00:00:00.000Z",
+  "holdout_start": "2026-11-05T00:00:00.000Z",
+  "end": "2026-11-07T00:00:00.000Z",
+  "minutes_before_close": 8,
+  "by_series": {
+    "KXBTC15M": {
+      "settled_events": 375,
+      "bars": 6059,
+      "missing_origin_rows": 0,
+      "earlier": {
+        "n": 191,
+        "brier": 0.18366255618354516,
+        "static_brier": 0.18398737721143282,
+        "coinflip_brier": 0.25,
+        "log_loss": 0.54298859179011,
+        "static_log_loss": 0.5530128693219153,
+        "wins": 139
+      },
+      "holdout": {
+        "n": 184,
+        "brier": 0.18628216503992903,
+        "static_brier": 0.19324755989352269,
+        "coinflip_brier": 0.25,
+        "log_loss": 0.5560070392947164,
+        "static_log_loss": 0.5774679161850159,
+        "wins": 130
+      },
+      "by_holdout_day": {
+        "2026-11-05": {
+          "n": 88,
+          "brier": 0.1756029684601114,
+          "static_brier": 0.18510204081632659,
+          "coinflip_brier": 0.25,
+          "log_loss": 0.5366824656907286,
+          "static_log_loss": 0.5561675585411934,
+          "wins": 64
+        },
+        "2026-11-06": {
+          "n": 96,
+          "brier": 0.1960714285714286,
+          "static_brier": 0.2007142857142857,
+          "coinflip_brier": 0.25,
+          "log_loss": 0.5737212317650389,
+          "static_log_loss": 0.5969932440251865,
+          "wins": 66
+        }
+      },
+      "release_eligible": false
+    },
+    "KXETH15M": {
+      "settled_events": 376,
+      "bars": 6059,
+      "missing_origin_rows": 0,
+      "earlier": {
+        "n": 192,
+        "brier": 0.1676587004287009,
+        "static_brier": 0.1638727816494244,
+        "coinflip_brier": 0.25,
+        "log_loss": 0.5106504885726878,
+        "static_log_loss": 0.5040059722417151,
+        "wins": 148
+      },
+      "holdout": {
+        "n": 184,
+        "brier": 0.18436557231588294,
+        "static_brier": 0.19174800354924582,
+        "coinflip_brier": 0.25,
+        "log_loss": 0.5489530401559367,
+        "static_log_loss": 0.5703944469688621,
+        "wins": 129
+      },
+      "by_holdout_day": {
+        "2026-11-05": {
+          "n": 88,
+          "brier": 0.1912059369202226,
+          "static_brier": 0.19395176252319102,
+          "coinflip_brier": 0.25,
+          "log_loss": 0.5778210273712052,
+          "static_log_loss": 0.5639037277095581,
+          "wins": 62
+        },
+        "2026-11-06": {
+          "n": 96,
+          "brier": 0.17809523809523806,
+          "static_brier": 0.18972789115646257,
+          "coinflip_brier": 0.25,
+          "log_loss": 0.522490718541941,
+          "static_log_loss": 0.576344272956558,
+          "wins": 67
+        }
+      },
+      "release_eligible": false
+    }
+  },
+  "protocol": [
+    "A fixed eight-minute lead uses only completed Coinbase minutes. Gap or mismatched contract rules withhold the prediction.",
+    "Exact binary outcomes come from finalized Kalshi settlement. Contract terms provide the named CF index and known starting strike.",
+    "Coinbase OHLC approximates each minute average. The settlement index is separately calculated by CF Benchmarks.",
+    "A constant 50% baseline and the same empirical returns without short-term volatility adjustment are scored on identical rows.",
+    "The short holdout has serially related observations and no comparable cost or trade simulation. It does not establish repeatable edge."
+  ]
+}

@@ -31,9 +31,9 @@ test('NO uses one minus upper YES bound, not one minus lower bound', async () =>
 });
 test('unsupported exact series remains evidence-only despite a name resembling a supported category', async () => {
   let modelCalled = false;
-  const deps = dependencies({ marketDetails: async () => ({ market: { ...market, ticker: 'KXBTC15M-26OCT28-T100', event_ticker: 'KXBTC15M-26OCT28', title: 'Bitcoin short-term outcome' }, as_of: new Date(NOW).toISOString() }),
+  const deps = dependencies({ marketDetails: async () => ({ market: { ...market, ticker: 'KXBTCTOUCH-26OCT28-T100', event_ticker: 'KXBTCTOUCH-26OCT28', title: 'Bitcoin short-term outcome' }, as_of: new Date(NOW).toISOString() }),
     researchReport: async () => { modelCalled = true; throw new Error('must not model'); } });
-  const result = await marketBrief('KXBTC15M-26OCT28-T100', {}, deps);
+  const result = await marketBrief('KXBTCTOUCH-26OCT28-T100', {}, deps);
   assert.equal(modelCalled, false); assert.equal(result.status, 'evidence_only');
   assert.equal(result.forecast.probability, null); assert.equal(result.decision.side, 'insufficient_edge');
   assert.ok(result.drivers.length >= 3);

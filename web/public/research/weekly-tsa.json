@@ -1,0 +1,270 @@
+{
+  "version": "weekly-tsa-settlement-replay-v1",
+  "independent_forecast": true,
+  "release_eligible": false,
+  "holdout_start": "2026-08-01",
+  "window_end": "2026-11-06",
+  "archive_sha256": "6c524624f13028117c352ce90562da8d8143657910382a134415fd309f9d93c4",
+  "observation_rows": 309,
+  "settled_events": 44,
+  "insufficient_history_events": 21,
+  "earlier": {
+    "events": 9,
+    "contracts": 190,
+    "brier": 0.03471478079138212,
+    "baseline_brier": 0.04002045142625361,
+    "log_loss": 0.1378486720627728,
+    "baseline_log_loss": 0.15152065692202513
+  },
+  "holdout": {
+    "events": 14,
+    "contracts": 294,
+    "brier": 0.04147118783118516,
+    "baseline_brier": 0.03805450306857318,
+    "log_loss": 0.14747968611009957,
+    "baseline_log_loss": 0.13540984466289727
+  },
+  "holdout_brier_gain_95": [
+    -0.023302014880160298,
+    0.011776362130986328
+  ],
+  "protocol": [
+    "The Friday forecast uses TSA observations through Wednesday under a two-calendar-day publication lag.",
+    "The model uses only earlier resolved weeks to estimate horizon-matched residuals. The prior completed week is the baseline.",
+    "Kalshi contributes exact contract definitions and finalized $0/$1 outcomes. Exchange prices are excluded.",
+    "Scores average within each week before averaging weeks. The paired bootstrap resamples whole weeks.",
+    "TSA daily values use the currently published vintage. First-publication times and subsequent revisions are unverified."
+  ],
+  "events": [
+    {
+      "event": "KXTSAW-26MAY31",
+      "end": "2026-05-31",
+      "origin": "2026-05-29T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.051285219970341064,
+      "baseline_brier": 0.045682979073982534,
+      "log_loss": 0.17244352050820394,
+      "baseline_log_loss": 0.15992237061153491
+    },
+    {
+      "event": "KXTSAW-26JUN07",
+      "end": "2026-06-07",
+      "origin": "2026-06-05T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.01693856554967666,
+      "baseline_brier": 0.020759847148736032,
+      "log_loss": 0.08647992724851326,
+      "baseline_log_loss": 0.09183336772486832
+    },
+    {
+      "event": "KXTSAW-26JUN14",
+      "end": "2026-06-14",
+      "origin": "2026-06-12T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.025491359978894606,
+      "baseline_brier": 0.023380820472233214,
+      "log_loss": 0.10171497051156152,
+      "baseline_log_loss": 0.09540628573307919
+    },
+    {
+      "event": "KXTSAW-26JUN21",
+      "end": "2026-06-21",
+      "origin": "2026-06-19T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.026815476190476188,
+      "baseline_brier": 0.020148809523809524,
+      "log_loss": 0.10176801752156017,
+      "baseline_log_loss": 0.08374527600243738
+    },
+    {
+      "event": "KXTSAW-26JUN28",
+      "end": "2026-06-28",
+      "origin": "2026-06-26T16:00:00.000Z",
+      "n": 22,
+      "brier": 0.012523191094619667,
+      "baseline_brier": 0.01314162028447743,
+      "log_loss": 0.06661988078584599,
+      "baseline_log_loss": 0.06384109417456287
+    },
+    {
+      "event": "KXTSAW-26JUL05",
+      "end": "2026-07-05",
+      "origin": "2026-07-03T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.12586088154269973,
+      "baseline_brier": 0.1351092089728453,
+      "log_loss": 0.4737908198746351,
+      "baseline_log_loss": 0.5006226940294641
+    },
+    {
+      "event": "KXTSAW-26JUL12",
+      "end": "2026-07-12",
+      "origin": "2026-07-10T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.017575839409487804,
+      "baseline_brier": 0.06636510937078045,
+      "log_loss": 0.07657166133260487,
+      "baseline_log_loss": 0.20821590158127984
+    },
+    {
+      "event": "KXTSAW-26JUL19",
+      "end": "2026-07-19",
+      "origin": "2026-07-17T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.022590112433862438,
+      "baseline_brier": 0.020109953703703703,
+      "log_loss": 0.09076564087145617,
+      "baseline_log_loss": 0.08590560655269419
+    },
+    {
+      "event": "KXTSAW-26JUL26",
+      "end": "2026-07-26",
+      "origin": "2026-07-24T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.013352380952380954,
+      "baseline_brier": 0.015485714285714285,
+      "log_loss": 0.07048360991057415,
+      "baseline_log_loss": 0.07419331588830513
+    },
+    {
+      "event": "KXTSAW-26AUG02",
+      "end": "2026-08-02",
+      "origin": "2026-07-31T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.02136165116934348,
+      "baseline_brier": 0.012767681036911808,
+      "log_loss": 0.08598311650851354,
+      "baseline_log_loss": 0.06637736039996367
+    },
+    {
+      "event": "KXTSAW-26AUG09",
+      "end": "2026-08-09",
+      "origin": "2026-08-07T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.026210072506368802,
+      "baseline_brier": 0.04110327258475407,
+      "log_loss": 0.09749323864357244,
+      "baseline_log_loss": 0.13429855923594378
+    },
+    {
+      "event": "KXTSAW-26AUG16",
+      "end": "2026-08-16",
+      "origin": "2026-08-14T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.030688168124392616,
+      "baseline_brier": 0.04101372691933917,
+      "log_loss": 0.10741425755771442,
+      "baseline_log_loss": 0.1353556715632353
+    },
+    {
+      "event": "KXTSAW-26AUG23",
+      "end": "2026-08-23",
+      "origin": "2026-08-21T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.04853915406828604,
+      "baseline_brier": 0.0357425966819546,
+      "log_loss": 0.15357089273074223,
+      "baseline_log_loss": 0.11995597342091999
+    },
+    {
+      "event": "KXTSAW-26AUG30",
+      "end": "2026-08-30",
+      "origin": "2026-08-28T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.06461640211640211,
+      "baseline_brier": 0.046838624338624346,
+      "log_loss": 0.20845046986759147,
+      "baseline_log_loss": 0.14608223934672765
+    },
+    {
+      "event": "KXTSAW-26SEP06",
+      "end": "2026-09-06",
+      "origin": "2026-09-04T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.025531440463802596,
+      "baseline_brier": 0.01621574748525841,
+      "log_loss": 0.09580028481903234,
+      "baseline_log_loss": 0.07385499201815077
+    },
+    {
+      "event": "KXTSAW-26SEP13",
+      "end": "2026-09-13",
+      "origin": "2026-09-11T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.1234770275297619,
+      "baseline_brier": 0.01903134300595238,
+      "log_loss": 0.4533756335112571,
+      "baseline_log_loss": 0.08062340490460837
+    },
+    {
+      "event": "KXTSAW-26SEP20",
+      "end": "2026-09-20",
+      "origin": "2026-09-18T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.01509685600594692,
+      "baseline_brier": 0.04745507018234291,
+      "log_loss": 0.07412406057078424,
+      "baseline_log_loss": 0.14786202234985857
+    },
+    {
+      "event": "KXTSAW-26SEP27",
+      "end": "2026-09-27",
+      "origin": "2026-09-25T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.014880952380952378,
+      "baseline_brier": 0.014304251112209586,
+      "log_loss": 0.07382177776691867,
+      "baseline_log_loss": 0.0689830503458009
+    },
+    {
+      "event": "KXTSAW-26OCT04",
+      "end": "2026-10-04",
+      "origin": "2026-10-02T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.014042759961127308,
+      "baseline_brier": 0.015753158406219634,
+      "log_loss": 0.07132525574077091,
+      "baseline_log_loss": 0.07055140039245542
+    },
+    {
+      "event": "KXTSAW-26OCT11",
+      "end": "2026-10-11",
+      "origin": "2026-10-09T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.07140101410934743,
+      "baseline_brier": 0.055674970605526154,
+      "log_loss": 0.21157047994246658,
+      "baseline_log_loss": 0.1666203555647875
+    },
+    {
+      "event": "KXTSAW-26OCT18",
+      "end": "2026-10-18",
+      "origin": "2026-10-16T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.017296253782740263,
+      "baseline_brier": 0.01465268357160249,
+      "log_loss": 0.07524789993768806,
+      "baseline_log_loss": 0.06880074720381932
+    },
+    {
+      "event": "KXTSAW-26OCT25",
+      "end": "2026-10-25",
+      "origin": "2026-10-23T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.013429956470122673,
+      "baseline_brier": 0.03466726025590292,
+      "log_loss": 0.06940230441036789,
+      "baseline_log_loss": 0.11163853038217943
+    },
+    {
+      "event": "KXTSAW-26NOV01",
+      "end": "2026-11-01",
+      "origin": "2026-10-30T16:00:00.000Z",
+      "n": 21,
+      "brier": 0.09402492094799787,
+      "baseline_brier": 0.13754265677342603,
+      "log_loss": 0.2871359335339744,
+      "baseline_log_loss": 0.504733518152111
+    }
+  ]
+}
