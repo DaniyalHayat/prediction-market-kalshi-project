@@ -9,6 +9,7 @@ import {sportsResearch} from './sports.mjs';
 import {screenAvailabilityForecast} from './nba-availability-feedback.mjs';
 import {musicResearch} from './music.mjs';
 import {contractEvidence} from './evidence.mjs';
+import {evidenceModelContext} from './evidence-model-context.mjs';
 import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
 import {tradeCandidates,rankCandidates} from './recommendations.mjs';
@@ -148,10 +149,11 @@ export async function workspaceResearch(ticker,{fast=false,assistant=false,model
   if(useCache)researchInflight.set(key,task);
   try{return await task;}finally{if(useCache)researchInflight.delete(key);}
 }
-export async function workspaceEvidence(ticker,{reddit=false,includeX=false,model='baseline',preview=false,marketPacket}={},dependencies={}){
+export async function workspaceEvidence(ticker,{reddit=false,includeX=false,model='baseline',preview=false,retain=true,marketPacket}={},dependencies={}){
   validateTicker(ticker);model=modelChoice(model);
   if(typeof reddit!=='boolean'||typeof includeX!=='boolean')throw new RangeError('Evidence source toggles must be booleans');
-  const deps={marketDetails,request,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX),Number(preview)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
+  const shouldRetain=retain&&!preview;
+  const deps={marketDetails,request,contractEvidence,retainPublicEvidence,...dependencies},key=[ticker,model,Number(reddit),Number(includeX),Number(preview),Number(shouldRetain)].join('#'),useCache=!Object.keys(dependencies).length,hit=evidenceCache.get(key);
   if(useCache&&hit&&hit.until>Date.now())return hit.value;
   if(useCache&&evidenceInflight.has(key))return evidenceInflight.get(key);
   const task=(async()=>{
@@ -164,17 +166,18 @@ export async function workspaceEvidence(ticker,{reddit=false,includeX=false,mode
     const recent=['full#0#availability','fast#0#availability','assistant#0#availability','full#0','assistant#0','fast#0']
       .map(mode=>researchCache.get([ticker,model,mode].join('#'))).find(entry=>entry?.until>Date.now())?.value;
     const checkAvailability=deps.workspaceResearch||workspaceResearch;
-    const refresh=/^KXNBAGAME-/.test(ticker)&&!preview&&!recent?.forecast?.availability_feedback&&
-      (useCache||dependencies.workspaceResearch)?Promise.race([checkAvailability(ticker,{fast:true,model,refreshAvailability:true,marketPacket:detail})
+    const refreshAvailability=/^KXNBAGAME-/.test(ticker)&&!recent?.forecast?.availability_feedback;
+    const refresh=!preview&&(!recent||refreshAvailability)&&
+      (useCache||dependencies.workspaceResearch)?Promise.race([checkAvailability(ticker,{fast:true,model,refreshAvailability,marketPacket:detail})
         .catch(()=>null),delay(4400,null,{ref:false})]):null;
     const [evidenceResult,checked]=await Promise.all([deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,
       sports:recent?.extensions?.sports,music:recent?.extensions?.music,settlementSources,headlineMode:preview?'official':'full'}),refresh]);
     const feedback=(checked||recent)?.forecast?.availability_feedback;
-    const value=feedback?{...evidenceResult,model_feedback:feedback}:evidenceResult;
+    const value={...evidenceResult,...(feedback?{model_feedback:feedback}:{}),model_context:evidenceModelContext(evidenceResult,checked||recent)};
     if(checked&&feedback?.status==='available')for(const mode of ['full','assistant','fast']){
       researchCache.delete([ticker,model,mode,0].join('#'));
     }
-    const retention=preview?null:await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker,deferEmbedding:true})
+    const retention=!shouldRetain?null:await deps.retainPublicEvidence(market,value,{enabled:true,selectedTicker:ticker,deferEmbedding:true})
       .catch(()=>({status:'unavailable',reason:'Evidence remains readable; retained search is temporarily unavailable.'}));
     const result=retention?{...value,retention}:value;
     if(useCache){if(evidenceCache.size>=100)evidenceCache.delete(evidenceCache.keys().next().value);evidenceCache.set(key,{until:Date.now()+60000,value:result});}
