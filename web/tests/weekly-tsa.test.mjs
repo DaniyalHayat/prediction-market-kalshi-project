@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {categoryById} from '../lib/intelligence/catalog.mjs';
 import {distribution} from '../lib/intelligence/index.mjs';
-import {estimateWeeklyTsa, weeklyTsaContract, weeklyTsaForecast, weeklyTsaProbability} from '../lib/intelligence/weekly-tsa.mjs';
+import {WEEKLY_TSA_CHALLENGER, WEEKLY_TSA_MODEL, estimateWeeklyTsa, weeklyTsaContract, weeklyTsaForecast, weeklyTsaProbability} from '../lib/intelligence/weekly-tsa.mjs';
 import {evaluateWeeklyTsaArchive} from '../tools/validate_weekly_tsa.mjs';
 
 const now = Date.parse('2026-11-07T02:00:00Z');
@@ -19,6 +19,8 @@ const market = {series: 'KXTSAW', event_ticker: 'KXTSAW-26NOV08', ticker: 'KXTSA
 test('weekly TSA matches Sunday, exact authority and strict strike before forecasting', () => {
   assert.equal(weeklyTsaContract(market).end, end);
   assert.equal(weeklyTsaContract({...market, floor_strike: 2500000}), null);
+  assert.equal(weeklyTsaContract({...market, event_ticker: 'KXTSAW-26NOV15', ticker: 'KXTSAW-26NOV15-A2.55'}), null);
+  assert.equal(weeklyTsaContract({...market, rules_primary: {}}), null);
   assert.equal(weeklyTsaContract({...market, strike_type: 'greater_or_equal'}), null);
   assert.equal(weeklyTsaContract({...market, rules_primary: market.rules_primary.replace('the TSA', 'an airport')}), null);
   const forecast = distribution(market, categoryById('travel'), {sources: [source]}, new Map(), now);
@@ -26,9 +28,21 @@ test('weekly TSA matches Sunday, exact authority and strict strike before foreca
   assert.equal(forecast.independent_forecast, true);
   assert.equal(forecast.inputs.observed_days, 3);
   assert.equal(forecast.backtest.holdout.events, 14);
+  assert.equal(forecast.model_name, WEEKLY_TSA_MODEL);
+  assert.equal(forecast.challenger.model_name, WEEKLY_TSA_CHALLENGER);
+  assert.equal(forecast.challenger.eligible, false);
+  assert.equal(forecast.inputs.historical_tsa_sources.length, 3);
+  const reference = weeklyTsaForecast(rows, end, 4);
+  assert.equal(forecast.probability, weeklyTsaProbability(reference, market.floor_strike, 'prior_week').probability);
+  assert.equal(forecast.challenger.probability, weeklyTsaProbability(reference, market.floor_strike).probability);
   assert.match(forecast.release_reason, /did not improve/i);
   assert.ok(forecast.interval[0] < forecast.probability && forecast.probability < forecast.interval[1]);
   assert.match(estimateWeeklyTsa(market, {...source, retrieved_at: '2026-11-06T00:00:00Z'}, now).reason, /stale/i);
+  const delayed = estimateWeeklyTsa(market, {...source, rows: rows.filter(row => row.date <= '2026-11-03'),
+    latest_observation: '2026-11-03'}, now);
+  assert.equal(delayed.inputs.observed_days, 2);
+  assert.equal(delayed.inputs.last_assumed_available_date, '2026-11-03');
+  assert.ok(Number.isFinite(delayed.probability));
 });
 
 test('weekly prediction ignores rows after the implied publication cutoff', () => {
@@ -36,6 +50,7 @@ test('weekly prediction ignores rows after the implied publication cutoff', () =
   const later = rows.map(row => row.date > '2026-11-04' ? {...row, value: row.value * 2} : row);
   assert.deepEqual(weeklyTsaForecast(later, end, 4), before);
   assert.equal(weeklyTsaForecast(rows.filter(row => row.date !== '2026-11-04'), end, 4), null);
+  assert.equal(before.errors.length, 78);
   assert.ok(weeklyTsaProbability(before, before.range[0]).probability > weeklyTsaProbability(before, before.range[1]).probability);
   assert.equal(weeklyTsaProbability({center: 100, errors: [-1, 0, 1]}, 100).probability, .375);
 });
@@ -43,6 +58,12 @@ test('weekly prediction ignores rows after the implied publication cutoff', () =
 test('weekly replay reproduces independently scored finalized settlements and retains a failed release gate', () => {
   assert.deepEqual(evaluateWeeklyTsaArchive(archive), receipt);
   assert.equal(receipt.holdout.contracts, 294);
+  assert.equal(receipt.observation_rows, 1405);
+  assert.equal(receipt.earlier.events + receipt.holdout.events, 105);
+  assert.equal(receipt.insufficient_history_events, 0);
   assert.ok(receipt.holdout.brier > receipt.holdout.baseline_brier);
+  assert.ok(receipt.holdout.brier < receipt.holdout.recent_weeks_brier);
+  assert.ok(receipt.holdout_brier_gain_vs_both_95[0] < 0);
+  assert.equal(receipt.release_checks.first_publication_vintages_verified, false);
   assert.equal(receipt.release_eligible, false);
 });
