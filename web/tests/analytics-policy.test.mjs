@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,deniedConsent,analyticsProvider} from '../app/components/analytics-policy.mjs';
+import {sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,deniedConsent,applyAnalyticsConsent,analyticsProvider} from '../app/components/analytics-policy.mjs';
+
+test('allowing analytics updates only measurement consent and withdrawing it disables the measurement ID',()=>{
+  const target={};
+  applyAnalyticsConsent(target,true,'G-PREDICTIR');
+  assert.deepEqual(Array.from(target.dataLayer[0]),['consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'}]);
+  assert.equal(target['ga-disable-G-PREDICTIR'],false);
+  applyAnalyticsConsent(target,false,'G-PREDICTIR');
+  assert.deepEqual(Array.from(target.dataLayer[1]),['consent','update',deniedConsent]);
+  assert.equal(target['ga-disable-G-PREDICTIR'],true);
+});
 
 test('analytics allowlist drops private payloads and rejects private actions and credentials',()=>{
   assert.deepEqual(sanitizeAnalyticsEvent('market_select',{ticker:'KXNBAGAME-26NOV04-CHI',category:'sports',bankroll:1000,probability:.8,journal_token:'private',chat:'secret'}),
@@ -11,6 +21,8 @@ test('analytics allowlist drops private payloads and rejects private actions and
   assert.equal(sanitizeAnalyticsEvent('market_select',{ticker:'KXFOO-..-BAR'}),null);
   assert.equal(sanitizeAnalyticsEvent('category_select',{category:'my-private-journal'}),null);
   assert.deepEqual(sanitizeAnalyticsEvent('category_select',{category:'climate',token:'private'}),{name:'category_select',params:{market_category:'climate'}});
+  const event=sanitizeAnalyticsEvent('category_select',{category:'science'});
+  assert.deepEqual(sanitizeAnalyticsEvent(event.name,event.params),event);
 });
 
 test('GTM has priority over direct GA and analytics remains disabled without a valid public ID',()=>{
