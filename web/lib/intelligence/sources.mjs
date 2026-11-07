@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
 import fredSnapshot from "./data/fred-snapshot.json" with {type:"json"};
 import {htmlDocument,htmlElements,htmlNodeText} from '../runtime/html-text.mjs';
+import {DAY,isoDay,monthNumber} from './time.mjs';
+export {DAY,isoDay,monthNumber} from './time.mjs';
 
 const hosts = new Set(["www.tsa.gov","fred.stlouisfed.org","api.weather.gov","api.coinbase.com","api.exchange.coinbase.com","mesonet.agron.iastate.edu"]);
 const state = globalThis[Symbol.for("kalshi.independent.sources.v1")] ||= {cache:new Map(),inflight:new Map()};
 state.failures ||= new Map();
-export const DAY = 86400000;
-export const isoDay = value => new Date(value).toISOString().slice(0,10);
-export const monthNumber = date => Number(date.slice(0,4))*12+Number(date.slice(5,7))-1;
 
 export async function sourceText(url, ttl = 300000, fetcher = fetch) {
   const parsed = new URL(url);
