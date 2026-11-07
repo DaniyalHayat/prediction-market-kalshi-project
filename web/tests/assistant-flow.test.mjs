@@ -25,6 +25,20 @@ test('automatic analysis includes current reporting and compares model and excha
   }
 });
 
+test('fresh quotes never present an expired source estimate as a current model comparison',async()=>{
+  const now=Date.now(),as_of=new Date(now).toISOString(),ticker='KXBTC15M-26NOV072230-30';
+  const packets=new Map([
+    ['get_contract',{ticker,market:{ticker},book:{as_of},quotes:{yes_ask_usd:.42,no_ask_usd:.60}}],
+    ['get_research',{ticker,as_of,forecast:{probability:.6,interval:[.5,.7],max_source_age_seconds:125,
+      source_as_of:new Date(now-86400000).toISOString()},opinion:{side:'PASS',reason:'Source expired'}}],
+  ]);
+  const {answer}=await azureResearchAnswer({question:'Explain the probability range',ticker,panel:'analysis',detail:'full',
+    tools:['get_contract','get_research'],packets,explain:{math:()=>''},now});
+  assert.match(answer,/observed YES midpoint is 41.0%/);
+  assert.match(answer,/outside the model’s freshness window/);
+  assert.doesNotMatch(answer,/independent model estimates 60.0%/);
+});
+
 test('large diagnostics preserve current probability and dated reporting inside MCP bounds',()=>{
   const ticker='KXTEST-ALPHA',as_of=new Date().toISOString();
   const value=boundPacket({ticker,title:'Selected contract',as_of,summary:'Research result',

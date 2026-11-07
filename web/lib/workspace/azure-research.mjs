@@ -116,13 +116,15 @@ function modelPriceComparison(contract,research,now){
   const midpoint=(yes+1-no)/2,lines=[
     'The observed YES midpoint is '+percent(midpoint)+', between the current bid and ask. Buying YES starts at '+cents(yes)+' and buying NO at '+cents(no)+' before fees.',
   ];
-  if(cents(forecast?.probability)!==null){
+  const maximum=Number.isFinite(forecast?.max_source_age_seconds)?Math.min(86400,Math.max(10,forecast.max_source_age_seconds)):86400;
+  const sourceCurrent=fresh(forecast?.source_as_of,now,maximum*1000);
+  if(cents(forecast?.probability)!==null&&sourceCurrent){
     const gap=100*(forecast.probability-midpoint);
     lines.push('The independent model estimates '+percent(forecast.probability)+' YES, '+Math.abs(gap).toFixed(1)+' percentage points '+(gap>=0?'above':'below')+' that midpoint.');
     if(forecast.outcomes&&cents(forecast.expected_settlement_value)!==null)
       lines.push('The rules also allow a partial payout. Including that case, modeled YES settlement value is '+cents(forecast.expected_settlement_value)+' per contract.');
     lines.push('For the paper decision, compare the modeled payout with the all-in entry cost. The gap to the midpoint alone does not cover the spread, fees or uncertainty.');
-  }else lines.push('The current independent model did not return a probability for this exact settlement rule. '+clean(forecast?.reason,300));
+  }else lines.push('A current independent estimate is unavailable for this comparison. '+(sourceCurrent?clean(forecast?.reason,300):'The independent source timestamp is missing or outside the model’s freshness window.'));
   return lines.join('\n\n');
 }
 
