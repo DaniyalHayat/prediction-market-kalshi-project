@@ -16,14 +16,14 @@ The Azure trial edition runs the Predictir interface on Azure Container Apps wit
 | --- |
 | Next.js, React and TypeScript sizing; a Node.js backend; PostgreSQL on Supabase; exchange WebSocket feeds; and a read-only MCP research assistant. Forecast checks, order-book depth and modeled fees support the paper-trading workflow. |
 
-Previously titled Predictir. The repository address is retained so existing links and service integrations continue to work.
+Predictir is an independent research and paper-trading application. Its account stores only Predictir data and accepts Predictir credentials.
 
 <details>
 <summary>Methods, engineering and local setup</summary>
 
 [Security and data handling](docs/SECURITY.md)
 
-**[Open Predictir](https://predictir.dev)**. The current workspace runs on Vercel, Railway and Supabase. It includes eight market categories, native streaming, contract-specific research, cost-aware screens, a paper portfolio, private prospective journals, and a read-only MCP research assistant. [Deployment and reproduction](web/docs/DEPLOYMENT.md) · [Integration ranking and costs](web/docs/INTEGRATIONS.md) · [Sports validation](web/docs/sports-validation.json).
+**[Open Predictir](https://predictir.dev)**. The current workspace runs on Vercel, Railway and Supabase. It includes eight market categories, native streaming, contract-specific research, cost-aware screens, a paper portfolio, private prospective journals, and an MCP research assistant. [Deployment and reproduction](web/docs/DEPLOYMENT.md) · [Integration ranking and costs](web/docs/INTEGRATIONS.md) · [Sports validation](web/docs/sports-validation.json).
 
 The [AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/lab.html) uses a separate journal store. The current Figma export opens the standalone workbench.
 
@@ -34,8 +34,8 @@ The research upgrade adds selectable dark themes, ranked budget scenarios, live 
 - A market workspace for Sports, Economy, Travel, Weather, Crypto, Tech & science, Climate and Culture, with native exchange streaming, bounded REST fallback, source timestamps, spread diagnostics and selected-contract order-book depth.
 - Regularized NBA team-strength and EPL attack/defense research, with chronological evaluation, coverage gates, recent form, head-to-head games and descriptive player-minute comparisons. Apple chart snapshots and attributed public X posts remain distinct from settlement-matched forecasting inputs. Spotify catalog references are display-only.
 - [NFL winner research](web/docs/NFL_RESEARCH.md) matches the exact fixture and models wins, losses and the 50¢ tie payout. The quote model replays one-minute price predictions across categories when enough observations exist. The [settlement calibration experiment](web/docs/SETTLEMENT_CALIBRATION.md) remains separate from paper sizing after its holdout loss to the raw midpoint.
-- Analysis shows both sides' fee-inclusive paper setups. Contract news starts with public reporting and official references. Reddit and X are opt-in. Execution scenarios use observed depth, explain the modeled fills and download as PDF.
-  Matching Fed and hurricane contracts can retrieve the Federal Reserve meeting calendar and NHC basin bulletins without API keys. If Reddit is unavailable, named AI leaderboard contracts can show separately labeled Hacker News discussion. Discussion does not adjust forecasts.
+- Analysis shows both sides' fee-inclusive paper setups. Contract news retrieves public reporting and official references for the selected outcome. Reddit, X and discussion fallbacks are disabled in the application. Execution scenarios use observed depth, explain the modeled fills and download as PDF.
+  Matching Fed and hurricane contracts retrieve the Federal Reserve meeting calendar and NHC basin bulletins without API keys. Numerical forecasts retain the source inputs and validation that produced them.
 - An MCP tool-backed explanation assistant, consent-based GA4 traffic measurement, observed market-price attribution, private journal score attribution, and durable, retryable source ingestion into relational tables and hashed compressed evidence archives.
 - Contract-specific research that brings together resolution rules, source observations, independent model outputs and linked news coverage. The numerical research families use TSA passenger counts, National Weather Service forecasts, FRED economic series and Coinbase candles. Missing evidence and archived source data retain their status and timestamps.
 - An execution workbench for YES and NO contracts: depth-limited fills, slippage caps, fee assumptions, break-even probabilities, outcome P/L and budget-constrained sizing.
