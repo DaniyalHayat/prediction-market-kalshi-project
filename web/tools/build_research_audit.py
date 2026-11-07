@@ -68,7 +68,7 @@ SOURCES = [
 ]
 
 def text(value):
-    value = str(value).replace("\u2014", " - ").replace("\u2013", "-").replace("\u2011", "-")
+    value = str(value).replace("Predictir", "Predictir").replace("\u2014", " - ").replace("\u2013", "-").replace("\u2011", "-")
     value = value.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"').replace("\u201d", '"').replace("\u2192", " -> ")
     replacements = {"\u2212":"-", "\u2264":"<=", "\u2265":">=", "\u00b1":"+/-", "\u00d7":"x", "\u0394":"Delta", "\u03a3":"sum", "\u03bb":"lambda", "\u03b1":"alpha", "\u03b2":"beta", "\u03bc":"mu", "\u03c3":"sigma", "\u03a6":"Phi", "\u221e":"infinity", "\u2013":"-", "\u2026":"...", "\u2022":"-", "\u2009":" ", "\u00a0":" "}
     for original, replacement in replacements.items(): value = value.replace(original, replacement)
@@ -229,12 +229,12 @@ def build(destination,verification_path):
     preliminary=not final_verification or any(not path.exists() for _,path in current_documents)
     contents=TableOfContents();contents.levelStyles=[styles["ContentsAudit"]]
     story=[Spacer(1,20),P("Predictir", "TitleAudit"),P("Research, mathematics and engineering audit", "H1Audit"),
-           P("November 4, 2026 | America/New_York"),P("V3 review branch - production release held"),
-           P("Existing public origin: https://predictir.dev. New features described here are staged locally unless an explicitly dated earlier-release check says otherwise. This report does not certify the current public deployment."),
+           P("Research record | Earlier measurements dated November 4, 2026"),P("Historical model and engineering review"),
+           P("Public origin: https://predictir.dev. This document preserves earlier research measurements and their review scope, alongside the source documents identified by the rendered revision. Current deployment status is tracked by the repository and dated hosted checks. This PDF does not certify the current public deployment."),
            P("A source-backed account of hypotheses tested, models trained, code staged, costs considered and evidence still missing. This is independent project engineering; employment verification and live-money performance are outside its evidence."),
-           table([["Evidence class","Meaning"],["Staged and tested","Code exists locally and is exercised by named tests or reproducible tools; this does not mean deployed."],["Measured","A dated local fixture or held-out model result, with its scope stated."],["Experimental","A conditional research computation whose empirical promotion requirements remain separate."],["Held / not established","No new production release, self-hosted migration, advertising optimizer or live-money return is claimed."]],[120,408]),
+           table([["Evidence class","Meaning"],["Staged and tested","Code exists locally and is exercised by named tests or reproducible tools; this does not mean deployed."],["Measured","A dated local fixture or held-out model result, with its scope stated."],["Experimental","A conditional research computation whose empirical promotion requirements remain separate."],["Not established by this record","This report does not establish current deployment status, a completed self-hosted migration, an advertising optimizer or live-money returns."]],[120,408]),
            Spacer(1,15),P("The notable mathematical addition is a tested composition of calibrated independent forecasts, fresh score-clock conditioning, executable depth, uncertainty-aware position decisions, a discrete risk constraint and an event-overlap graph. Established papers motivate the components; the project's own measurements evaluate this implementation."),
-           P("PRELIMINARY: awaiting final local verification and remaining source documentation." if preliminary else "Final local-review evidence is included. Production remains held pending the user's review.","SmallAudit"),
+           P("Historical review snapshot with incomplete local verification or source documentation." if preliminary else "Final local-review evidence for the historical snapshot is included. Current deployment status is tracked separately.","SmallAudit"),
            P("Source base revision when rendered: "+revision+". Report authoring may be committed after this base.","SmallAudit"),PageBreak(),P("Contents","H1Audit"),contents,PageBreak(),P("Earlier measurements retained: model comparisons","H1Audit"),
            bars("Pregame: lower Brier is better, same 514-game holdout",[("Team-strength baseline",nba["baseline"]["brier"]),("Selected challenger",nba["validation"]["brier"])]),
            P("The 1.554% relative Brier point improvement is observable. Its paired whole-week uncertainty interval includes zero, so the challenger remains an explicit experimental option rather than being silently promoted. The neural candidate was trained and its non-convergence retained in the record."),
@@ -252,10 +252,10 @@ def build(destination,verification_path):
            P("Audit and reproduction checklist","H1Audit"),
            P("Inspect the frozen source hashes and split dates; reproduce native model training; verify Python/JavaScript parity; run the PostgreSQL and pgTAP checks; replay the independent cash-flow tests; review the full runtime query plans; compare hosted latency before/after region changes; and inspect a paper entry, live mark, close and confirmed settlement. Use the deployment guide for private environment setup. Credentials and private journals are excluded from this report."),
            P("Pinned PDF regeneration: create a Python environment, install tools/report-requirements.txt, then run python tools/build_research_audit.py --output /chosen/path/Research_Audit.pdf. Add --public-copy public/research/research-audit.pdf only when updating the local public artifact too. No private artifact package is required.")]
-    story += [PageBreak(),P("Current implementation and release boundary","H1Audit"),
+    story += [PageBreak(),P("Implementation scope at the original review","H1Audit"),
               P("V3 adds a neutral black interface; separate analysis/news reading modes; explicit selected-contract evidence loading; source access and pricing limits; auditable $20,000 paper accounts; cash additions/decreases; browser-scoped guest sessions; owner account synchronization with conflict preservation; and optional consent-gated analytics. Runtime, protocol and mathematical experiments are documented separately from the production data path."),
               P("The current forecasting estimates continue to require exact event/outcome matching, fresh source timestamps and explicit uncertainty. Source reputation, social votes, a smoothed context score, embedding similarity or a critic preference is never silently converted into a trading probability. A more readable long-form explanation is not stronger statistical evidence."),
-              P("Self-hosting, the separate advertising optimizer, cloud provisioning, broker activation and production cutover remain held or optional. No technology name alone establishes a speed improvement, cost saving or profitable strategy. The shared-ring microbenchmark was slower than the simple same-thread queue; the report preserves that negative result."),
+              P("At the original review, self-hosting, the separate advertising optimizer, cloud provisioning, broker activation and production cutover were held or optional. No technology name alone establishes a speed improvement, cost saving or profitable strategy. The shared-ring microbenchmark was slower than the simple same-thread queue; the report preserves that negative result."),
               P("Final verification is tracked separately from implementation. A local test pass does not prove current hosted credentials, third-party access, future source availability or production deployment.")]
     technical_math(story)
     for title,path in current_documents:
@@ -275,13 +275,13 @@ def build(destination,verification_path):
     destination.parent.mkdir(parents=True,exist_ok=True)
     doc=AuditDocTemplate(str(destination),pagesize=letter,rightMargin=42,leftMargin=42,topMargin=43,bottomMargin=42,title="Predictir - Research and engineering audit",author="Predictir",pageCompression=1)
     def decorate(canvas,document):
-        canvas.saveState();canvas.setStrokeColor(colors.HexColor("#cccccc"));canvas.line(42,30,570,30);canvas.setFont("Helvetica",8);canvas.setFillColor(colors.HexColor("#606060"));canvas.drawString(42,19,"Predictir | V3 review branch | Production release held");canvas.drawRightString(570,19,str(document.page));canvas.restoreState()
+        canvas.saveState();canvas.setStrokeColor(colors.HexColor("#cccccc"));canvas.line(42,30,570,30);canvas.setFont("Helvetica",8);canvas.setFillColor(colors.HexColor("#606060"));canvas.drawString(42,19,"Predictir | Historical research and engineering record");canvas.drawRightString(570,19,str(document.page));canvas.restoreState()
     doc.multiBuild(story,onFirstPage=decorate,onLaterPages=decorate)
     manifest={"classification":"local_review_artifact_not_production_verification","preliminary":preliminary,"source_base_revision":revision,"reportlab_version":REPORTLAB_VERSION,"page_count":doc.page,"pdf_sha256":hashlib.sha256(destination.read_bytes()).hexdigest(),"inputs":[{"path":path.relative_to(REPO).as_posix(),"sha256":hashlib.sha256(path.read_bytes()).hexdigest()} for path in inputs if path.exists()]}
     destination.with_suffix(".manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     print(str(destination.resolve()))
 
 if __name__=="__main__":
-    parser=argparse.ArgumentParser();parser.add_argument("--output",type=Path,default=REPO/"output/pdf/Kalshi_Market_Lab_Research_Audit.pdf");parser.add_argument("--public-copy",type=Path);parser.add_argument("--verification",type=Path,default=BASE/"docs/V3_VERIFICATION.md");args=parser.parse_args();build(args.output,args.verification)
+    parser=argparse.ArgumentParser();parser.add_argument("--output",type=Path,default=REPO/"output/pdf/Predictir_Research_Audit.pdf");parser.add_argument("--public-copy",type=Path);parser.add_argument("--verification",type=Path,default=BASE/"docs/V3_VERIFICATION.md");args=parser.parse_args();build(args.output,args.verification)
     if args.public_copy:
         args.public_copy.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(args.output,args.public_copy);print(str(args.public_copy.resolve()))
