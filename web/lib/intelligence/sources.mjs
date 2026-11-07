@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fredSnapshot from "./data/fred-snapshot.json" with {type:"json"};
 
-const hosts = new Set(["www.tsa.gov","fred.stlouisfed.org","api.weather.gov","api.coinbase.com","api.exchange.coinbase.com"]);
+const hosts = new Set(["www.tsa.gov","fred.stlouisfed.org","api.weather.gov","api.coinbase.com","api.exchange.coinbase.com","mesonet.agron.iastate.edu"]);
 const state = globalThis[Symbol.for("kalshi.independent.sources.v1")] ||= {cache:new Map(),inflight:new Map()};
 state.failures ||= new Map();
 export const DAY = 86400000;
