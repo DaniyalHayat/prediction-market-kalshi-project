@@ -110,7 +110,7 @@ run "live_saved_logs_are_bounded_and_use_azure_identity" {
       !azurerm_log_analytics_workspace.runtime[0].local_authentication_enabled &&
       !azurerm_log_analytics_workspace.runtime[0].allow_resource_only_permissions &&
       one(azurerm_monitor_diagnostic_setting.runtime[0].enabled_log).category_group == "allLogs" &&
-      azurerm_monitor_diagnostic_setting.runtime[0].log_analytics_destination_type == "Dedicated" &&
+      length(azurerm_monitor_diagnostic_setting.runtime[0].enabled_metric) == 0 &&
       output.saved_logs.monthly_review_usd == 5
     )
     error_message = "Live console and system logs require 30-day retention, bounded ingestion, reviewed spend, and workspace authorization."

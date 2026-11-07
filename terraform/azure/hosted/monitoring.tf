@@ -18,7 +18,6 @@ resource "azurerm_monitor_diagnostic_setting" "runtime" {
   name                           = "predictir-runtime-logs"
   target_resource_id             = azurerm_container_app_environment.edition[0].id
   log_analytics_workspace_id     = azurerm_log_analytics_workspace.runtime[0].id
-  log_analytics_destination_type = "Dedicated"
 
   enabled_log {
     category_group = "allLogs"
