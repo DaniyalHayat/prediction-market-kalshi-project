@@ -2,7 +2,9 @@ import {server} from './server.mjs';
 import {startPipeline} from './pipeline.mjs';
 import {closeStore} from '../lib/cloud/store.mjs';
 import {drainMarketRuntime} from './shutdown.mjs';
+import {runDatabaseEgressProof} from './egress-proof.mjs';
 const stop=startPipeline();
+void runDatabaseEgressProof();
 if(!process.env.PORT)throw new Error('Set PORT before starting the hosted backend');
 let draining=false;
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,async()=>{
