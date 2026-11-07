@@ -17,7 +17,7 @@ export default function Journal({onClose}) {
       const value=JSON.parse(await file.text());if(!/^[a-f0-9]{64}$/.test(value.private_access_token||''))throw new Error('The export does not contain a valid access token');
       localStorage.setItem('market-lab-journal-token',value.private_access_token);await load();}catch(e){setError(e.message);}
   }
-  function exportAccess(){try{exportJSON({private_access_token:journalToken(),journal:data},'kalshi-private-journal.json');}catch(e){setError(e.message);}}
+  function exportAccess(){try{exportJSON({private_access_token:journalToken(),journal:data},'predictir-private-journal.json');}catch(e){setError(e.message);}}
   return <Modal className="journal-dialog" titleId="journal-title" onClose={onClose}>
     <div className="dialog-heading"><div><h2 id="journal-title">Forecast journal</h2><p>Predictions registered before close, scored after settlement.</p></div><button className="icon-button" aria-label="Close journal" onClick={onClose}><X size={20}/></button></div>
     <div className="journal-summary"><div><span>Settled</span><strong>{data?.evaluation?.n??'—'}</strong></div><div><span>Your Brier score</span><strong>{data?.evaluation?.brier?.toFixed(4)??'—'}</strong></div><div><span>Market baseline</span><strong>{data?.evaluation?.baseline_brier?.toFixed(4)??'—'}</strong></div></div>

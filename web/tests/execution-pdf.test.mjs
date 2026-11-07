@@ -13,7 +13,7 @@ test('the downloadable PDF parses and paginates a full 60-step submitted scenari
     sources:[{label:'Public order book',url:'https://example.test/a/'.padEnd(270,'q'),as_of}]});
   assert.equal(new TextDecoder().decode(bytes.slice(0,5)),'%PDF-');
   const loaded=await PDFDocument.load(bytes);
-  assert.match(loaded.getTitle(),/KX-NFL-FIXTURE/);
+  assert.match(loaded.getTitle(),/^Predictir \\| Execution research \\| KX-NFL-FIXTURE$/);
   assert.ok(loaded.getPageCount()>=3);
   assert.ok(loaded.getPages().every(page=>page.getWidth()===612&&page.getHeight()===792));
 });
