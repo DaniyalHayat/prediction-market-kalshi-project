@@ -162,7 +162,7 @@ export default function Assistant({market,book,fees,research,history,onClose,mod
       <button type="button" className="icon-button" aria-label="Close assistant" onClick={onClose}><X size={19}/></button>
     </header>
     <div className="assistant-identity">
-      <p className="assistant-eyebrow">{launch?.label||'Selected contract'} <span>·</span> {model==='challenger'?'Challenger':'Validated'}</p>
+      <p className="assistant-eyebrow">{launch?.label||'Selected contract'} <span>·</span> {model==='challenger'?'Challenger':'Baseline model'}</p>
       <strong>{contractTitle(market)}</strong>
       <code>{market.ticker}</code>
       {automatic&&launch?.panel&&<small>{handoff[launch.panel]}</small>}

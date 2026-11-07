@@ -92,6 +92,9 @@ try{
     assert.equal(payload.panel,panel);
     assert.equal(payload.detail,detail);
     assert.equal(payload.model,model);
+    const modelLabel=await assistant.locator('.assistant-eyebrow').textContent();
+    assert.match(modelLabel,new RegExp(model==='challenger'?'Challenger':'Baseline model'));
+    assert.doesNotMatch(modelLabel,/Validated/);
     assert.match(payload.messages.at(-1).content,new RegExp(ticker));
     await assistant.getByRole('button',{name:'Close assistant'}).click();
     return payload;
@@ -167,7 +170,7 @@ try{
   assert.equal(await page.getByTestId('selected-ticker').textContent(),'KXTEST-BETA');
   await ask('Ask why about exchange price history','history','KXTEST-BETA');
   await page.getByRole('button',{name:'Appearance and models',exact:true}).click();
-  await page.getByRole('radio',{name:/Validated model view/}).check();
+  await page.getByRole('radio',{name:/Baseline model/}).check();
   await page.getByRole('button',{name:'Close appearance settings'}).click();
   await ask('Ask why about exchange price history','history','KXTEST-BETA','brief','validated');
   await page.setViewportSize({width:390,height:844});
