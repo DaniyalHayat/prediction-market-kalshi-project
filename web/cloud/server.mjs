@@ -21,6 +21,7 @@ import {isCountryAllowed} from '../lib/workspace/geo.mjs';
 import {traceContext} from '../lib/runtime-observability.mjs';
 import {runtimeTelemetry,observeProviderAttempt,operationalRoute,throttleReason} from '../lib/runtime/telemetry.mjs';
 import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
+import {handleOperatorMCP} from '../lib/runtime/operator-mcp.mjs';
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
 import {azureMode,azureOrigin} from '../lib/workspace/azure-mode.mjs';
 import {createPaperScenarioActions,paperActionError} from '../lib/workspace/paper-actions.mjs';
@@ -239,6 +240,13 @@ export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnable
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         if(!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
         const raw=await readBody(req,20000),input=JSON.parse(raw||'{}');
+        if(url.pathname==='/internal/operator-mcp')return handleOperatorMCP(req,res,input,{
+          now,readSnapshot:async()=>({telemetry:telemetry.snapshot(),logs:recentLogs.slice()}),
+          readAllowances:async()=>{
+            if(!storageEnabled()||storage().kind!=='postgres')throw new Error('Relational usage records unavailable');
+            return usageAllowances(storage().db);
+          }
+        });
         if(url.pathname==='/internal/diagnostics'){
           if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'Public source retrieval includes body reads and decoding. Other HTTP adapter timings may stop at response headers. Supabase Auth measures SDK calls.'});
           if(input.operation==='runtime_metrics'){res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4; charset=utf-8','Cache-Control':'no-store'});return res.end(telemetry.prometheus());}

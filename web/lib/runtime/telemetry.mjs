@@ -91,7 +91,7 @@ const operationalRoutes = new Set([
   '/api/workspace/sources', '/api/workspace/attribution', '/api/workspace/evidence', '/api/workspace/evidence/search',
   '/api/intelligence', '/api/intelligence/catalog', '/api/intelligence/series', '/api/intelligence/candles',
   '/api/intelligence/execution', '/api/intelligence/forward', '/api/intelligence/forward/start', '/api/intelligence/forward/checkpoint',
-  '/mcp', '/internal/diagnostics', '/internal/assistant/reserve', '/internal/assistant/reserve-azure',
+  '/mcp', '/internal/operator-mcp', '/internal/diagnostics', '/internal/assistant/reserve', '/internal/assistant/reserve-azure',
   '/internal/assistant/read-azure', '/internal/assistant/settle',
 ]);
 export function operationalRoute(path) {

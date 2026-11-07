@@ -88,6 +88,18 @@ Use `node terraform/azure/hosted/verify-live.mjs <frontend-origin> --backend <in
 
 Use Azure Monitor's platform metrics for requests by status, replicas, restarts, CPU and memory, and PostgreSQL metrics for connections, CPU and storage. The platform's ACA response-time metric is an average. The private backend diagnostic endpoint provides process-local p95/p99 with sample counts. Use its service credential only from the trusted environment and account for replica restarts and scale-to-zero resets. Read metrics on demand and stream ACA console or system logs during an incident. Terraform leaves log retention off and creates no Log Analytics workspace, diagnostic sink, dedicated compute or NAT gateway. [ACA metrics](https://learn.microsoft.com/azure/container-apps/metrics) · [ACA log destinations](https://learn.microsoft.com/azure/container-apps/log-options) · [PostgreSQL metrics](https://learn.microsoft.com/azure/postgresql/monitor/concepts-monitoring)
 
+## Private operational reviews
+
+The backend serves a separate MCP endpoint at `/internal/operator-mcp` for service-authenticated operational reviews. It is reachable within the Azure environment and uses the existing service secret. The public frontend does not forward this endpoint.
+
+- `review_runtime` reports measured API latency, failures and the recorded reasons for stream throttles.
+- `review_sources` reviews recorded provider latency and errors using observations already collected by the backend.
+- `review_allowances` reads stored work and assistant allowances and identifies records above 80% usage.
+
+Each tool returns its observation scope and time, plus proposed actions for review. Runtime measurements cover the current process and reset on restart. Application allowances measure reservations. Provider billing remains a separate source.
+
+MCP clients connect from a trusted workload using Streamable HTTP and the existing `ASSISTANT_SERVICE_SECRET` bearer credential. Access uses the same internal authorization as diagnostics. Keep that credential in Key Vault or the caller's protected environment.
+
 ## Regional cost basis
 
 Public USD retail rates checked November 5, 2026. Subscription terms and actual consumption determine the bill. [Azure retail pricing API](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices)
