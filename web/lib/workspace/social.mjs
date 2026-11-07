@@ -2,6 +2,7 @@ import {sourceJSON,recordProviderStatus} from './providers.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {SOURCE_CATALOG,evidenceSearchTerms,evidenceTopic,safePublicURL} from './source-ranking.mjs';
 import {createHash} from 'node:crypto';
+import {redditAccessToken,redditAuthConfigured} from './reddit-oauth.mjs';
 const boundedInteger=(value,fallback,maximum)=>Number.isInteger(Number(value))&&Number(value)>=1?Math.min(maximum,Number(value)):fallback;
 const empty=(status,reason)=>({status,posts:[],reason});
 export function xSearchScope(topic,entities,maximumAccounts=2){
@@ -101,12 +102,14 @@ export async function publicXFeed({topic='music',entities,maximumAccounts=2,enab
 }
 
 const communities={nfl:'nfl',nba:'nba',epl:'soccer',music:'popheads',film:'boxoffice'};
-export function filterRedditPosts(payload,{now=Date.now()}={}){
+export function filterRedditPosts(payload,{now=Date.now(),community}={}){
   const rejected={},posts=[],seen=new Set(),reject=reason=>{rejected[reason]=(rejected[reason]||0)+1;};
-  for(const row of (payload?.data?.children||[]).slice(0,25)){
-    const p=row.data||{},text=String(p.title||'').trim(),author=String(p.author||''),date=Number(p.created_utc)*1000,url=safePublicURL('https://www.reddit.com'+String(p.permalink||'')),link=safePublicURL(p.url);
+  const children=Array.isArray(payload?.data?.children)?payload.data.children.slice(0,25):[];
+  for(const row of children){
+    const p=row?.data||{},text=String(p.title||'').trim(),author=String(p.author||''),date=Number(p.created_utc)*1000,url=safePublicURL('https://www.reddit.com'+String(p.permalink||'')),link=safePublicURL(p.url);
     let reason=null;
     if(!/^t3_[a-z0-9]+$/.test(p.name||'')||!/^\/r\/[a-z0-9_]+\/comments\/[a-z0-9]+\//i.test(p.permalink||'')||!url||!Number.isFinite(date)||date>now+300000||now-date>3*86400000)reason='invalid_or_stale';
+    else if(community&&(String(p.subreddit).toLowerCase()!==community||p.permalink.toLowerCase().split('/')[2]!==community))reason='wrong_community';
     else if(!author||author==='[deleted]'||p.removed_by_category||p.is_robot_indexable===false||p.over_18||p.stickied)reason='unavailable_or_unsuitable';
     else if(/(?:^automoderator$|bot$|_bot\b)/i.test(author)||/\b(i am a bot|automated message|beep boop)\b/i.test(text))reason='automation_heuristic';
     else if(!Number.isFinite(p.score)||p.score<3||!Number.isFinite(p.upvote_ratio)||p.upvote_ratio<.65)reason='low_vote_support';
@@ -115,7 +118,7 @@ export function filterRedditPosts(payload,{now=Date.now()}={}){
     if(reason){reject(reason);continue;}seen.add(text.toLowerCase());seen.add(link);
     posts.push({id:p.name,title:text.slice(0,500),excerpt:'Public link-post title; linked article and comment thread have not been read.',url,linked_source_url:link,author,platform:'reddit',publisher:'r/'+p.subreddit,as_of:new Date(date).toISOString(),metrics:{score:p.score,upvote_ratio:p.upvote_ratio,comments:p.num_comments||0},limitations:['Possible automation and low-evidence posts are filtered using fallible heuristics. A surviving post is not certified human or accurate.']});
   }
-  return {posts,rejected,examined:Math.min(25,payload?.data?.children?.length||0)};
+  return {posts,rejected,examined:children.length};
 }
 export async function redditEvidence(market,{enabled=false,selectedTicker,sports}={},dependencies={}){
   if(!enabled||selectedTicker!==market?.ticker)return empty('not_queried','Reddit is fetched only when enabled for the exact selected trade.');
@@ -125,20 +128,25 @@ export async function redditEvidence(market,{enabled=false,selectedTicker,sports
   const now=dependencies.now||Date.now,day=new Date(now()).toISOString().slice(0,10),query=entities.map(e=>'"'+e.replace(/[^\p{L}\p{N} ]/gu,' ').slice(0,36).trim()+'"').join(' OR ');
   const params=new URLSearchParams({q:query,restrict_sr:'on',sort:'new',t:'week',limit:'25',raw_json:'1'});
   const search_url='https://www.reddit.com/r/'+community+'/search/?'+params;
-  if(env.REDDIT_DATA_API_APPROVED!=='true'||!env.REDDIT_ACCESS_TOKEN||!env.REDDIT_USER_AGENT)
+  if(!redditAuthConfigured(env))
     return {...empty('not_configured','Automatic retrieval requires approved Reddit Data API access. Open the focused search to see public discussion.'),search_url};
   const durable=dependencies.store||(cloudEnabled()?store():null),key=createHash('sha256').update(community+'\n'+query).digest('hex').slice(0,32);
   if(!durable||['get','save','cached','consume'].some(k=>typeof durable[k]!=='function'))return {...empty('unavailable','Reddit feed is unavailable. Open the public search to review discussion directly.'),search_url};
   try{const result=await durable.cached('reddit-oauth-selected#'+key,900,async()=>{
-    const cooldown=await durable.get('reddit-public-cooldown');if(cooldown?.until>now())return {...empty('cooldown','Shared Reddit reads are paused after a provider limit.'),retry_at:new Date(cooldown.until).toISOString()};
+    const cooldown=await durable.get('reddit-public-cooldown');
+    if(cooldown?.until>now())throw Object.assign(new Error('Reddit is cooling down'),{code:'REDDIT_COOLDOWN',retry_at:new Date(cooldown.until).toISOString()});
     const limit=boundedInteger(env.REDDIT_DAILY_REQUEST_LIMIT,100,1000);
     if(!await durable.consume('reddit-public#'+day,limit,1,3*86400))return empty('budget_reached','Shared daily Reddit request allowance reached.');
-    const response=await get('Reddit selected-trade context','https://oauth.reddit.com/r/'+community+'/search?'+params,{ttl:1,headers:{Authorization:'Bearer '+env.REDDIT_ACCESS_TOKEN,'User-Agent':env.REDDIT_USER_AGENT},maximumBytes:180000,timeoutMs:3500});
-    if(!Array.isArray(response.data?.data?.children))return empty('unavailable','Public post listing schema was unavailable; retrieval stopped.');
-    const result=filterRedditPosts(response.data,{now:now()});return {status:result.posts.length?'available':'empty',...result,posts:result.posts.map(({author,...row})=>({...row,retrieved_at:response.as_of})),community,query,as_of:response.as_of,note:'Up to 25 public link posts are reviewed. Posts that pass the vote and spam filters remain unverified context.'};
+    const token=await redditAccessToken(env,{fetcher:dependencies.tokenFetcher,now});
+    const response=await get('Reddit selected-trade context','https://oauth.reddit.com/r/'+community+'/search?'+params,{ttl:1,sharedCache:false,headers:{Authorization:'Bearer '+token,'User-Agent':env.REDDIT_USER_AGENT},maximumBytes:180000,timeoutMs:3500});
+    if(!Array.isArray(response.data?.data?.children))throw Object.assign(new Error('Reddit listing schema unavailable'),{status:502,code:'REDDIT_LISTING_UNAVAILABLE'});
+    const result=filterRedditPosts(response.data,{now:now(),community});return {status:result.posts.length?'available':'empty',...result,posts:result.posts.map(({author,...row})=>({...row,retrieved_at:response.as_of})),community,query,as_of:response.as_of,note:'Up to 25 public link posts are reviewed. Posts that pass the vote and spam filters remain unverified context.'};
   });return {...result,search_url};}catch(error){
     if(['CACHE_LEASE_LOST','CACHE_LEASE_BUSY'].includes(error.code))return {...empty('refreshing','A shared Reddit search is refreshing.'),search_url};
+    if(error.code==='REDDIT_COOLDOWN')return {...empty('cooldown','Shared Reddit reads are paused after a provider error.'),retry_at:error.retry_at,search_url};
     const status=Number(error.status),seconds=status===429?900:status===401||status===403?3600:60,reported=Date.parse(error.retry_at),until=Math.max(now()+seconds*1000,Number.isFinite(reported)?reported:0);
     await durable.save({pk:'reddit-public-cooldown',sk:'value',until,expires_epoch:Math.ceil(until/1000)},true).catch(()=>{});
-    return {...empty('unavailable',Number.isInteger(status)?'Public Reddit retrieval returned HTTP '+status+'.':'The Reddit feed is temporarily unavailable.'),search_url};}
+    const reason=status===401||status===403?'Reddit authorization was rejected. Open the focused search or check the approved integration.':
+      error.code==='REDDIT_LISTING_UNAVAILABLE'?'Public post listing schema was unavailable.':Number.isInteger(status)?'Public Reddit retrieval returned HTTP '+status+'.':'The Reddit feed is temporarily unavailable.';
+    return {...empty('unavailable',reason),retry_at:new Date(until).toISOString(),search_url};}
 }
