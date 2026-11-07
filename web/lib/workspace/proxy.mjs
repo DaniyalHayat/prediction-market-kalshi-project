@@ -2,6 +2,10 @@ import {isCountryAllowed} from './geo.mjs';
 import {traceContext,structuredLog} from '../runtime-observability.mjs';
 const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|portfolio-books|context|history|research|execution-research|position-review|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
 export const STREAM_CONNECT_TIMEOUT_MS=5000,STREAM_LIFETIME_MS=750000;
+export const JSON_TIMEOUT_MS=50000;
+function unavailableResponse(status=503,error='The data service is temporarily unavailable. Try again shortly.'){
+  return Response.json({error,status:'unavailable'},{status,headers:{'Cache-Control':'no-store','Retry-After':'5','X-Content-Type-Options':'nosniff'}});
+}
 export function applicationOriginMatches(origin,url,{development=process.env.NODE_ENV==='development'}={}){
   try{const supplied=new URL(origin),own=new URL(url);
     if(supplied.username||supplied.password)return false;
@@ -34,7 +38,7 @@ function relayEventStream(body,{requestSignal,abortUpstream,lifetimeMs,onUnexpec
     cancel(){return finish(false);}
   },{highWaterMark:1});
 }
-export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTimeoutMs=STREAM_CONNECT_TIMEOUT_MS,streamLifetimeMs=STREAM_LIFETIME_MS,
+export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSON_TIMEOUT_MS,streamConnectTimeoutMs=STREAM_CONNECT_TIMEOUT_MS,streamLifetimeMs=STREAM_LIFETIME_MS,
   onStreamError=values=>structuredLog('proxy.stream_error',values)}={}){
   if(!process.env.MARKET_BACKEND_URL)return null;
   if(!Array.isArray(path)||path.length>5||path.some(part=>typeof part!=='string'))return Response.json({error:'Unknown API route'},{status:404});
@@ -70,10 +74,10 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
       if(!Number.isInteger(streamConnectTimeoutMs)||streamConnectTimeoutMs<1||streamConnectTimeoutMs>STREAM_CONNECT_TIMEOUT_MS||!Number.isInteger(streamLifetimeMs)||streamLifetimeMs<1||streamLifetimeMs>STREAM_LIFETIME_MS)throw new RangeError('Invalid stream deadline');
       upstream=new AbortController();connectTimer=setTimeout(()=>upstream.abort(),streamConnectTimeoutMs);
     }
-    const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,streaming?upstream.signal:AbortSignal.timeout(positionReview?7600:50000)])});
+    const result=await fetcher(url,{method:request.method,headers,body,redirect:'error',cache:'no-store',signal:AbortSignal.any([request.signal,streaming?upstream.signal:AbortSignal.timeout(positionReview?Math.min(jsonTimeoutMs,7600):jsonTimeoutMs)])});
     clearTimeout(connectTimer);
     const type=result.headers.get('content-type')||'';
-    if(/text\/html/i.test(type)){upstream?.abort();return Response.json({error:'The data service returned a web page instead of data. Try again shortly.'},{status:502});}
+    if(/text\/html/i.test(type)){upstream?.abort();await result.body?.cancel();return unavailableResponse(502,'The data service returned a web page instead of data. Try again shortly.');}
     const outputHeaders={'Cache-Control':'no-store','Content-Type':result.headers.get('content-type')||'application/json','X-Content-Type-Options':'nosniff',traceparent:trace.traceparent};
     if(result.headers.has('retry-after'))outputHeaders['Retry-After']=result.headers.get('retry-after');
     if(positionReview&&result.headers.has('server-timing'))outputHeaders['Server-Timing']=result.headers.get('server-timing');
@@ -83,10 +87,14 @@ export async function proxyBackend(request,path,{fetcher=fetch,streamConnectTime
       if(/text\/event-stream/i.test(type))outputBody=relayEventStream(result.body,{requestSignal:request.signal,abortUpstream:()=>upstream.abort(),lifetimeMs:streamLifetimeMs,
         onUnexpectedError:()=>onStreamError({route,error_code:'UPSTREAM_STREAM_INTERRUPTED',trace_id:trace.traceId})});
       else{connectTimer=setTimeout(()=>upstream.abort(),streamLifetimeMs);outputBody=result.body===null?null:await result.arrayBuffer();upstream.abort();}
+    }else{
+      // Finish bounded-duration data reads before committing headers, so a cold-start
+      // or body timeout can still become a safe, retryable JSON response.
+      outputBody=result.body===null?null:await result.arrayBuffer();
     }
     const output=new Response(outputBody,{status:result.status,headers:outputHeaders});
     if(privateRoute){output.headers.set('Vary','Cookie');for(const cookie of result.headers.getSetCookie())output.headers.append('Set-Cookie',cookie);}
     return output;
-  }catch(error){upstream?.abort();return Response.json({error:error.status===413?'Request too large':'The data service is temporarily unavailable. Try again shortly.'},{status:error.status===413?413:503});}
+  }catch(error){upstream?.abort();return error.status===413?Response.json({error:'Request too large'},{status:413,headers:{'Cache-Control':'no-store'}}):unavailableResponse();}
   finally{clearTimeout(connectTimer);}
 }
