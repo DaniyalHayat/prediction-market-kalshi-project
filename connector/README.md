@@ -1,4 +1,4 @@
-# Kalshi read-only connector
+# Predictir public-data connector
 
 A small FastAPI service that adapts Kalshi's public market API to the request
 routes used by the Predictir dashboard. It does not place trades and

@@ -67,7 +67,7 @@ function settlementScenario(forecast,side,quantity,exit,risk){
 
 export function executionResearch({market,book,forecast,book_history=[],controls={},now=Date.now(),fee_coefficient=.07,observation_end_seconds}={}){
   const c=normalizeExecutionControls(controls);finite(fee_coefficient,'Fee coefficient',0,1);if(!market?.ticker)throw new RangeError('An exact market ticker is required');
-  const checked=globalThis.KalshiPaper.checkedBook(book,market.ticker,{now}),yesBid=checked.yes[0],noBid=checked.no[0];
+  const checked=globalThis.PredictirPaper.checkedBook(book,market.ticker,{now}),yesBid=checked.yes[0],noBid=checked.no[0];
   const availableForecast=forecast?.valid===true&&forecast?.fresh===true;
   const common={version:'execution-research-v1',experimental:true,paper_only:true,classification:'CONDITIONAL_EXECUTION_RESEARCH_NOT_SETTLEMENT_FORECAST',enabled:c.enabled,controls:c,ticker:market.ticker,category:market.category||null,as_of:book.as_of,
     forecast:{probability:availableForecast?forecast.probability:null,interval:availableForecast?forecast.interval:null,model:forecast?.model||null,source_as_of:forecast?.source_as_of||null,status:availableForecast?'unchanged_independent_forecast':'unavailable_or_stale',unchanged:true}};

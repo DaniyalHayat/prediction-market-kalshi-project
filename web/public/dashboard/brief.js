@@ -48,5 +48,5 @@
           h("p",{className:"km-note"},"Estimates are research hypotheses. Fees, available depth and model uncertainty can erase a numerical advantage; paper results do not establish executable profitability.")));
     };
   }
-  root.KalshiBrief={createPanel,safe};
+  root.PredictirBrief={createPanel,safe};
 })(typeof globalThis!=="undefined"?globalThis:this);

@@ -120,7 +120,7 @@ export async function request(path, params = {}, fetcher = fetch, now = Date.now
   if (state.requestInflight.has(url)) return state.requestInflight.get(url);
   const task = (async () => {
     await reserveProviderRead();
-    const base = { Accept: "application/json", "User-Agent": "Mozilla/5.0 KalshiMarketLab/2.0" };
+    const base = { Accept: "application/json", "User-Agent": "Mozilla/5.0 Predictir/2.0" };
     const transportUrl = DATA_SERVICE ? DATA_SERVICE + path + "?" + query : url;
     const send = headers => observeProviderAttempt('kalshi',()=>fetcher(transportUrl, { headers, signal: AbortSignal.timeout(12000), cache: "no-store" }));
     const auth = DATA_SERVICE || state.authRejected ? {} : signedHeaders("GET", url, now());

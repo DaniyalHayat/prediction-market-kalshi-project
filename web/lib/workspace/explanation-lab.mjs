@@ -64,7 +64,7 @@ function feeAssumptions({market,fees,research}){
 function withBook(context,run){
   const {market,book,now}=context;
   if(!marketOpen(market,now))return unavailable('A confirmed open contract is required for a live depth calculation.');
-  try{globalThis.KalshiPaper.checkedBook(book,market.ticker,{now});}
+  try{globalThis.PredictirPaper.checkedBook(book,market.ticker,{now});}
   catch{return unavailable('Refresh the matching public book to use this tool. A fresh, uncrossed snapshot is required.');}
   return run({...context,...feeAssumptions(context)});
 }
@@ -97,7 +97,7 @@ function breakEven(context){
 
 function fillPath(context){
   const {market,book,side,quantity,coefficient,slippage,now}=context;
-  const value=globalThis.KalshiPaper.estimate(book,market.ticker,side,'buy',quantity,{coefficient,slippage,now});
+  const value=globalThis.PredictirPaper.estimate(book,market.ticker,side,'buy',quantity,{coefficient,slippage,now});
   if(!value.filled)return unavailable('There is no executable ask depth for this side in the selected price band.');
   let running=0;
   const rows=value.fills.slice(0,16).map((fill,index)=>{

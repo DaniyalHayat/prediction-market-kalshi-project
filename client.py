@@ -6,7 +6,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-class KalshiResearchClient:
+class PredictirResearchClient:
     """
     REST API v2 Client for Kalshi Exchange Data.
     Designed for Equity Research high-frequency data ingestion (Markets, Orderbooks, Trades, Candlesticks).

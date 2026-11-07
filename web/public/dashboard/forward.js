@@ -151,5 +151,5 @@
         ));
     };
   }
-  root.KalshiForwardLab={createPanel};
+  root.PredictirForwardLab={createPanel};
 })(globalThis);

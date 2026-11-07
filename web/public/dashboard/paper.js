@@ -130,7 +130,7 @@
   const identifier=()=>root.crypto?.randomUUID?.()||`paper-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const button=(text,fn,disabled=false)=>h(dataApp.Button||'button',{type:'button',onClick:fn,disabled},text);
   function Field({label,value,setValue,...props}){return h('label',null,label,h('input',{type:'number',value,onChange:e=>setValue(e.target.value),...props}));}
-  return function KalshiPaper({selected,book,live=false,connector='',contracts=100,download,onInspect}){
+  return function PredictirPaper({selected,book,live=false,connector='',contracts=100,download,onInspect}){
    const [ledger,setLedger]=React.useState(()=>{try{return readLedger(root.localStorage?.getItem(STORAGE));}catch{return emptyLedger();}});
    const ledgerRef=React.useRef(ledger);ledgerRef.current=ledger;
    const [side,setSide]=React.useState('yes'),[size,setSize]=React.useState(String(contracts)),[mode,setMode]=React.useState('quantity'),[budget,setBudget]=React.useState('100'),[slippage,setSlippage]=React.useState('2'),[coefficient,setCoefficient]=React.useState('.07'),[multiplier,setMultiplier]=React.useState('1');
@@ -205,5 +205,5 @@
    return h(dataApp.DataComponent,{id:'km-paper',queryId:'scenarios',kind:'table',title:'Paper trading · positions and execution journal',variant:'card',sourceRows:rows,displayRows:rows,description:'Simulated browser-local transactions from fresh matching public books; fee assumptions and source timestamps are saved with each execution. No real orders.'},body);
   };
  }
- root.KalshiPaper={checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,applySettlement,markPosition,csv,createPanel};
+ root.PredictirPaper={checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,applySettlement,markPosition,csv,createPanel};
 })(globalThis);

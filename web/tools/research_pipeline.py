@@ -303,7 +303,7 @@ def train(output: Path) -> dict:
 def refresh_fred(snapshot: Path) -> dict:
     """Refresh the genuine public-source fallback from Python's HTTP client."""
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL,UNRATE"
-    request = Request(url, headers={"Accept": "text/csv", "User-Agent": "KalshiResearch/1.0"})
+    request = Request(url, headers={"Accept": "text/csv", "User-Agent": "PredictirResearch/1.0"})
     try:
         with urlopen(request, timeout=30) as response:
             text = response.read(2_000_001).decode("utf-8")

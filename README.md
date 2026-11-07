@@ -25,7 +25,7 @@ Predictir is an independent research and paper-trading application. Its account 
 
 **[Open Predictir](https://predictir.dev)**. The current workspace runs on Vercel, Railway and Supabase. It includes eight market categories, native streaming, contract-specific research, cost-aware screens, a paper portfolio, private prospective journals, and an MCP research assistant. [Deployment and reproduction](web/docs/DEPLOYMENT.md) · [Integration ranking and costs](web/docs/INTEGRATIONS.md) · [Sports validation](web/docs/sports-validation.json).
 
-The [AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/lab.html) uses a separate journal store. The current Figma export opens the standalone workbench.
+The current application does not depend on the legacy AWS workbench or its separate journal store. [Legacy deployment reference](web/docs/cloud-runtime.md). The Figma export uses the standalone workbench.
 
 The research upgrade adds selectable dark themes, ranked budget scenarios, live paper-position decisions and confirmed settlement accounting. The experimental NBA ensemble and score-clock model are selectable alongside validated research. [Full feature review](web/docs/FEATURE_REVIEW.md), [pregame model evidence](web/docs/NBA_RESEARCH.md), [in-play replay](web/docs/NBA_INPLAY.md) and [runtime benchmarks](web/docs/RUNTIME_RESEARCH.md) explain the methods, measured results and integration decisions.
 

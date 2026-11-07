@@ -4,7 +4,7 @@ import {DEFAULT_PAPER_BALANCE,PAPER_STORAGE,PAPER_BALANCE,PAPER_EVENT,PAPER_LOCK
 import {assertPaperSession,loadAccountSession,queueOwnerSave} from './useAccount.jsx';
 import {readVerifiedPaperLedger} from './paper-session.mjs';
 let enginePromise;
-const loadEngine=()=>enginePromise||(enginePromise=import('../public/dashboard/paper.js').then(()=>globalThis.KalshiPaper));
+const loadEngine=()=>enginePromise||(enginePromise=import('../public/dashboard/paper.js').then(()=>globalThis.PredictirPaper));
 let localWrites=Promise.resolve();
 export default function usePaperLedger(){
   const [engine,setEngine]=useState(null),[ledger,setLedger]=useState(null),[bankroll,setBankroll]=useState(DEFAULT_PAPER_BALANCE),[storageError,setStorageError]=useState(''),[retrying,setRetrying]=useState(false);

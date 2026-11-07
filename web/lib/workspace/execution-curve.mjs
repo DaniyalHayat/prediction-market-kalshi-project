@@ -4,7 +4,7 @@ const round=value=>Math.round(value*1e10)/1e10;
 const fee=value=>Math.max(0,Math.ceil((value-1e-10)*100)/100);
 export function executionCurve(book,ticker,side,action,{coefficient=.07,slippage=2,now=Date.now()}={}) {
   if(!['yes','no'].includes(side)||!['buy','sell'].includes(action)||!Number.isFinite(coefficient)||coefficient<0||coefficient>1||!Number.isFinite(slippage)||slippage<0||slippage>100)throw new RangeError('Invalid execution assumptions');
-  const checked=globalThis.KalshiPaper.checkedBook(book,ticker,{now});
+  const checked=globalThis.PredictirPaper.checkedBook(book,ticker,{now});
   const own=side==='yes'?checked.yes:checked.no,other=side==='yes'?checked.no:checked.yes;
   const raw=action==='buy'?other.map(level=>({price:round(1-level.price),quantity:level.quantity})).sort((a,b)=>a.price-b.price):own;
   const best=raw[0]?.price??null,limit=best===null?null:Math.max(0,Math.min(1,best+(action==='buy'?1:-1)*slippage/100));

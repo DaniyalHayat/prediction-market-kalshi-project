@@ -32,7 +32,7 @@
   };
   function createPanel(React,dataApp) {
     const h=React.createElement,Button=dataApp.Button;
-    const ForwardPanel=root.KalshiForwardLab?.createPanel(React,dataApp);
+    const ForwardPanel=root.PredictirForwardLab?.createPanel(React,dataApp);
     const note=text=>h("p",{className:"km-note"},text);
     const link=(url,text)=>h("a",{href:url,target:"_blank",rel:"noreferrer"},text);
     const metric=(label,value)=>h("div",{className:"qi-kpi",key:label},h("span",null,label),h("strong",null,value));
@@ -317,5 +317,5 @@
       );
     };
   }
-  root.KalshiIntelligence={createPanel,paperScores};
+  root.PredictirIntelligence={createPanel,paperScores};
 })(globalThis);

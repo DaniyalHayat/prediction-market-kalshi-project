@@ -2,7 +2,7 @@ import {sourceText} from './providers.mjs';
 import {socialSourceDisabled} from './social-policy.mjs';
 export const FED_CALENDAR='https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm';
 let fedRobotsMissingUntil=0;
-export function robotsAllowed(text,path,userAgent='KalshiMarketLab'){
+export function robotsAllowed(text,path,userAgent='Predictir'){
   if(typeof text!=='string'||text.length>100000)return false;
   const groups=[];let agents=[],rules=[],hasRule=false;
   const commit=()=>{if(agents.length)groups.push({agents,rules});agents=[];rules=[];hasRule=false;};
@@ -16,7 +16,7 @@ export function robotsAllowed(text,path,userAgent='KalshiMarketLab'){
   const applicable=matching.filter(g=>g.specificity===specificity).flatMap(g=>g.rules).filter(r=>new RegExp('^'+r.pattern.split('*').map(s=>s.replace(/[.+?^{}()|[\]\\]/g,'\\$&')).join('.*').replace(/\\\$$/,'$')).test(path)).sort((a,b)=>b.pattern.length-a.pattern.length||Number(b.allow)-Number(a.allow));
   return applicable[0]?.allow??true;
 }
-export async function permittedPublicPage(id,url,{maximumBytes=1_000_000,ttl=3600,fetcher=fetch,timeoutMs=3000,userAgent='KalshiMarketLab/4.0 public-research',checkGPTBot=true}={}){
+export async function permittedPublicPage(id,url,{maximumBytes=1_000_000,ttl=3600,fetcher=fetch,timeoutMs=3000,userAgent='Predictir/4.0 public-research',checkGPTBot=true}={}){
   const target=new URL(url);
   if(target.protocol!=='https:'||target.port||target.username||target.password)throw new RangeError('Invalid public source address');
   if(socialSourceDisabled(target.hostname))return {status:'disabled',source_url:url,reason:'Social evidence retrieval is disabled for this deployment.'};
