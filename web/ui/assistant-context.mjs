@@ -1,9 +1,9 @@
 const prompts={
-  analysis:['Analysis','Explain the research view for','Identify the evidence, model assumptions, entry-cost screen and strongest uncertainty.'],
+  analysis:['Analysis','Explain the research view for','Compare the independent model probability with the current exchange price. Retrieve current public reporting for this exact outcome and explain which facts support or challenge the estimate, how fees affect the paper entry, and what would change the view.'],
   history:['Exchange price history','Explain the exchange price history for','Describe the observed candle closes, time window and gaps. Distinguish quotes from trades and an outcome forecast.'],
   rules:['Settlement rules','Explain the settlement rules for','State the exact condition for YES, the settlement source and any timing or ambiguous cases.'],
   sources:['Source records','Explain the source coverage for','Identify the authoritative settlement source and say which provider or warehouse coverage gaps matter here.'],
-  evidence:['Contract news','Explain the retained public reporting for','Compare the best-matched reports, their source dates and material limitations. Call out missing or conflicting evidence if present.'],
+  evidence:['Contract news','Explain the current public reporting for','Retrieve reporting for the selected outcome. Compare dated, matched reports, identify concrete facts that support or challenge the model, and explain the remaining gaps.'],
   paper:['Paper position','Explain the paper-position method for','Describe how depth, fees and the probability range affect hypothetical entry and break-even. Use public inputs only.'],
   execution:['Execution lab','Explain the execution lab for','Compare the submitted paper scenario with the even-paced schedule, including costs, observed depth and limits.'],
 };

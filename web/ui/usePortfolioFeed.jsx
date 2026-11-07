@@ -56,7 +56,7 @@ export default function usePortfolioFeed(tickers,model='validated'){
         const label=value.transport==='public-rest-poll'?'Public quote polling':value.transport==='exchange-websocket'?'Live stream':'Observed depth';
         setStatus(current=>({...current,[value.ticker]:label}));}catch{}});
       stream.addEventListener('status',event=>{try{const value=JSON.parse(event.data);if(tracked.includes(value.ticker))setStatus(current=>({...current,[value.ticker]:String(value.status||'Connecting')}));}catch{}});
-      stream.onerror=()=>{stream?.close();stream=null;if(!stopped&&!document.hidden){retryTimer=setTimeout(connect,Math.min(30000,1000*2**Math.min(retries++,5)));}};
+      stream.onerror=()=>{stream?.close();stream=null;if(!stopped&&!document.hidden){retryTimer=setTimeout(connect,Math.min(30000,3000*(1+Math.random()*.2)*2**Math.min(retries++,4)));}};
     }
     const visible=()=>{if(document.hidden){stream?.close();stream=null;clearTimeout(retryTimer);}else{refreshBooks(true);refreshResearch(true);connect();}};
     refreshBooks(true);refreshResearch(true);connect();const quotesTimer=setInterval(refreshBooks,15000),researchTimer=setInterval(refreshResearch,20000);

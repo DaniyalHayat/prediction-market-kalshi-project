@@ -158,7 +158,7 @@ test('partial results retain scoped answers and never display stale or foreign m
   assert.equal(response.status,200);
   assert.match(answer,/Arizona wins/);
   assert.match(answer,/Fresh independent research is unavailable/);
-  assert.match(answer,/Load contract news/);
+  assert.match(answer,/no matched report for this exact outcome/);
   assert.doesNotMatch(answer,/Foreign contract|36\.0%/);
   assert.equal(h.calls.close,1);
 });
@@ -275,7 +275,7 @@ test('reporting panel uses a compact lexical query and labels fresh attributed f
   const question='Explain the retained public reporting for '+ticker+'. Compare the best-matched reports, their source dates and material limitations.';
   const reply=await assistantResponse(request(question,{panel:'evidence',detail:'full'}),h.deps),answer=await reply.text();
   assert.equal(reply.status,200);
-  assert.match(answer,/retained search returned no usable excerpts/);
+  assert.match(answer,/retained index has no additional matching excerpts/);
   assert.match(answer,/Matched report\. \[Official game availability\]/);
   assert.match(answer,/Related context\. \[Practice notes\]/);
   assert.match(answer,/check publication dates/);

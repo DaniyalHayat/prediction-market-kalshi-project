@@ -38,7 +38,7 @@ const link=({url,label})=>'['+(clean(label,120)||new URL(url).hostname)+']('+lin
 export function azureToolArguments(name,ticker,question,panel){
   if(name==='get_source_status')return {};
   if(name==='get_price_history')return {ticker,hours:/\b(?:week|7\s+days?|168\s+hours?)\b/i.test(question)?'168':'24'};
-  if(name==='get_research')return {ticker,include_reporting:panel==='evidence'||/\b(?:news|headlines?|reports?|reporting|injur(?:y|ies)|articles?)\b/i.test(question)};
+  if(name==='get_research')return {ticker,include_reporting:!panel||['analysis','paper','evidence'].includes(panel)||/\b(?:news|headlines?|reports?|reporting|injur(?:y|ies)|articles?)\b/i.test(question)};
   if(name==='search_retained_evidence'){
     const query=panel==='evidence'&&/^explain the retained public reporting for /i.test(question)?
       (/^KX(?:NFL|NBA|EPL)/i.test(ticker)?'injury OR questionable OR availability OR lineup OR practice OR starter':
@@ -108,6 +108,22 @@ function quoteFacts(contract,now){
   const book=rows(contract.sources).find(source=>source?.label==='Kalshi order book'),url=publicSource(book?.url);
   return 'Visible asks at '+date(observed)+' were '+asks.join(' and ')+' per contract before fees or depth-dependent fill costs.'+
     (url?' '+link({url,label:'Kalshi order book'}):'');
+}
+
+function modelPriceComparison(contract,research,now){
+  const forecast=research?.forecast,yes=contract?.quotes?.yes_ask_usd,no=contract?.quotes?.no_ask_usd;
+  if(!fresh(contract?.book?.as_of,now,90000)||cents(yes)===null||cents(no)===null||yes+no<1-1e-8)return null;
+  const midpoint=(yes+1-no)/2,lines=[
+    'The observed YES midpoint is '+percent(midpoint)+', between the current bid and ask. Buying YES starts at '+cents(yes)+' and buying NO at '+cents(no)+' before fees.',
+  ];
+  if(cents(forecast?.probability)!==null){
+    const gap=100*(forecast.probability-midpoint);
+    lines.push('The independent model estimates '+percent(forecast.probability)+' YES, '+Math.abs(gap).toFixed(1)+' percentage points '+(gap>=0?'above':'below')+' that midpoint.');
+    if(forecast.outcomes&&cents(forecast.expected_settlement_value)!==null)
+      lines.push('The rules also allow a partial payout. Including that case, modeled YES settlement value is '+cents(forecast.expected_settlement_value)+' per contract.');
+    lines.push('For the paper decision, compare the modeled payout with the all-in entry cost. The gap to the midpoint alone does not cover the spread, fees or uncertainty.');
+  }else lines.push('The current independent model did not return a probability for this exact settlement rule. '+clean(forecast?.reason,300));
+  return lines.join('\n\n');
 }
 
 function paperFacts(research,ticker,now,full){
@@ -279,9 +295,10 @@ function attributedReports(research,full){
     seen.add(url);
     const stamp=date(item.published_at)||date(item.retrieved_at);
     const at=stamp?' ('+(date(item.published_at)?'published':'retrieved')+' '+stamp+')':'';
-    return [(item.match_scope==='matched'?'Matched report':item.match_scope==='related'?'Related context':'Attributed report')+
-      '. '+link({url,label})+at+(excerpt?' '+excerpt:'')];
-  }).slice(0,full?3:2);
+    const context=full?[clean(item.why_relevant,350),clean(item.impact,350)].filter(Boolean).join(' '):'';
+    return [(item.match_scope==='matched'?'Matched report':item.match_scope==='related'?'Related context':'Official observation')+
+      '. '+link({url,label})+at+(excerpt?' '+excerpt:'')+(context?' '+context:'')];
+  }).slice(0,full?5:2);
 }
 
 export async function azureResearchAnswer({question,ticker,panel,detail,executionControls,packets,tools,explain,authorize,signal,env,foundryFetcher,now=Date.now()}){
@@ -302,6 +319,10 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
     }
   }
   if(wants('get_contract'))parts.push('## What the contract pays for',contractFacts(contract,research,full));
+  if(current&&(!panel||['analysis','paper','evidence'].includes(panel))){
+    const comparison=modelPriceComparison(contract,research,now);
+    if(comparison)parts.push('## Your model beside the market',comparison);
+  }
   if(wants('get_contract')&&(panel==='paper'||full&&panel!=='rules'||/\b(?:order book|bid|ask price|current quote|live quote|all-in entry|break-even)\b/i.test(question))){
     parts.push(quoteFacts(contract,now));
   }
@@ -356,6 +377,11 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
   if(/\b(?:buy how many|how many (?:contracts|should)|how much (?:should|to) (?:buy|spend|put)|size (?:this|my)|position size)\b/i.test(question)){
     parts.push('For a paper size, enter your own probability range and budget in Paper position. The assistant does not have your account balance or permission to place an order.');
   }
+  const reports=current?attributedReports(research,full):[];
+  if(reports.length&&(!panel||['analysis','paper','evidence'].includes(panel))){
+    parts.push('## What current reporting adds',clean(research.model_context?.reason,600),...reports);
+    if(full)parts.push('Open the linked sources to check publication dates, the named outcome and the observation window. A retrieval timestamp tells you when the source was checked.');
+  }
   let mode='azure-deterministic';
   if(wants('search_retained_evidence')){
     const retained=packets.get('search_retained_evidence'),evidence=evidenceRows(retained,ticker,now);
@@ -370,11 +396,10 @@ export async function azureResearchAnswer({question,ticker,panel,detail,executio
         parts.push(link(row)+' ('+row.timeLabel+' '+row.at+'). '+(full?row.text:row.text.slice(0,220)));
       }
     }else{
-      const reports=current?attributedReports(research,full):[];
       if(reports.length){
-        parts.push('## The evidence trail','The retained search returned no usable excerpts. The research check returned these public report links. Open the sources to check publication dates.',...reports);
-      }else if(retained)parts.push('No matching retained public evidence was available. Use Load contract news to collect evidence before asking again.');
-      else parts.push('The retained evidence search did not complete. Use Load contract news or try the search again.');
+        parts.push('The live source check above returned the available reporting. The retained index has no additional matching excerpts for this question.');
+      }else if(retained)parts.push('The current source and retained-evidence checks returned no matched report for this exact outcome. The model inputs and quote comparison above remain available.');
+      else parts.push('The retained evidence search did not complete. Refresh the selected contract news to retry it.');
     }
   }
   const cited=new Map();

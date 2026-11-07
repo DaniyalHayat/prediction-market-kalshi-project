@@ -12,6 +12,9 @@ type Market = Ticker & ContractLabel & {
   close_time?: string;
   status?: string;
   result?: string;
+  event_ticker?: string;
+  observed_at?: string;
+  as_of?: string;
 };
 type QuoteLevel = readonly [price: string, quantity: string];
 type Book = Ticker & {
