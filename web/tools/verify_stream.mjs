@@ -7,7 +7,7 @@ if(!args['key-file']||!args['key-id'])throw new Error('Provide a local key file 
 const raw=await readFile(args['key-file'],'utf8'),pem=raw.match(/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/)?.[0];
 if(!pem)throw new Error('The file does not contain a PEM private key');
 const credentials={id:args['key-id'],pem},url=BASE+'/markets?series_ticker=KXBTC15M&status=open&limit=10';
-const response=await fetch(url,{headers:signedHeaders('GET',url,Date.now(),{id:credentials.id,key:createPrivateKey(pem)}),signal:AbortSignal.timeout(12000)});
+const response=await fetch(url,{headers:signedHeaders('GET',url,Date.now(),{id:credentials.id,key:createPrivateKey(pem)}),signal:AbortSignal.timeout(12000),redirect:'error'});
 if(!response.ok)throw new Error('Public market lookup HTTP '+response.status);
 const data=await response.json(),ticker=args.ticker || data.markets?.find(m=>Date.parse(m.close_time)>Date.now())?.ticker;
 if(!ticker)throw new Error('No active test market is available');

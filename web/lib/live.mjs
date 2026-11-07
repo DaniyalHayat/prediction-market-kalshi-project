@@ -60,6 +60,17 @@ export function signedHeaders(method, url, now = Date.now(), creds = credentials
 export const number = (value) => value === null || value === undefined || value === "" || typeof value === "boolean" || !Number.isFinite(Number(value)) ? null : Number(value);
 const rounded = (value) => value === null ? null : Math.round(value * 1e12) / 1e12;
 export function validateTicker(ticker) { if (typeof ticker !== "string" || !/^[A-Za-z0-9_.-]{1,140}$/.test(ticker) || ticker.includes("..") || ticker === ".") throw new RangeError("Invalid public market ticker"); return ticker; }
+export function marketDataURL(path, params = {}, base = BASE) {
+  if (typeof path !== 'string' || !/^\/(?:markets|series|events)(?:\/[A-Za-z0-9_.-]{1,140}){0,4}$/.test(path) || path.includes('..')) throw new RangeError('Only public market-data paths are supported');
+  const origin = new URL(base);
+  const local = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+  if ((origin.protocol !== 'https:' && !(local && origin.protocol === 'http:')) || origin.username || origin.password || origin.search || origin.hash) throw new RangeError('Invalid public market-data origin');
+  const prefix = origin.pathname.replace(/\/$/, ''), url = new URL(origin.href);
+  url.pathname = prefix + path;
+  if (url.origin !== origin.origin || url.pathname !== prefix + path) throw new RangeError('Only public market-data paths are supported');
+  const query = new URLSearchParams(params); query.sort(); url.search = '?' + query;
+  return url.href;
+}
 export function validateVertical(vertical) { if (!Object.hasOwn(VERTICALS, vertical)) throw new RangeError("Choose Macro, Sports, Travel, Weather or Crypto"); return vertical; }
 export const validQuote = (bid, ask) => bid !== null && ask !== null && 0 <= bid && bid <= ask && ask <= 1;
 export function normalizeMarket(m, vertical, series, source_url) {
@@ -107,22 +118,19 @@ function upstreamError(status, seconds, cooldown = false) {
   return error;
 }
 export async function request(path, params = {}, fetcher = fetch, now = Date.now) {
-  if(!/^\/(markets(?:\/|$)|series(?:\/|$)|events(?:\/|$))/.test(path) || path.includes('..'))throw new RangeError('Only public market-data paths are supported');
+  const url = marketDataURL(path, params), transportUrl = DATA_SERVICE ? marketDataURL(path, params, DATA_SERVICE) : url;
   if(cloudEnabled() && fetcher===fetch) {
     const key=path+'?'+new URLSearchParams(params).toString();
     const ttl=path.endsWith('/orderbook')||path==='/markets/orderbooks'?3:path.startsWith('/series')&&!path.includes('/markets/')?3600:path.includes('candlesticks')?60:20;
     return store().cached(key,ttl,()=>request(path,params,(...args)=>fetch(...args),now));
   }
-  const query = new URLSearchParams(params); query.sort();
-  const url = BASE + path + "?" + query;
   const blocked = [state.cooldowns.get(url), state.providerCooldown].filter(Boolean).sort((a,b)=>b.until-a.until)[0];
   if (blocked && blocked.until > now()) throw upstreamError(blocked.status, Math.ceil((blocked.until-now())/1000), true);
   if (state.requestInflight.has(url)) return state.requestInflight.get(url);
   const task = (async () => {
     await reserveProviderRead();
     const base = { Accept: "application/json", "User-Agent": "Mozilla/5.0 Predictir/2.0" };
-    const transportUrl = DATA_SERVICE ? DATA_SERVICE + path + "?" + query : url;
-    const send = headers => observeProviderAttempt('kalshi',()=>fetcher(transportUrl, { headers, signal: AbortSignal.timeout(12000), cache: "no-store" }));
+    const send = headers => observeProviderAttempt('kalshi',()=>fetcher(transportUrl, { headers, signal: AbortSignal.timeout(12000), cache: "no-store", redirect: 'error' }));
     const auth = DATA_SERVICE || state.authRejected ? {} : signedHeaders("GET", url, now());
     let response = await send({ ...base, ...auth });
     // A rejected key must not hide public market data; fall back to an unsigned read.
