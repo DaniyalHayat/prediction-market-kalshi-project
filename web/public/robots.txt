@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /internal/
+Sitemap: https://predictir.dev/sitemap.xml
