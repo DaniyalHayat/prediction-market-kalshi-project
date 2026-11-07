@@ -1,4 +1,5 @@
 import {isCountryAllowed} from './geo.mjs';
+import {privateAccessResponse,shareCookieForward,shareAccessEnabled} from '../private-access.mjs';
 import {traceContext,structuredLog} from '../runtime-observability.mjs';
 const known=/^\/(?:session|account\/(?:login|logout|profile|portfolio)|health|book|market|markets|trades|history|brief|fees|resolve|stream|portfolio\/stream|journal|paper\/size|export\.xlsx|workspace\/(?:catalog|markets|portfolio-books|context|history|research|execution-research|position-review|opinions|recommendations|search|sources|attribution|evidence(?:\/search)?)|intelligence(?:\/(?:catalog|series|candles|execution|forward(?:\/(?:start|checkpoint))?))?)$/;
 export const STREAM_CONNECT_TIMEOUT_MS=5000,STREAM_LIFETIME_MS=750000;
@@ -54,6 +55,7 @@ function relayEventStream(body,{requestSignal,abortUpstream,lifetimeMs,onUnexpec
 }
 export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSON_TIMEOUT_MS,streamConnectTimeoutMs=STREAM_CONNECT_TIMEOUT_MS,streamLifetimeMs=STREAM_LIFETIME_MS,
   onStreamError=values=>structuredLog('proxy.stream_error',values)}={}){
+  const denied=privateAccessResponse(request);if(denied)return denied;
   if(!process.env.MARKET_BACKEND_URL)return null;
   if(!Array.isArray(path)||path.length>5||path.some(part=>typeof part!=='string'))return Response.json({error:'Unknown API route'},{status:404});
   const route='/'+path.join('/');
@@ -79,6 +81,7 @@ export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSO
     traceparent:trace.traceparent,tracestate:trace.tracestate};
   if(route==='/journal'&&request.headers.get('authorization'))headers.Authorization=request.headers.get('authorization');
   if(privateRoute&&request.headers.get('cookie'))headers.Cookie=request.headers.get('cookie');
+  else if(shareAccessEnabled()){const cookie=shareCookieForward(request.headers.get('cookie'));if(cookie)headers.Cookie=cookie;}
   if(privateRoute&&origin)headers.Origin=origin;
   if(privateRoute&&request.headers.get('sec-fetch-site'))headers['Sec-Fetch-Site']=request.headers.get('sec-fetch-site');
   let upstream,connectTimer;

@@ -1,4 +1,5 @@
 import {createHash,timingSafeEqual} from 'node:crypto';
+import {privateAccessResponse} from '../private-access.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {gateway,streamText,tool,jsonSchema,stepCountIs} from 'ai';
@@ -181,6 +182,7 @@ export function assistantChargeUnits(usage){
   return Math.min(25,Math.ceil(dollars*1000));
 }
 export async function assistantResponse(request,{createClient,generate=streamText,fetcher=fetchJSON}={}){
+  const denied=privateAccessResponse(request);if(denied)return denied;
   let client;
   try{
     const origin=request.headers.get('origin'),own=new URL(request.url).origin;

@@ -19,6 +19,7 @@ import {traceContext} from '../lib/runtime-observability.mjs';
 import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
 import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
+import {shareAccessEnabled,shareCookieAuthorized,PRIVATE_HEADERS} from '../lib/private-access.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
@@ -36,12 +37,14 @@ export async function readBody(req,maximum=16000){
 }
 export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
+  shareAccess=shareAccessEnabled(),shareTokenHash=process.env.PREDICTIR_SHARE_TOKEN_HASH,
   getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
   streamMaxConnections=Number(process.env.MARKET_STREAM_MAX_CONNECTIONS||32),streamMaxPerIP=Number(process.env.MARKET_STREAM_MAX_PER_IP||8),
   monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger,telemetry=runtimeTelemetry,accountOptions={}}={}){
   if(!Number.isInteger(streamMaxConnections)||streamMaxConnections<1||streamMaxConnections>128||
     !Number.isInteger(streamMaxPerIP)||streamMaxPerIP<1||streamMaxPerIP>16||streamMaxPerIP>streamMaxConnections)throw new RangeError('Invalid streaming connection limits');
+  const shareEnv={PREDICTIR_SHARE_ACCESS:shareAccess?'1':'0',PREDICTIR_SHARE_TOKEN_HASH:shareTokenHash,MARKET_EDGE_SECRET:edgeSecret};
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
   const recentLogs=[],logPipeline=createLogPipeline({write:line=>{const record=JSON.parse(line);recentLogs.push(record);if(recentLogs.length>200)recentLogs.shift();if(production&&!logger)process.stdout.write(line+'\n');}});
   function recordLog(event,values){
@@ -170,6 +173,10 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
       route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|settle)))$/.test(url.pathname)?url.pathname:'unknown';
       const identity=requestIdentity(req,edgeVerified);
+      if(shareAccess)for(const [name,value]of Object.entries(PRIVATE_HEADERS))res.setHeader(name,value);
+      if(url.pathname==='/healthz'&&['GET','HEAD'].includes(req.method))return json(res,{status:'ok'});
+      if(shareAccess&&!serviceAuthorized(req.headers.authorization,serviceSecret)&&
+        (!edgeVerified||!shareCookieAuthorized(req.headers.cookie,shareEnv,now())))return json(res,{error:'A private Predictir link is required.'},401);
       if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
       if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:'Railway Node backend',market_data_only:true,
