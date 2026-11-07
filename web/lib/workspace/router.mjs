@@ -9,6 +9,7 @@ import {sportsResearch} from './sports.mjs';
 import {screenAvailabilityForecast} from './nba-availability-feedback.mjs';
 import {musicResearch} from './music.mjs';
 import {contractEvidence} from './evidence.mjs';
+import {evidenceModelContext} from './evidence-model-context.mjs';
 import {retainPublicEvidence,searchRetainedEvidence,embeddingStatus} from './semantic.mjs';
 import {providerStatus,boundedMap} from './providers.mjs';
 import {tradeCandidates,rankCandidates} from './recommendations.mjs';
@@ -165,13 +166,14 @@ export async function workspaceEvidence(ticker,{reddit=false,includeX=false,mode
     const recent=['full#0#availability','fast#0#availability','assistant#0#availability','full#0','assistant#0','fast#0']
       .map(mode=>researchCache.get([ticker,model,mode].join('#'))).find(entry=>entry?.until>Date.now())?.value;
     const checkAvailability=deps.workspaceResearch||workspaceResearch;
-    const refresh=/^KXNBAGAME-/.test(ticker)&&!preview&&!recent?.forecast?.availability_feedback&&
-      (useCache||dependencies.workspaceResearch)?Promise.race([checkAvailability(ticker,{fast:true,model,refreshAvailability:true,marketPacket:detail})
+    const refreshAvailability=/^KXNBAGAME-/.test(ticker)&&!recent?.forecast?.availability_feedback;
+    const refresh=!preview&&(!recent||refreshAvailability)&&
+      (useCache||dependencies.workspaceResearch)?Promise.race([checkAvailability(ticker,{fast:true,model,refreshAvailability,marketPacket:detail})
         .catch(()=>null),delay(4400,null,{ref:false})]):null;
     const [evidenceResult,checked]=await Promise.all([deps.contractEvidence(market,{enabled:true,selectedTicker:ticker,redditEnabled:reddit,includeX,
       sports:recent?.extensions?.sports,music:recent?.extensions?.music,settlementSources,headlineMode:preview?'official':'full'}),refresh]);
     const feedback=(checked||recent)?.forecast?.availability_feedback;
-    const value=feedback?{...evidenceResult,model_feedback:feedback}:evidenceResult;
+    const value={...evidenceResult,...(feedback?{model_feedback:feedback}:{}),model_context:evidenceModelContext(evidenceResult,checked||recent)};
     if(checked&&feedback?.status==='available')for(const mode of ['full','assistant','fast']){
       researchCache.delete([ticker,model,mode,0].join('#'));
     }
