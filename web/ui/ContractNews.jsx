@@ -12,8 +12,8 @@ export function ReadText({value}){
   const paragraphs=Array.isArray(value)?value:typeof value==='string'?value.split(/\n+/):[];
   return paragraphs.filter(row=>typeof row==='string'&&row.trim()).map((row,index)=><p key={index}>{row}</p>);
 }
-const kindNames={official:'Official',publisher:'Publisher',reddit:'Reddit',x:'X',data:'Data'};
-const itemKind=item=>item.platform==='reddit'?'reddit':item.platform==='x'?'x':item.confidence==='primary_source'?'official':'publisher';
+const kindNames={official:'Official',publisher:'Publisher',reddit:'Reddit',x:'X',hacker_news:'Hacker News',data:'Data'};
+const itemKind=item=>['reddit','x','hacker_news'].includes(item.platform)?item.platform:item.confidence==='primary_source'?'official':'publisher';
 const statusNames={available:'Retrieved',live:'Retrieved',partial:'Partial coverage',empty:'No results',opt_in:'Off',on_selection:'Runs when applicable',not_queried:'Waiting for selection',not_configured:'Connection required',not_applicable:'Outside source coverage',unavailable:'Unavailable',robots_blocked:'Automatic access blocked',access_blocked:'Automatic access blocked',cooldown:'Cooling down',budget_reached:'Allowance reached',refreshing:'Refreshing'};
 function SourceBadge({kind}){
   return <span className="news-source-kind" data-kind={kind||'publisher'}>{kindNames[kind]||'Publisher'}</span>;
@@ -61,7 +61,7 @@ export default function ContractNews({ticker,model='validated',initial=null,arti
   },[initial,load]);
   const canShow=item=>item.platform==='reddit'?reddit:item.platform==='x'?x:true;
   const items=(value?.items||[]).filter(canShow),related=(value?.related_items||[]).filter(canShow),headlines=articles.filter(article=>safeURL(article.url));
-  const feeds=(value?.feeds||[]).filter(feed=>feed.kind==='reddit'?reddit:feed.kind==='x'?x:true);
+  const feeds=(value?.feeds||[]).filter(feed=>['reddit','hacker_news'].includes(feed.kind)?reddit:feed.kind==='x'?x:true);
   const long=mode==='long';
   const hasSources=Boolean(value?.source_links?.length);
   return <section className="contract-news" aria-label="Contract news and context"><div className="readout-heading"><div><span className="eyebrow">Evidence & reporting</span><h3>Contract news</h3></div><ReadMode value={mode} onChange={setMode} label="Contract news reading length"/></div>
@@ -81,6 +81,8 @@ export default function ContractNews({ticker,model='validated',initial=null,arti
       <NewsCards label="Matched reporting" items={items.filter(item=>!['reddit','x'].includes(item.platform))} long={long}/>
       <NewsCards label="Related context" items={related.filter(item=>!['reddit','x'].includes(item.platform))} long={long}/>
       <NewsCards label="Social context" items={[...items,...related].filter(item=>['reddit','x'].includes(item.platform))} long={long}/>
+      <NewsCards label="Official source checks" items={(value.official_observations||[]).filter(item=>safeURL(item.url))} long={long}/>
+      {reddit&&<NewsCards label="Technology discussion from Hacker News" items={(value.community_items||[]).filter(item=>safeURL(item.url))} long={long}/>}
       {hasSources&&<div className="news-source-links"><h4 className="news-section-label">Go to the source</h4>{value.source_links.filter(row=>safeURL(row.url)).map(row=><a href={row.url} key={row.url} target="_blank" rel="noreferrer"><SourceBadge kind={row.kind}/><span><strong>{row.label}</strong><small>{row.detail}</small></span><ArrowUpRight size={14}/></a>)}</div>}
       {feeds.length>0&&<details className="method news-feeds" open={long||reddit||x}><summary>Source coverage · {dateLabel(value.as_of)}</summary>{feeds.map(feed=><div key={feed.name}>
         <p><SourceBadge kind={feed.kind}/> <strong>{feed.name}</strong> · {statusNames[feed.status]||feed.status?.replaceAll('_',' ')}{feed.as_of?' · '+dateLabel(feed.as_of):''}</p>

@@ -98,6 +98,11 @@
   background: #1e3545;
   color: #a5daff;
 }
+.news-source-kind[data-kind="hacker_news"] {
+  border-color: #8f6834;
+  background: #3a2a14;
+  color: #ffd28a;
+}
 .news-source-kind[data-kind="official"] {
   border-color: #3a755d;
   background: #1c382e;

@@ -49,9 +49,14 @@ export function publicEvidenceChunks(market,evidence,{now=Date.now()}={}){
     for(const content of chunks(text)){rows.push({ticker,id:hash(ticker+'\n'+url+'\n'+content),source_url:url,title:clean(title,400),content,publisher:clean(publisher||'Public source',160),source_kind:kind,published_at:Number.isFinite(publication)?new Date(publication).toISOString():null,retrieved_at:new Date(date).toISOString(),expires_at:new Date(expiry).toISOString()});if(rows.length>=32)break;}
   };
   add(market.title,[market.title,market.yes_sub_title,'Primary settlement rules: '+(market.rules_primary||''),'Secondary settlement rules: '+(market.rules_secondary||'')].join('\n'),'https://external-api.kalshi.com/trade-api/v2/markets/'+encodeURIComponent(ticker),'Kalshi','public_contract_rules',null,evidence.as_of);
+  for(const item of (evidence.official_observations||[]).slice(0,6)){
+    const url=publicURL(item.url);
+    if(item.platform!=='official_observation'||!url||!['www.federalreserve.gov','www.nhc.noaa.gov'].includes(new URL(url).hostname))continue;
+    add(item.title,[item.title,item.excerpt,...(item.limitations||[])].filter(Boolean).join('\n'),url,item.publisher,'official_observation',item.published_at,item.retrieved_at);
+  }
   for(const item of [...(evidence.items||[]),...(evidence.related_items||[])]){
     if(rows.length>=32)break;
-    if(item.platform==='reddit')continue;
+    if(['reddit','hacker_news'].includes(item.platform))continue;
     const scope=item.match_scope==='related'?'related_'+(item.source_tier||'public_metadata'):item.source_tier||'public_metadata';
     add(item.title,[item.title,item.excerpt].filter(Boolean).join('\n'),item.url,item.publisher,scope,item.time_basis==='provider_first_seen'?null:item.published_at||item.as_of,item.retrieved_at||evidence.as_of);
   }
