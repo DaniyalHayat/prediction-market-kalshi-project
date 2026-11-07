@@ -1,107 +1,368 @@
 {
-  "version": "crypto-minute-settlement-replay-v1",
+  "version": "crypto-minute-settlement-replay-v2",
   "independent_forecast": true,
   "release_eligible": false,
-  "archive_sha256": "719b3f10950ab89e21fdbd942209dcbf22f6aaf4dce8ba0df63ed6950db1523d",
-  "start": "2026-11-03T00:00:00.000Z",
-  "holdout_start": "2026-11-05T00:00:00.000Z",
-  "end": "2026-11-07T00:00:00.000Z",
+  "archive_sha256": "8129f37c3834d3656d0854f57ce8ba760d56c723414999080075a416ee7a9107",
+  "start": "2026-09-25T00:00:00.000Z",
+  "holdout_start": "2026-10-13T00:00:00.000Z",
+  "end": "2026-11-03T00:00:00.000Z",
   "minutes_before_close": 8,
   "by_series": {
     "KXBTC15M": {
-      "settled_events": 375,
-      "bars": 6059,
-      "missing_origin_rows": 0,
-      "earlier": {
-        "n": 191,
-        "brier": 0.18366255618354516,
-        "static_brier": 0.18398737721143282,
-        "coinflip_brier": 0.25,
-        "log_loss": 0.54298859179011,
-        "static_log_loss": 0.5530128693219153,
-        "wins": 139
+      "settled_events": 3692,
+      "bars": 56456,
+      "missing_origin_rows": 1,
+      "selected_profile": {
+        "lead_minutes": 8,
+        "basis_weight": 1,
+        "gaussian_weight": 1
+      },
+      "development": {
+        "n": 1706,
+        "brier": 0.16572577576552291,
+        "baseline_brier": 0.17447463308566707,
+        "log_loss": 0.5004899766584016,
+        "baseline_log_loss": 0.5283743993019491,
+        "paired_brier_gain_95": [
+          0.0036584989179929694,
+          0.013881665702467494
+        ]
       },
       "holdout": {
-        "n": 184,
-        "brier": 0.18628216503992903,
-        "static_brier": 0.19324755989352269,
-        "coinflip_brier": 0.25,
-        "log_loss": 0.5560070392947164,
-        "static_log_loss": 0.5774679161850159,
-        "wins": 130
+        "n": 1985,
+        "brier": 0.16898206139223415,
+        "baseline_brier": 0.174435626000379,
+        "log_loss": 0.5077025169457114,
+        "baseline_log_loss": 0.5262694293618272,
+        "paired_brier_gain_95": [
+          0.0025199559781486215,
+          0.00814054910299601
+        ]
       },
-      "by_holdout_day": {
-        "2026-11-05": {
-          "n": 88,
-          "brier": 0.1756029684601114,
-          "static_brier": 0.18510204081632659,
-          "coinflip_brier": 0.25,
-          "log_loss": 0.5366824656907286,
-          "static_log_loss": 0.5561675585411934,
-          "wins": 64
+      "held_out_days": 21,
+      "incumbent_benchmark": {
+        "n": 1985,
+        "brier": 0.16898206139223415,
+        "baseline_brier": 0.1732690709473406,
+        "log_loss": 0.5077025169457114,
+        "baseline_log_loss": 0.5223217597593989,
+        "paired_brier_gain_95": [
+          0.0018132180751942325,
+          0.006736794494554531
+        ]
+      },
+      "gaussian_benchmark": {
+        "n": 1985,
+        "brier": 0.16898206139223415,
+        "baseline_brier": 0.1689714110158495,
+        "log_loss": 0.5077025169457114,
+        "baseline_log_loss": 0.5073938302971169,
+        "paired_brier_gain_95": [
+          -0.0018702786934198352,
+          0.0015926341991318758
+        ]
+      },
+      "coinflip_benchmark": {
+        "n": 1985,
+        "brier": 0.16898206139223415,
+        "baseline_brier": 0.25,
+        "log_loss": 0.5077025169457114,
+        "baseline_log_loss": 0.6931471805599114,
+        "paired_brier_gain_95": [
+          0.07519153454041608,
+          0.08730007658460594
+        ]
+      },
+      "midpoint_benchmark": {
+        "n": 1985,
+        "brier": 0.16898206139223415,
+        "baseline_brier": 0.167594466120906,
+        "log_loss": 0.5077025169457114,
+        "baseline_log_loss": 0.5044190687302876,
+        "paired_brier_gain_95": [
+          -0.0034410007859975657,
+          0.0004904570053179813
+        ]
+      },
+      "calibration": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "n": 178,
+          "forecast_mean": 0.05323684709214591,
+          "realized_rate": 0.06179775280898876
         },
-        "2026-11-06": {
-          "n": 96,
-          "brier": 0.1960714285714286,
-          "static_brier": 0.2007142857142857,
-          "coinflip_brier": 0.25,
-          "log_loss": 0.5737212317650389,
-          "static_log_loss": 0.5969932440251865,
-          "wins": 66
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "n": 215,
+          "forecast_mean": 0.14833262559994947,
+          "realized_rate": 0.13488372093023257
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "n": 207,
+          "forecast_mean": 0.25297891015955387,
+          "realized_rate": 0.28019323671497587
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "n": 233,
+          "forecast_mean": 0.35291676941866584,
+          "realized_rate": 0.33476394849785407
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "n": 207,
+          "forecast_mean": 0.4495057086019633,
+          "realized_rate": 0.43478260869565216
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "n": 221,
+          "forecast_mean": 0.5508179174776057,
+          "realized_rate": 0.5203619909502263
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "n": 203,
+          "forecast_mean": 0.650208649182119,
+          "realized_rate": 0.6699507389162561
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "n": 190,
+          "forecast_mean": 0.7515721364313259,
+          "realized_rate": 0.7789473684210526
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "n": 193,
+          "forecast_mean": 0.8491970240262287,
+          "realized_rate": 0.9067357512953368
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "n": 138,
+          "forecast_mean": 0.9462432500894804,
+          "realized_rate": 0.9565217391304348
         }
+      ],
+      "paper_replay": {
+        "eligible_quote_rows": 1985,
+        "attempts": 60,
+        "delayed_quote_rows": 1985,
+        "indicative_fills": 35,
+        "net_pnl_dollars": -0.894,
+        "daily_block_pnl_per_quoted_origin_95": [
+          -0.0016076812819666724,
+          0.0007882751386040862
+        ]
       },
-      "release_eligible": false
+      "release_gates": {
+        "at_least_fourteen_held_out_days": true,
+        "at_least_ninety_five_percent_completed_origins": true,
+        "at_least_ninety_percent_matched_quotes": true,
+        "paired_gain_over_static": true,
+        "paired_gain_over_incumbent": true,
+        "paired_gain_over_gaussian": false,
+        "paired_gain_over_market_midpoint": false,
+        "positive_delayed_paper_returns": false,
+        "verified_historical_depth": false
+      },
+      "release_eligible": false,
+      "release_reason": "The held-out forecasts did not establish a positive paired Brier gain over Kalshi’s quoted midpoint."
     },
     "KXETH15M": {
-      "settled_events": 376,
-      "bars": 6059,
-      "missing_origin_rows": 0,
-      "earlier": {
-        "n": 192,
-        "brier": 0.1676587004287009,
-        "static_brier": 0.1638727816494244,
-        "coinflip_brier": 0.25,
-        "log_loss": 0.5106504885726878,
-        "static_log_loss": 0.5040059722417151,
-        "wins": 148
+      "settled_events": 3687,
+      "bars": 56455,
+      "missing_origin_rows": 2,
+      "selected_profile": {
+        "lead_minutes": 8,
+        "basis_weight": 0.25,
+        "gaussian_weight": 1
+      },
+      "development": {
+        "n": 1707,
+        "brier": 0.16364470614652557,
+        "baseline_brier": 0.16696823980376388,
+        "log_loss": 0.4963462501974532,
+        "baseline_log_loss": 0.5049471674583643,
+        "paired_brier_gain_95": [
+          0.0005792840556749507,
+          0.0063653036391521966
+        ]
       },
       "holdout": {
-        "n": 184,
-        "brier": 0.18436557231588294,
-        "static_brier": 0.19174800354924582,
-        "coinflip_brier": 0.25,
-        "log_loss": 0.5489530401559367,
-        "static_log_loss": 0.5703944469688621,
-        "wins": 129
+        "n": 1978,
+        "brier": 0.1568427860324665,
+        "baseline_brier": 0.161391508541762,
+        "log_loss": 0.47647105066649315,
+        "baseline_log_loss": 0.4918942550439645,
+        "paired_brier_gain_95": [
+          0.0019129020699908165,
+          0.007144346151002661
+        ]
       },
-      "by_holdout_day": {
-        "2026-11-05": {
-          "n": 88,
-          "brier": 0.1912059369202226,
-          "static_brier": 0.19395176252319102,
-          "coinflip_brier": 0.25,
-          "log_loss": 0.5778210273712052,
-          "static_log_loss": 0.5639037277095581,
-          "wins": 62
+      "held_out_days": 21,
+      "incumbent_benchmark": {
+        "n": 1978,
+        "brier": 0.1568427860324665,
+        "baseline_brier": 0.15938427337462305,
+        "log_loss": 0.47647105066649315,
+        "baseline_log_loss": 0.4845008450118628,
+        "paired_brier_gain_95": [
+          0.0006942502460309904,
+          0.004404718463853182
+        ]
+      },
+      "gaussian_benchmark": {
+        "n": 1978,
+        "brier": 0.1568427860324665,
+        "baseline_brier": 0.15702070495400114,
+        "log_loss": 0.47647105066649315,
+        "baseline_log_loss": 0.476949079520563,
+        "paired_brier_gain_95": [
+          -0.00009631279736708554,
+          0.00046339685515866126
+        ]
+      },
+      "coinflip_benchmark": {
+        "n": 1978,
+        "brier": 0.1568427860324665,
+        "baseline_brier": 0.25,
+        "log_loss": 0.47647105066649315,
+        "baseline_log_loss": 0.6931471805599115,
+        "paired_brier_gain_95": [
+          0.08413347435363908,
+          0.10128766732438328
+        ]
+      },
+      "midpoint_benchmark": {
+        "n": 1978,
+        "brier": 0.1568427860324665,
+        "baseline_brier": 0.1541003698179974,
+        "log_loss": 0.47647105066649315,
+        "baseline_log_loss": 0.46839892249004916,
+        "paired_brier_gain_95": [
+          -0.004976218551243307,
+          -0.0007132437470438275
+        ]
+      },
+      "calibration": [
+        {
+          "lower": 0,
+          "upper": 0.1,
+          "n": 159,
+          "forecast_mean": 0.054384732536420635,
+          "realized_rate": 0.03773584905660377
         },
-        "2026-11-06": {
-          "n": 96,
-          "brier": 0.17809523809523806,
-          "static_brier": 0.18972789115646257,
-          "coinflip_brier": 0.25,
-          "log_loss": 0.522490718541941,
-          "static_log_loss": 0.576344272956558,
-          "wins": 67
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "n": 212,
+          "forecast_mean": 0.15028865182953538,
+          "realized_rate": 0.10377358490566038
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.3,
+          "n": 201,
+          "forecast_mean": 0.24768542795958706,
+          "realized_rate": 0.21393034825870647
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.4,
+          "n": 220,
+          "forecast_mean": 0.34953722373524587,
+          "realized_rate": 0.29545454545454547
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "n": 210,
+          "forecast_mean": 0.450482061983432,
+          "realized_rate": 0.4142857142857143
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6,
+          "n": 234,
+          "forecast_mean": 0.5489898698903756,
+          "realized_rate": 0.5769230769230769
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.7,
+          "n": 210,
+          "forecast_mean": 0.649066988571381,
+          "realized_rate": 0.6857142857142857
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.8,
+          "n": 191,
+          "forecast_mean": 0.7510215364244928,
+          "realized_rate": 0.8115183246073299
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "n": 189,
+          "forecast_mean": 0.8489355072245454,
+          "realized_rate": 0.8888888888888888
+        },
+        {
+          "lower": 0.9,
+          "upper": 1,
+          "n": 152,
+          "forecast_mean": 0.9447204116147578,
+          "realized_rate": 0.9736842105263158
         }
+      ],
+      "paper_replay": {
+        "eligible_quote_rows": 1978,
+        "attempts": 111,
+        "delayed_quote_rows": 1978,
+        "indicative_fills": 72,
+        "net_pnl_dollars": -0.36299999999999943,
+        "daily_block_pnl_per_quoted_origin_95": [
+          -0.0020674233815379506,
+          0.002067750639521501
+        ]
       },
-      "release_eligible": false
+      "release_gates": {
+        "at_least_fourteen_held_out_days": true,
+        "at_least_ninety_five_percent_completed_origins": true,
+        "at_least_ninety_percent_matched_quotes": true,
+        "paired_gain_over_static": true,
+        "paired_gain_over_incumbent": true,
+        "paired_gain_over_gaussian": false,
+        "paired_gain_over_market_midpoint": false,
+        "positive_delayed_paper_returns": false,
+        "verified_historical_depth": false
+      },
+      "release_eligible": false,
+      "release_reason": "The held-out forecasts did not establish a positive paired Brier gain over Kalshi’s quoted midpoint."
     }
   },
   "protocol": [
     "A fixed eight-minute lead uses only completed Coinbase minutes. Gap or mismatched contract rules withhold the prediction.",
     "Exact binary outcomes come from finalized Kalshi settlement. Contract terms provide the named CF index and known starting strike.",
     "Coinbase OHLC approximates each minute average. The settlement index is separately calculated by CF Benchmarks.",
-    "A constant 50% baseline and the same empirical returns without short-term volatility adjustment are scored on identical rows.",
-    "The short holdout has serially related observations and no comparable cost or trade simulation. It does not establish repeatable edge."
+    "Opening Coinbase-to-CF basis weight and Gaussian mixture weight are selected on the chronological development prefix only. Test-period exchange quotes are never forecast inputs.",
+    "Benchmarks are coin flip, static empirical returns, the prior volatility-adjusted empirical model, Gaussian EWMA and the exact-minute Kalshi bid/ask midpoint on matched rows.",
+    "Two-day moving blocks preserve local serial dependence and weight each UTC day equally for paired Brier gain and paper P&L intervals.",
+    "Paper entries require a one-cent conservative margin above rounded standard taker fees. A one-minute delayed quote must still clear the predeclared entry cap.",
+    "Quote candles lack displayed size and do not guarantee fills or profits. Releases require independently verified historical depth."
   ]
 }
