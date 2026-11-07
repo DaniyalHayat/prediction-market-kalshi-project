@@ -11,7 +11,8 @@ function ProbabilityPair({probability, unavailable, outcomes}: {probability: num
   const entries=outcomes || [['YES', probability!], ['NO', 1 - probability!]];
   return <div className={'probability-pair' + (outcomes ? ' probability-three' : '')}>{entries.map(([label, value]) => {
     const chance = value as number;
-    return <div className={'probability-outcome probability-' + tone(chance)} key={label}><span>{label}</span><strong>{percentage(chance)}</strong><div className="probability-track" aria-hidden="true"><span style={{'--chance': (chance * 100).toFixed(2) + '%'} as CSSProperties}/></div></div>;
+    const outcomeTone = label === 'Tie' ? 'balanced' : tone(label === 'Loss' ? 1 - chance : chance);
+    return <div className={'probability-outcome probability-' + outcomeTone} key={label}><span>{label}</span><strong>{percentage(chance)}</strong><div className="probability-track" aria-hidden="true"><span style={{'--chance': (chance * 100).toFixed(2) + '%'} as CSSProperties}/></div></div>;
   })}</div>;
 }
 
@@ -26,6 +27,6 @@ export default function QuoteComparison({bid, ask, age, forecast, stale = false,
   return <section className="quote-comparison" aria-label="Market and Predictir probability comparison">
     <div className="probability-card"><span className="probability-heading">{forecast?.outcomes ? 'Market price equivalent' : 'Market price implied'}</span><ProbabilityPair probability={market} unavailable="Awaiting a fresh quote"/><small>Observed bid–ask midpoint{forecast?.outcomes ? '; tie pays half' : ''}</small></div>
     <div className="probability-card"><span className="probability-heading">Predictir model</span><ProbabilityPair probability={model} outcomes={outcomes} unavailable={loading ? 'Calculating…' : stale ? 'Refreshing estimate…' : 'Estimate unavailable'}/><small>{forecast?.model_name || 'Independent source model'}{interval && <> · YES range {percentage(interval[0])}–{percentage(interval[1])}</>}{outcomes && validProbability(value) && <> · Expected YES payout {(value*100).toFixed(1)}¢</>}</small></div>
-    <p className="probability-caption">{gap !== null && <span className={'probability-gap ' + (gap > 0 ? 'gap-positive' : gap < 0 ? 'gap-negative' : '')}>{gap > 0 ? '+' : ''}{gap.toFixed(1)}{outcomes ? '¢: expected YES payout vs market price.' : ' percentage points: model YES vs market.'} </span>}Color shows likelihood. Compare price, fees and model uncertainty to judge trade value.</p>
+    <p className="probability-caption">{gap !== null && <span className={'probability-gap ' + (gap > 0 ? 'gap-positive' : gap < 0 ? 'gap-negative' : '')}>{gap > 0 ? '+' : ''}{gap.toFixed(1)}{outcomes ? '¢: expected YES payout vs market price.' : ' percentage points: model YES vs market.'} </span>}{outcomes ? 'Win colors show likelihood; Loss colors show downside risk. Tie stays neutral.' : 'Colors show YES/NO likelihood.'} Color is not a profit signal. Compare price, fees and model uncertainty to judge trade value.</p>
   </section>;
 }
