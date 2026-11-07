@@ -93,8 +93,8 @@ test('discussion fallback uses an exact named technical query and keeps weak or 
   assert.equal((await collectCommunityContext({...tech,custom_strike:{Organization:'Other'}},{now,get})).status,'not_applicable');
 });
 
-test('exact contract evidence exposes public checks and opted-in technology discussion separately',async()=>{
-  let officialCalls=0,communityCalls=0;
+test('exact contract evidence retrieves official checks while deployment-disabled social sources make no request',async()=>{
+  let officialCalls=0,communityCalls=0,redditCalls=0;
   const official={title:'The scheduled FOMC decision',excerpt:'Official date',url:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',publisher:'Federal Reserve',
     platform:'official_observation',retrieved_at:asOf};
   const community={title:'OpenAI releases a model',excerpt:'9 points',url:'https://news.ycombinator.com/item?id=12',platform:'hacker_news',retrieved_at:asOf};
@@ -102,7 +102,7 @@ test('exact contract evidence exposes public checks and opted-in technology disc
     now:()=>now,
     fetchContractHeadlines:async()=>({status:'empty',articles:[]}),
     sportsNews:async()=>({status:'not_applicable',articles:[]}),
-    redditEvidence:async()=>({status:'not_configured',posts:[]}),
+    redditEvidence:async()=>{redditCalls++;return {status:'available',posts:[{id:'t3_abc123',title:'OpenAI leaderboard report',excerpt:'Listing metadata only',url:'https://www.reddit.com/r/technology/comments/abc123/story/',publisher:'r/technology',platform:'reddit',as_of:asOf,limitations:['Public listing metadata only.']}]};},
     collectOfficialEvidence:async market=>{officialCalls++;return market===fed?{name:'Federal Reserve',status:'available',rows:[official]}:{status:'not_applicable',rows:[]};},
     collectCommunityContext:async()=>{communityCalls++;return {name:'Hacker News',status:'available',rows:[community]};}
   };
@@ -113,17 +113,15 @@ test('exact contract evidence exposes public checks and opted-in technology disc
   assert.equal(fedEvidence.items.length,0);
   assert.equal(publicEvidenceChunks(fed,fedEvidence,{now}).find(row=>row.source_kind==='official_observation').published_at,null);
   assert.equal(communityCalls,0);
-  const techEvidence=await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true},dependencies);
-  assert.deepEqual(techEvidence.community_items,[community]);
-  assert.equal(techEvidence.feeds.find(row=>row.kind==='reddit').status,'not_configured');
-  assert.equal(techEvidence.feeds.find(row=>row.kind==='hacker_news').status,'available');
+  const techEvidence=await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true,includeX:true},dependencies);
+  assert.equal(techEvidence.community_items.length,0);
+  assert.equal(techEvidence.social_context.length,0);
+  assert.equal(techEvidence.feeds.find(row=>row.kind==='reddit').status,'disabled');
+  assert.equal(techEvidence.feeds.find(row=>row.kind==='x').status,'disabled');
+  assert.equal(techEvidence.feeds.find(row=>row.kind==='hacker_news'),undefined);
   assert.ok(publicEvidenceChunks(tech,{...techEvidence,items:[community]},{now}).every(row=>row.source_url!==community.url));
-  assert.equal(communityCalls,1);
-  await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true}, {...dependencies,redditEvidence:async()=>({status:'available',posts:[]})});
-  assert.equal(communityCalls,1);
-  const unmapped=await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true}, {...dependencies,redditEvidence:async()=>({status:'not_applicable',posts:[]})});
-  assert.deepEqual(unmapped.community_items,[community]);
-  assert.equal(communityCalls,2);
+  assert.equal(communityCalls,0);
+  assert.equal(redditCalls,0);
   await contractEvidence(tech,{...options,headlineMode:'official',news:{provider:'fixture'},selectedTicker:tech.ticker},dependencies);
-  assert.equal(officialCalls,4);
+  assert.equal(officialCalls,2);
 });

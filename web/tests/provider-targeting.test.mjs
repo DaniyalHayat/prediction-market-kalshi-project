@@ -17,26 +17,26 @@ test('selected-contract X query binds allowlisted authors and sanitized exact en
 });
 
 test('targeted X search performs one bounded read, reserves expansions and shares its scope cache',async()=>{
-  const durable=memoryStore();let calls=0;const deps={store:durable,now:()=>NOW,env:{X_BEARER_TOKEN:'fixture'},sourceJSON:async(_,value)=>{calls++;const url=new URL(value);assert.equal(url.pathname,'/2/tweets/search/recent');assert.equal(url.searchParams.get('max_results'),'10');assert.equal(url.searchParams.get('next_token'),null);return searchResponse;}};
+  const durable=memoryStore();let calls=0;const deps={store:durable,now:()=>NOW,env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture'},sourceJSON:async(_,value)=>{calls++;const url=new URL(value);assert.equal(url.pathname,'/2/tweets/search/recent');assert.equal(url.searchParams.get('max_results'),'10');assert.equal(url.searchParams.get('next_token'),null);return searchResponse;}};
   const options={topic:'nba',entities:['Lakers'],enabled:true};
   const first=await publicXFeed(options,deps),second=await publicXFeed(options,deps);assert.equal(calls,1);assert.equal(first.posts[0].author,'NBA');assert.deepEqual(first.posts,second.posts);assert.equal(first.scope,'selected_entities');assert.equal(durable.quotas.get('x-posts#2026-11'),10);assert.equal(durable.quotas.get('x-cost-milliusd#2026-11'),70);assert.equal(first.coverage.truncated,false);
 });
 
 test('targeted search closes on allowance denial and rejects unverified authors without publishing a cursor',async()=>{
-  const durable=memoryStore();let calls=0;const base={now:()=>NOW,env:{X_BEARER_TOKEN:'fixture'},sourceJSON:async()=>{calls++;return {...searchResponse,data:{...searchResponse.data,includes:{users:[{id:'123',username:'unlisted_account'}]}}};}};
+  const durable=memoryStore();let calls=0;const base={now:()=>NOW,env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture'},sourceJSON:async()=>{calls++;return {...searchResponse,data:{...searchResponse.data,includes:{users:[{id:'123',username:'unlisted_account'}]}}};}};
   assert.equal((await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{...base,store:{...durable,consume:async()=>false}})).status,'budget_reached');assert.equal(calls,0);
   const value=await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{...base,store:durable});assert.equal(value.status,'unavailable');assert.equal([...durable.values.keys()].some(key=>key.startsWith('x-search-cursor#')),false);
 });
 
 test('targeted cache lease loss does not create an X provider cooldown',async()=>{
   const durable=memoryStore();durable.kind='postgres';durable.cached=async(key,ttl,producer)=>producer({publishRecord:async()=>{throw Object.assign(new Error('lost'),{code:'CACHE_LEASE_LOST'});}});
-  const value=await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{store:durable,now:()=>NOW,env:{X_BEARER_TOKEN:'fixture'},sourceJSON:async()=>searchResponse});assert.equal(value.status,'refreshing');assert.equal(await durable.get('x-public-cooldown'),undefined);
+  const value=await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{store:durable,now:()=>NOW,env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture'},sourceJSON:async()=>searchResponse});assert.equal(value.status,'refreshing');assert.equal(await durable.get('x-public-cooldown'),undefined);
 });
 
 test('targeted cursor advances with exact numeric IDs and marks bounded pagination gaps',async()=>{
   const durable=memoryStore(),scope=xSearchScope('nba',['Lakers']),old={...searchResponse.data.data[0],author:'NBA',title:'Older copy',excerpt:'Older copy',url:'https://x.com/NBA/status/2118176390805647692'};
   durable.values.set('x-search-cursor#'+scope.key,{newest_id:'2118176390805647692',posts:[old]});
-  const result=await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{store:durable,now:()=>NOW,env:{X_BEARER_TOKEN:'fixture'},sourceJSON:async(_,value)=>{assert.equal(new URL(value).searchParams.get('since_id'),'2118176390805647692');return {...searchResponse,data:{...searchResponse.data,data:[{...searchResponse.data.data[0],id:'2118176390805647693'}],meta:{result_count:1,next_token:'unfollowed-next-page'}}};}});
+  const result=await publicXFeed({topic:'nba',entities:['Lakers'],enabled:true},{store:durable,now:()=>NOW,env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture'},sourceJSON:async(_,value)=>{assert.equal(new URL(value).searchParams.get('since_id'),'2118176390805647692');return {...searchResponse,data:{...searchResponse.data,data:[{...searchResponse.data.data[0],id:'2118176390805647693'}],meta:{result_count:1,next_token:'unfollowed-next-page'}}};}});
   assert.equal(result.coverage.truncated,true);assert.equal((await durable.get('x-search-cursor#'+scope.key)).newest_id,'2118176390805647693');assert.equal(result.posts.length,2);
 });
 
@@ -44,7 +44,7 @@ test('explicit X opt-in passes selected entities and the default makes no paid c
   let options;
   const market={ticker:'SELECTED',title:'NBA game',yes_sub_title:'Los Angeles Lakers'};
   const scope={enabled:true,selectedTicker:'SELECTED',sports:{teams:[{name:'Los Angeles Lakers'},{name:'Boston Celtics'}]}};
-  const dependencies={now:()=>NOW,sportsNews:async()=>({status:'empty',articles:[]}),publicXFeed:async value=>{options=value;return {posts:[]};}};
+  const dependencies={env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1'},now:()=>NOW,sportsNews:async()=>({status:'empty',articles:[]}),publicXFeed:async value=>{options=value;return {posts:[]};}};
   await contractEvidence(market,scope,dependencies);
   assert.equal(options,undefined);
   await contractEvidence(market,{...scope,includeX:true},dependencies);
