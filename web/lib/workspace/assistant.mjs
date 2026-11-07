@@ -1,4 +1,5 @@
 import {createHash,timingSafeEqual} from 'node:crypto';
+import {privateAccessResponse} from '../private-access.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {gateway,streamText,tool,jsonSchema,stepCountIs} from 'ai';
@@ -212,6 +213,7 @@ async function azureReadback(request,{ticker,messages,model,executionControls,pa
 }
 
 export async function assistantResponse(request,{createClient,generate=streamText,fetcher=fetchJSON,countryLookup,env=process.env,foundryFetcher}={}){
+  const denied=privateAccessResponse(request,env);if(denied)return denied;
   let client;
   try{
     const edition=azureMode(env.PREDICTIR_MODE||null);

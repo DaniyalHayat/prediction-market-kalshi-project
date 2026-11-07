@@ -204,11 +204,11 @@ run "hosted_replay_consumption_and_private_backend" {
       length(azurerm_virtual_network.live) == 0 &&
       length(azurerm_container_app.front[0].secret) == 0 &&
       length(azurerm_container_app.backend[0].secret) == 0 &&
-      azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].path == "/" &&
+      azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].path == "/healthz" &&
       azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
       azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
       azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].port == 8780 &&
-      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].path == "/api/health" &&
+      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].path == "/healthz" &&
       azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].interval_seconds == 15 &&
       azurerm_container_app.backend[0].template[0].container[0].liveness_probe[0].interval_seconds == 15 &&
       contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_SHUTDOWN_TIMEOUT_MS") &&
@@ -234,6 +234,38 @@ run "warm_replicas_require_a_reviewed_estimate" {
   }
 
   expect_failures = [terraform_data.release_approval]
+}
+
+run "private_share_gate_is_configured_on_both_apps" {
+  command = plan
+
+  variables {
+    azure_enabled                = true
+    private_share_access_enabled = true
+    private_share_token_sha256   = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+
+  assert {
+    condition = alltrue([
+      for app in [azurerm_container_app.front[0], azurerm_container_app.backend[0]] :
+      one([for env in app.template[0].container[0].env : env.value if env.name == "PREDICTIR_SHARE_ACCESS"]) == "1" &&
+      one([for env in app.template[0].container[0].env : env.secret_name if env.name == "PREDICTIR_SHARE_TOKEN_HASH"]) == "share-token-sha256" &&
+      one([for secret in app.secret : secret.value if secret.name == "share-token-sha256"]) == var.private_share_token_sha256 &&
+      app.template[0].container[0].readiness_probe[0].path == "/healthz"
+    ])
+    error_message = "Both app layers must use the same private verifier through a secret and keep readiness separate from app data."
+  }
+}
+
+run "private_share_gate_rejects_invalid_verifiers" {
+  command = plan
+
+  variables {
+    private_share_access_enabled = true
+    private_share_token_sha256   = "not-a-sha256-verifier"
+  }
+
+  expect_failures = [var.private_share_token_sha256]
 }
 
 run "warm_replicas_remain_bounded" {

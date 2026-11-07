@@ -10,13 +10,15 @@ locals {
     AZURE_OWNER_OBJECT_ID = var.live_owner.object_id
   })
 
-  front_environment = merge({
+  private_share_environment = { PREDICTIR_SHARE_ACCESS = var.private_share_access_enabled ? "1" : "0" }
+
+  front_environment = merge(local.private_share_environment, {
     PORT           = "3000"
     PREDICTIR_MODE = var.profile
     APP_ORIGIN     = local.public_origin
   }, local.live ? local.owner_front_environment : {})
 
-  backend_environment = merge({
+  backend_environment = merge(local.private_share_environment, {
     PORT           = "8780"
     PREDICTIR_MODE = var.profile
     APP_ORIGIN     = local.public_origin
@@ -81,6 +83,14 @@ resource "azurerm_container_app" "backend" {
     }
   }
 
+  dynamic "secret" {
+    for_each = var.private_share_access_enabled ? ["share-token-sha256"] : []
+    content {
+      name  = secret.value
+      value = var.private_share_token_sha256
+    }
+  }
+
   ingress {
     external_enabled           = false
     allow_insecure_connections = false
@@ -123,6 +133,14 @@ resource "azurerm_container_app" "backend" {
       }
 
       dynamic "env" {
+        for_each = var.private_share_access_enabled ? ["share-token-sha256"] : []
+        content {
+          name        = "PREDICTIR_SHARE_TOKEN_HASH"
+          secret_name = env.value
+        }
+      }
+
+      dynamic "env" {
         for_each = local.backend_secrets
 
         content {
@@ -134,7 +152,7 @@ resource "azurerm_container_app" "backend" {
       startup_probe {
         transport               = "HTTP"
         port                    = 8780
-        path                    = "/api/health"
+        path                    = "/healthz"
         initial_delay           = 5
         interval_seconds        = 15
         timeout                 = 3
@@ -144,7 +162,7 @@ resource "azurerm_container_app" "backend" {
       readiness_probe {
         transport               = "HTTP"
         port                    = 8780
-        path                    = "/api/health"
+        path                    = "/healthz"
         initial_delay           = 5
         interval_seconds        = 15
         timeout                 = 3
@@ -155,7 +173,7 @@ resource "azurerm_container_app" "backend" {
       liveness_probe {
         transport               = "HTTP"
         port                    = 8780
-        path                    = "/api/health"
+        path                    = "/healthz"
         initial_delay           = 5
         interval_seconds        = 15
         timeout                 = 3
@@ -211,6 +229,14 @@ resource "azurerm_container_app" "front" {
     }
   }
 
+  dynamic "secret" {
+    for_each = var.private_share_access_enabled ? ["share-token-sha256"] : []
+    content {
+      name  = secret.value
+      value = var.private_share_token_sha256
+    }
+  }
+
   ingress {
     external_enabled           = true
     allow_insecure_connections = false
@@ -261,10 +287,18 @@ resource "azurerm_container_app" "front" {
         }
       }
 
+      dynamic "env" {
+        for_each = var.private_share_access_enabled ? ["share-token-sha256"] : []
+        content {
+          name        = "PREDICTIR_SHARE_TOKEN_HASH"
+          secret_name = env.value
+        }
+      }
+
       startup_probe {
         transport               = "HTTP"
         port                    = 3000
-        path                    = "/"
+        path                    = "/healthz"
         interval_seconds        = 3
         timeout                 = 2
         failure_count_threshold = 20
@@ -273,7 +307,7 @@ resource "azurerm_container_app" "front" {
       readiness_probe {
         transport               = "HTTP"
         port                    = 3000
-        path                    = "/"
+        path                    = "/healthz"
         interval_seconds        = 3
         timeout                 = 2
         failure_count_threshold = 5
@@ -283,7 +317,7 @@ resource "azurerm_container_app" "front" {
       liveness_probe {
         transport        = "HTTP"
         port             = 3000
-        path             = "/"
+        path             = "/healthz"
         interval_seconds = 20
         timeout          = 3
       }

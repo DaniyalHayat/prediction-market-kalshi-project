@@ -1,4 +1,5 @@
 import {isCountryAllowed} from './geo.mjs';
+import {privateAccessResponse,shareCookieForward,shareAccessEnabled} from '../private-access.mjs';
 import {traceContext,structuredLog} from '../runtime-observability.mjs';
 import {azureMode,azureOrigin} from './azure-mode.mjs';
 import {azureAccess} from './azure-access.mjs';
@@ -58,6 +59,7 @@ function relayEventStream(body,{requestSignal,abortUpstream,lifetimeMs,onUnexpec
 }
 export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSON_TIMEOUT_MS,streamConnectTimeoutMs,streamLifetimeMs,countryLookup,
   onStreamError=values=>structuredLog('proxy.stream_error',values)}={}){
+  const denied=privateAccessResponse(request);if(denied)return denied;
   const edition=azureMode();
   const connectLimit=edition==='live'?AZURE_STREAM_CONNECT_TIMEOUT_MS:STREAM_CONNECT_TIMEOUT_MS;
   const lifetimeLimit=edition==='live'?AZURE_STREAM_LIFETIME_MS:STREAM_LIFETIME_MS;
@@ -95,6 +97,7 @@ export async function proxyBackend(request,path,{fetcher=fetch,jsonTimeoutMs=JSO
     traceparent:trace.traceparent,tracestate:trace.tracestate};
   if(route==='/journal'&&request.headers.get('authorization'))headers.Authorization=request.headers.get('authorization');
   if(privateRoute&&request.headers.get('cookie'))headers.Cookie=request.headers.get('cookie');
+  else if(shareAccessEnabled()){const cookie=shareCookieForward(request.headers.get('cookie'));if(cookie)headers.Cookie=cookie;}
   if(privateRoute&&edition==='live'&&process.env.AZURE_OWNER_AUTH_ENABLED==='1'){
     const token=request.headers.get('x-ms-token-aad-id-token');
     if(token&&token.length<=8192)headers['x-ms-token-aad-id-token']=token;

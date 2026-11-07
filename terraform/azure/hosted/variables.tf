@@ -204,6 +204,23 @@ variable "live_bootstrap" {
   }
 }
 
+variable "private_share_access_enabled" {
+  description = "Require a revocable private preview link before app access. This does not replace owner account authorization."
+  type        = bool
+  default     = false
+}
+
+variable "private_share_token_sha256" {
+  description = "SHA256 verifier of an independently generated random share token. Never supply the raw token."
+  type        = string
+  sensitive   = true
+  default     = ""
+  validation {
+    condition     = !var.private_share_access_enabled || can(regex("^[a-f0-9]{64}$", var.private_share_token_sha256))
+    error_message = "Enabled private share access requires a lowercase SHA256 verifier."
+  }
+}
+
 variable "live_owner" {
   description = "Optional existing single-tenant Entra owner application and the one approved user's object ID. Values are identifiers, not secrets."
   type = object({
