@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-+
+
 test('signed stable zlib backport is pinned before build tools and never copied into runtime', async () => {
   for (const file of ['Dockerfile','Dockerfile.azure']) {
     const source = await readFile(new URL('../' + file, import.meta.url), 'utf8').catch(error => {
