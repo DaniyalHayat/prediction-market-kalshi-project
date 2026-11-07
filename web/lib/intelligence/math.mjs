@@ -1,4 +1,4 @@
-import { DAY, isoDay, monthNumber } from "./sources.mjs";
+import { DAY, isoDay, monthNumber } from "./time.mjs";
 
 export const MODEL_VERSION = "independent-v1.0";
 export const clamp = (value,lower=0,upper=1) => Math.max(lower,Math.min(upper,value));
