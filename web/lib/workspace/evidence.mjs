@@ -14,7 +14,7 @@ export async function sportsNews(topic,{get=sourceJSON,sports}={}){
   const feed=sportFeeds[topic];
   if(!feed)return {status:'not_applicable',articles:[]};
   const [path,label]=feed,name='ESPN '+label+' news';
-  const teams=topic==='nfl'?[...new Set((sports?.teams||[]).map(team=>String(team.espn_team_id??team.id)).filter(id=>/^\d{1,4}$/.test(id)))].sort().slice(0,2):[];
+  const teams=[...new Set((sports?.teams||[]).map(team=>String(team.espn_team_id??team.id)).filter(id=>/^\d{1,4}$/.test(id)))].sort().slice(0,2);
   const requests=(teams.length?teams:[null]).map(async team=>{
     const params=new URLSearchParams({limit:team?'12':'20'});
     if(team)params.set('team',team);

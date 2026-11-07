@@ -87,6 +87,11 @@ export async function leagueData(league) {
     const teams=(response.data.sports?.[0]?.leagues?.[0]?.teams||[]).map(({team:t})=>({id:String(t.id),name:t.displayName,code:t.abbreviation,
       aliases:[t.displayName,t.name,t.location,t.shortDisplayName,t.abbreviation,t.nickname].filter(Boolean).map(clean)}));
     if(teams.length<15||teams.length>40)throw new Error('Team-catalog coverage is incomplete');
+    if(league==='epl')for(const team of teams){
+      const first=clean(team.name).split(' ')[0];
+      if(first.length>=4&&teams.filter(other=>clean(other.name).startsWith(first+' ')||clean(other.name)===first).length===1)
+        team.aliases=[...new Set([...team.aliases,first])];
+    }
     const now=new Date(),year=league==='nba'?now.getUTCFullYear()+(now.getUTCMonth()>=6?1:0):now.getUTCFullYear()-(now.getUTCMonth()<6?1:0);
     const tasks=teams.flatMap(t=>[year-2,year-1,year].map(season=>({team:t.id,season}))),errors=[];
     const schedules=await boundedMap(tasks,3,async task=>{
@@ -233,7 +238,7 @@ export async function sportsResearch(market,{includeAvailability=true,refreshAva
   const availability_feedback=availabilityFor(p,interval);
   const alternativeRange=alternative?(match.side==='home'?alternative.interval:[1-alternative.interval[1],1-alternative.interval[0]]):null;
   const references=[game.home_id,game.away_id].map(id=>data.sources.filter(s=>s.url.includes('/teams/'+id+'/schedule?')).sort((a,b)=>b.url.localeCompare(a.url))[0]).filter(Boolean);
-  return {league,event:game,teams:[{id:game.home_id,name:game.home_name},{id:game.away_id,name:game.away_name}].map(team=>({...team,form:teamForm(prior,team.id,cutoff),form_last_five:teamForm(prior,team.id,cutoff,5),last_five_games:prior.filter(g=>g.home_id===team.id||g.away_id===team.id).slice(-5).reverse()})),head_to_head:paired,availability:includeAvailability?injuries?.rows||[]:[],availability_note:injuries?.note,
+  return {league,event:game,teams:[{id:game.home_id,name:game.home_name},{id:game.away_id,name:game.away_name}].map(team=>({...team,aliases:data.teams.find(row=>row.id===team.id)?.aliases||[],form:teamForm(prior,team.id,cutoff),form_last_five:teamForm(prior,team.id,cutoff,5),last_five_games:prior.filter(g=>g.home_id===team.id||g.away_id===team.id).slice(-5).reverse()})),head_to_head:paired,availability:includeAvailability?injuries?.rows||[]:[],availability_note:injuries?.note,
     player_stats:includeAvailability?injuries?.player_stats||[]:[],lineup_scenarios:includeAvailability?injuries?.lineup_scenarios||[]:[],boxscore_coverage:injuries?.boxscore_coverage||null,availability_feedback,
     coverage:data.coverage,as_of:data.as_of,reason:match.reason||null,bookmaker:game.bookmaker,
     live_score:live?.score||null,
