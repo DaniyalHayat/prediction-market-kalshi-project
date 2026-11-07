@@ -48,6 +48,68 @@ test('retained sports search excludes older non-performance stories after the ra
 test('reciprocal-rank fusion promotes independent lexical/semantic agreement without calling it confidence',()=>{
   const result=reciprocalRankFusion([{id:'lexical'},{id:'both'}],[{id:'semantic'},{id:'both'}]);assert.equal(result[0].id,'both');assert.equal(result[0].lexical_rank,2);assert.equal(result[0].semantic_rank,2);assert.equal(result[0].confidence,undefined);
 });
+test('hybrid citations combine cross-chunk agreement once per source while preserving the chosen excerpt',async()=>{
+  const ticker='FUSION-'+randomUUID(),url='https://example.org/official?edition=us';
+  const docs=[
+    ['Ankle injury rumor','Mentions both keywords.','https://example.org/rumor'],
+    ['Ankle update','The medical report gives the official game status.',url],
+    ['Condition confirmed','He will sit out the game after getting hurt.',url+'&utm_source=mirror#details'],
+    ['Different edition','He may play despite the ankle injury.','https://example.org/official?edition=eu'],
+    ['Semantic distractor','Speculation that he may be unavailable.','https://example.org/speculation'],
+  ];
+  const items=docs.map(([title,excerpt,url])=>({title,excerpt,url,publisher:'Fixture',as_of:evidence.as_of}));
+  const repository=createEvidenceRepository({now:()=>NOW,embed:async texts=>texts.map(text=>
+    /will sit out|speculation that|^ankle injury$/i.test(text)?basis(1):basis(0))});
+  await repository.index({ticker,title:'Fixture contract'},{ticker,as_of:evidence.as_of,items},{enabled:true,selectedTicker:ticker});
+  const result=await repository.search(ticker,'ankle injury');
+  assert.equal(result.retrieval.fusion_unit,'source_url');
+  assert.equal(result.citations[0].url,url);
+  assert.equal(result.citations[0].lexical_rank,2);
+  assert.ok(result.citations[0].semantic_rank<=2);
+  assert.equal(result.citations[0].cosine_similarity,null);
+  assert.equal(result.citations[0].source_cosine_similarity,1);
+  assert.match(result.citations[0].text,/medical report/);
+  assert.equal(result.citations.filter(row=>row.url.includes('edition=us')).length,1);
+  assert.ok(result.citations.some(row=>row.url.includes('edition=eu')));
+});
+test('a stalled dense query still returns lexical citations with an explicit retrieval status',async()=>{
+  const ticker='DENSE-DEADLINE-'+randomUUID(),m={...market,ticker},e={...evidence,ticker};
+  const repository=createEvidenceRepository({now:()=>NOW,embed:async texts=>
+    texts.length===1?new Promise(()=>{}):fixtureEmbed(texts)});
+  await repository.index(m,e,{enabled:true,selectedTicker:ticker});
+  const result=await repository.search(ticker,'ankle injury');
+  assert.equal(result.retrieval.mode,'lexical_only');
+  assert.equal(result.retrieval.semantic_status,'timed_out');
+  assert.equal(result.citations[0].url,'https://example.org/injury');
+});
+test('a failed dense quota read cannot suppress lexical evidence',async()=>{
+  const ticker='DENSE-QUOTA-'+randomUUID(),m={...market,ticker},e={...evidence,ticker};
+  let fail=false;
+  const repository=createEvidenceRepository({now:()=>NOW,embed:fixtureEmbed,storage:{consume:async()=>{
+    if(fail)throw new Error('Fixture quota is unavailable');
+    return true;
+  }}});
+  await repository.index(m,e,{enabled:true,selectedTicker:ticker});
+  fail=true;
+  const result=await repository.search(ticker,'ankle injury');
+  assert.equal(result.retrieval.mode,'lexical_only');
+  assert.equal(result.retrieval.semantic_status,'unavailable');
+  assert.equal(result.citations[0].url,'https://example.org/injury');
+});
+test('sports availability favors exact fixture updates over related reports and settlement boilerplate',async()=>{
+  const ticker='KXNBAGAME-AVAILABILITY-'+randomUUID(),m={...market,ticker};
+  const base={publisher:'Fixture sports source',as_of:evidence.as_of,source_tier:'reported'};
+  const items=[{...base,title:'Lakers center downgraded to out for Celtics matchup',excerpt:'A twisted ankle keeps him on the bench.',url:'https://example.org/matchup'}];
+  const related_items=[{...base,title:'Injured forward will miss the game',excerpt:'The player will sit out.',url:'https://example.org/related',match_scope:'related'}];
+  const repository=createEvidenceRepository({now:()=>NOW,embed:fixtureEmbed});
+  await repository.index(m,{ticker,as_of:evidence.as_of,items,related_items},{enabled:true,selectedTicker:ticker});
+  const result=await repository.search(ticker,'who is out injured and will miss the game');
+  assert.equal(result.retrieval.intent,'sports_availability');
+  assert.deepEqual(result.citations.map(c=>c.url),['https://example.org/matchup','https://example.org/related']);
+  const mixed=await repository.search(ticker,'who is injured and what are the settlement rules');
+  assert.equal(mixed.retrieval.intent,'general');
+  assert.ok(mixed.citations.some(c=>c.source_kind==='public_contract_rules'));
+});
 test('evidence route propagates exact selected trade and Reddit opt-in, while retained search performs no source load',async()=>{
   const calls=[],sources=[{name:'Fixture',url:'https://example.org/rules'}];
   const deps={marketDetails:async t=>{assert.equal(t,ticker);return {market};},request:async path=>{assert.equal(path,'/series/KXNBAGAME');return {data:{series:{settlement_sources:sources}}};},
