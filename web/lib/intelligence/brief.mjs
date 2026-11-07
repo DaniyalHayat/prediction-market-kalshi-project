@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { marketDetails, request, book, validateTicker } from '../live.mjs';
 import { CATEGORIES } from './catalog.mjs';
-import { researchReport, modelEvidence } from './index.mjs';
+import { selectedResearch, modelEvidence } from './index.mjs';
 import { executionEstimate } from './math.mjs';
 import { evidenceEntities,evidenceTopicGroups,sportsEvidenceClaim,sportsTeamMention,topicWords } from '../workspace/source-ranking.mjs';
 import { nflContractIdentity } from '../workspace/nfl-source.mjs';
@@ -249,7 +249,7 @@ function driverChecklist(category, market, seriesProfile) {
     : /Federal Reserve|interest rate|GDP|econom/i.test(text) ? 'macro'
     : /movie|music|award|stream|entertainment/i.test(text) ? 'entertainment' : 'other');
   const specific = {
-    travel: [['Passenger counts', 'Check the latest nationwide TSA observation and same-weekday seasonal pattern.'], ['Calendar effects', 'Check holidays, disruptions and the exact observation date; weekly contracts require a different model.']],
+    travel: [['Passenger counts', 'Check the latest nationwide TSA observation and same-weekday seasonal pattern.'], ['Calendar effects', 'Check holidays, disruptions and whether the settlement uses one day or the Monday–Sunday average.']],
     weather: [['Station and local day', 'Match the settlement station, timezone and official daily climate report.'], ['Forecast and observed maximum', 'Check forecast updates, already observed highs and grid-to-station differences.']],
     inflation: [['Release definition', 'Confirm CPI month-over-month versus year-over-year and seasonal adjustment.'], ['Measurement and revisions', 'Check release timing, rounding conventions, first-release rules and changes in inflation regimes.']],
     labor: [['Labor release', 'Confirm the U-3 unemployment definition, observation month and first-release rules.'], ['Turning points', 'Check labor-force participation, revisions and whether recent changes differ from historical regimes.']],
@@ -276,7 +276,7 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
   const { contracts = 100, slippage = 2, coefficient = .07, uncertainty_buffer = .02 } = options;
   executionEstimate({ orderbook_fp: {} }, 'yes', contracts, slippage, coefficient);
   if (!Number.isFinite(uncertainty_buffer) || uncertainty_buffer < 0 || uncertainty_buffer > .25) throw new RangeError('Invalid uncertainty buffer');
-  const deps = { marketDetails, request, book, researchReport, headlines: fetchHeadlines, now: Date.now, ...dependencies };
+  const deps = { marketDetails, request, book, selectedResearch, headlines: fetchHeadlines, now: Date.now, ...dependencies };
   const detail = await deps.marketDetails(ticker);
   if (!detail.market || detail.market.ticker !== ticker) throw new Error('Official market response did not match selected ticker');
   const market = detail.market;
@@ -291,7 +291,8 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
     market.event_ticker && /^[A-Za-z0-9_.-]{1,140}$/.test(market.event_ticker) && !market.event_ticker.includes('..')
       ? attempt('Official event', () => deps.request('/events/' + encodeURIComponent(market.event_ticker))) : null,
     attempt('Order book', () => deps.book(ticker, contracts)),
-    category ? attempt('Independent model', () => deps.researchReport(category.id)) : null,
+    category ? attempt('Independent model', () => deps.researchReport ? deps.researchReport(category.id) :
+      deps.selectedResearch({...market,series},category)) : null,
     newsContext?.unsupported?null:attempt('Headlines', () => deps.headlines(newsQuery(market, category))),
   ]);
   const news=filterSportsHeadlines(rawNews,newsContext);
@@ -309,7 +310,8 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
   const validation = forecast.validation;
   const validated = modeled && forecast.evidence.tier === 2 && Number.isFinite(validation?.rmse_skill) && validation.rmse_skill > 0
     && Number.isFinite(validation?.interval_80_coverage) && validation.interval_80_coverage >= .7 && validation.n >= 30;
-  if (modeled && !validated) reasons.push('The model lacks a passing underlying-value holdout; uncalibrated proxies and failed validation cannot produce a YES/NO screen.');
+  if (modeled && !validated) reasons.push(forecast.release_reason ||
+    'The model lacks a passing underlying-value holdout; uncalibrated proxies and failed validation cannot produce a YES/NO screen.');
   if (!depth?.raw) reasons.push('Current executable depth is unavailable.');
   const bookAge = now - Date.parse(depth?.as_of || '');
   const freshBook = Number.isFinite(bookAge) && bookAge >= -60000 && bookAge <= 120000;
@@ -346,7 +348,8 @@ export async function marketBrief(ticker, options = {}, dependencies = {}) {
     reasons, candidates, assumptions: { contracts, slippage_cents: slippage, fee_coefficient: coefficient, uncertainty_buffer,
       fee_note: 'The coefficient is an explicit taker-fee assumption, not a verified market-specific fee schedule.' },
     validation_note: 'Passing an underlying-value holdout does not establish calibrated contract probabilities or profitable net trading. A screen is not an order or a profit claim.' };
-  const forecastLabel = forecast.evidence.tier === 1 ? 'The uncalibrated proxy estimates' : 'The independent model estimates';
+  const forecastLabel = forecast.backtest ? 'The research-only model estimates' :
+    forecast.evidence.tier === 1 ? 'The uncalibrated proxy estimates' : 'The independent model estimates';
   const rangeLabel = forecast.evidence.tier === 1 ? 'sensitivity range' : 'uncertainty range';
   const summary = !modeled ? `${clean(market.title, 240)}: evidence only. ${forecast.reason}`
     : `${forecastLabel} ${percent(forecast.probability)} YES, with a ${percent(forecast.interval[0])}–${percent(forecast.interval[1])} ${rangeLabel}. `

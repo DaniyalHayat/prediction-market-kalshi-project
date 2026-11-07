@@ -2,13 +2,20 @@ import { request, book, marketDetails, trades, validateTicker, number, validQuot
 import { CATEGORIES, categoryById } from "./catalog.mjs";
 import { tsaSource, macroSource, weatherSource, cryptoSource, WEATHER_SITES, localDay, DAY, monthNumber } from "./sources.mjs";
 import { MODEL_VERSION, timeSeriesModel, eventDate, marketBounds, empiricalProbability, gaussianProbability, cryptoModel, coherenceChecks, executionEstimate, quarterKelly, mean } from "./math.mjs";
+import {WEEKLY_TSA_SERIES, estimateWeeklyTsa, weeklyTsaContract} from "./weekly-tsa.mjs";
+import {CRYPTO_MINUTE_SERIES, cryptoMinuteSource, estimateMinuteCrypto, minuteCryptoContract} from "./crypto-minute.mjs";
+import weeklyTsaReplay from "../../public/research/weekly-tsa.json" with {type:"json"};
+import cryptoMinuteReplay from "../../public/research/crypto-minute.json" with {type:"json"};
 
 const state = globalThis[Symbol.for("kalshi.independent.reports.v1")] ||= {cache:new Map(),inflight:new Map()};
 export { CATEGORIES };
-export async function sourceBundle(id) {
+export async function sourceBundle(id, exactSeries) {
   const category=categoryById(id);
+  if(exactSeries && !category.series.includes(exactSeries)) throw new RangeError("Unsupported contract series for this research family");
+  const series=exactSeries ? [exactSeries] : category.series;
   const tasks=id==="travel" ? [tsaSource] : ["inflation","labor"].includes(id) ? [()=>macroSource(id)] :
-    id==="weather" ? category.series.map(series=>()=>weatherSource(series)) : ["BTC","ETH"].map(asset=>()=>cryptoSource(asset));
+    id==="weather" ? series.map(ticker=>()=>weatherSource(ticker)) :
+    series.map(ticker=>Object.hasOwn(CRYPTO_MINUTE_SERIES,ticker) ? ()=>cryptoMinuteSource(ticker) : ()=>cryptoSource(ticker==="KXBTC" ? "BTC" : "ETH"));
   const sources=[],errors=[];
   // Bound simultaneous requests; datasets are independently cached and failures are never synthesized.
   for(let start=0;start<tasks.length;start+=2) {
@@ -44,6 +51,12 @@ function prepareModels(category, sources) {
   return models;
 }
 export function distribution(market, category, bundle, models, now=Date.now()) {
+  if(category.id==="travel" && market.series===WEEKLY_TSA_SERIES)
+    return estimateWeeklyTsa(market,bundle.sources[0],now,{holdout:weeklyTsaReplay.holdout,
+      brier_gain_interval_95:weeklyTsaReplay.holdout_brier_gain_95, release_eligible:weeklyTsaReplay.release_eligible});
+  if(category.id==="crypto" && Object.hasOwn(CRYPTO_MINUTE_SERIES,market.series))
+    return estimateMinuteCrypto(market,bundle.sources.find(source=>source.series===market.series),now,
+      cryptoMinuteReplay.by_series[market.series]);
   const id=category.id, date=eventDate(market), bounds=marketBounds(market,["weather","travel"].includes(id) ? 1 : ["inflation","labor"].includes(id) ? .1 : .01);
   if(!bounds) return {reason:"Unsupported or ambiguous strike definition; probability withheld."};
   if(!date) return {reason:"Target observation date could not be read unambiguously."};
@@ -59,7 +72,7 @@ export function distribution(market, category, bundle, models, now=Date.now()) {
     if(!forecast)return {reason:id==="travel" ? "Only the next seven observation days are modeled." : "Only the next unreleased observation month is modeled; longer horizons are withheld."};
     // These series have fixed published measurement conventions; other series are never inferred from names alone.
     const rules=`${market.rules_primary || ""} ${market.rules_secondary || ""}`;
-    if(id==="travel" && (!/TSA|passenger screenings|transportation security/i.test(rules) || market.series!=="KXTSAD")) return {reason:"Only daily nationwide TSA screening rules are mapped; weekly/custom contracts are withheld."};
+    if(id==="travel" && (!/TSA|passenger screenings|transportation security/i.test(rules) || market.series!=="KXTSAD")) return {reason:"This daily TSA forecast requires the exact nationwide screening definition."};
     if(id==="inflation" && !/CPI|consumer price index/i.test(rules))return {reason:"CPI resolution source is unconfirmed."};
     if(id==="inflation" && /year.over.year|12.month|not seasonally adjusted/i.test(rules) && !/month.over.month/i.test(rules))return {reason:"This model is seasonally adjusted month-over-month CPI, not a year-over-year or NSA contract."};
     if(id==="labor" && !/unemployment/i.test(rules))return {reason:"Unemployment resolution definition is unconfirmed."};
@@ -137,7 +150,7 @@ export function modelEvidence(forecast) {
     evaluation?.rmse_skill<=0 ? {tier:0,label:"Underperforms naive baseline"} :
     evaluation && evaluation.interval_80_coverage<.7 ? {tier:0,label:"Prediction interval undercoverage"} :
     evaluation && evaluation.n>=30 ? {tier:2,label:"Underlying-value holdout only"} :
-    {tier:1,label:"Uncalibrated proxy / sensitivity only"};
+    {tier:1,label:forecast.backtest ? "Independent settlement replay / research only" : "Uncalibrated proxy / sensitivity only"};
 }
 function marketReport(market, category, bundle, models, now) {
   const forecast=distribution(market,category,bundle,models,now),quote=quoteAnalysis(market,forecast);
@@ -166,8 +179,8 @@ export async function researchReport(id) {
       markets:rows,coherence:coherenceChecks(catalog.rows),sources:bundle.sources,
       errors:[...catalog.errors.map(item=>`${item.series}: ${item.error}`),...bundle.errors, ...(models.has("error") ? [models.get("error")] : [])],
       evaluation:model?.evaluation || null,model_weights:model?.weights || null,
-      chart:model?.chart || bundle.sources[0]?.rows.slice(-100).map(row=>({date:row.date,observed:row.value})) || [],
-      summary:{markets:rows.length,modeled:rows.filter(row=>row.probability!==undefined).length,
+      chart:model?.chart || bundle.sources[0]?.rows?.slice(-100).map(row=>({date:row.date,observed:row.value})) || [],
+      summary:{markets:rows.length,modeled:rows.filter(row=>Number.isFinite(row.probability)).length,
         conservative_candidates:rows.filter(row=>row.status==="research candidate").length,
         provisional_candidates:rows.filter(row=>row.status==="provisional hypothesis").length,
         validation_warnings:rows.filter(row=>row.status==="validation warning").length,withheld:rows.filter(row=>row.status==="withheld").length},
@@ -179,6 +192,13 @@ export async function researchReport(id) {
   })();
   state.inflight.set(id,task);
   try{return await task;}finally{state.inflight.delete(id);}
+}
+export async function selectedResearch(market, category) {
+  const exact=market.series===WEEKLY_TSA_SERIES ? weeklyTsaContract(market) :
+    Object.hasOwn(CRYPTO_MINUTE_SERIES,market.series) ? minuteCryptoContract(market) : true;
+  const bundle=exact ? await sourceBundle(category.id,market.series) : {sources:[],errors:[]};
+  const models=market.series===WEEKLY_TSA_SERIES ? new Map() : prepareModels(category,bundle.sources);
+  return {markets:[marketReport(market,category,bundle,models,Date.now())],errors:bundle.errors};
 }
 function microstructure(raw, tape) {
   const rows=key=>(raw.orderbook_fp?.[key] || []).filter(row=>Number(row[1])>0).map(row=>row.map(Number)).sort((a,b)=>b[0]-a[0]);

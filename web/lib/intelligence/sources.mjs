@@ -33,12 +33,16 @@ export async function sourceText(url, ttl = 300000, fetcher = fetch) {
     } finally {reader.releaseLock();}
     const text = Buffer.concat(parts).toString("utf8");
     const value = {text,source_url:url,retrieved_at:new Date().toISOString(),sha256:createHash("sha256").update(text).digest("hex")};
+    if(state.cache.size>=128 && !state.cache.has(url))state.cache.delete(state.cache.keys().next().value);
     state.cache.set(url,{at:Date.now(),value});
     return value;
   })();
   state.inflight.set(url,task);
   try {const result=await task;state.failures.delete(url);return result;}
-  catch(error){state.failures.set(url,{at:Date.now(),message:error.message});throw error;}
+  catch(error){
+    if(state.failures.size>=128 && !state.failures.has(url))state.failures.delete(state.failures.keys().next().value);
+    state.failures.set(url,{at:Date.now(),message:error.message});throw error;
+  }
   finally {state.inflight.delete(url);}
 }
 const provenance = (response, name, rows, unit, extra={}) => ({

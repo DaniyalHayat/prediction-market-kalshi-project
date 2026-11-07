@@ -1,4 +1,5 @@
 import {request, normalizeMarket, validateTicker} from '../live.mjs';
+import {CATEGORIES as INDEPENDENT_CATEGORIES} from '../intelligence/catalog.mjs';
 import {recordProviderStatus} from './providers.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {retainMarketHistory} from './warehouse.mjs';
@@ -6,7 +7,7 @@ import {retainMarketHistory} from './warehouse.mjs';
 export const WORKSPACE_CATEGORIES = [
   {id:'sports',name:'Sports',sourceCategories:['Sports'],preferred:['KXNBAGAME','KXNFLGAME','KXEPLGAME','KXUCLGAME']},
   {id:'macro',name:'Economy',preferred:['KXCPI','KXU3','KXFEDDECISION']},
-  {id:'crypto',name:'Crypto',preferred:['KXBTC15M','KXBTC','KXETH']},
+  {id:'crypto',name:'Crypto',preferred:['KXBTC15M','KXETH15M','KXBTC','KXETH']},
   {id:'travel',name:'Travel',preferred:['KXTSAD','KXTSA','KXTSAW','KXORDPAX','KXRDUVISITS','KXBOIPASSENGERS']},
   {id:'weather',name:'Weather',preferred:['KXHIGHNY','KXHIGHCHI','KXHIGHMIA','KXHIGHLAX']},
   {id:'science',name:'Tech & science',sourceCategories:['Science and Technology'],preferred:['KXLLM1','KXTOPMODEL','KXSPACEXCOUNT']},
@@ -132,7 +133,5 @@ export function inferCategory(market,series=[]) {
 }
 export function inferResearchFamily(ticker) {
   validateTicker(ticker);
-  for(const [family,prefixes] of Object.entries({travel:['KXTSA','KXTSAD'],weather:['KXHIGHNY','KXHIGHCHI','KXHIGHMIA'],
-    inflation:['KXCPI'],labor:['KXU3'],crypto:['KXBTC','KXETH']}))if(prefixes.some(p=>ticker.startsWith(p+'-')))return family;
-  return null;
+  return INDEPENDENT_CATEGORIES.find(category=>category.series.some(series=>ticker.startsWith(series+'-')))?.id ?? null;
 }
