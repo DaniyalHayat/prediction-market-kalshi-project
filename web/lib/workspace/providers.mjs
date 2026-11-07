@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {readJSON} from '../transport.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {observeProviderAttempt} from '../runtime/telemetry.mjs';
+import {redditAuthConfigured} from './reddit-oauth.mjs';
 
 const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map(),failureStreak=new Map();
 const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','oauth.reddit.com','www.reddit.com','kworb.net']);
@@ -37,12 +38,12 @@ export function providerStatus(){
     {id:'Apple Music US chart',detail:'US song-rank snapshots; not artist stream totals or Spotify charts.'},
     {id:'Spotify catalog references',detail:'Display-only artist references; excluded from AI and forecasting.',configured:Boolean(process.env.SPOTIFY_CLIENT_ID&&process.env.SPOTIFY_CLIENT_SECRET)},
     {id:'X public chart news',status:'opt_in',detail:'Opt in for curated public accounts. Reads share a cached allowance.',configured:Boolean(process.env.X_BEARER_TOKEN)},
-    {id:'Reddit selected-trade context',status:'opt_in',detail:'Opt in on a contract. When provider access is blocked, open the targeted search directly.'}];
+    {id:'Reddit selected-trade context',status:'opt_in',configured:redditAuthConfigured(),detail:'Opt in on a contract. When provider access is blocked, open the targeted search directly.'}];
   const rows=new Map(defaults.map(row=>[row.id,{...row,name:row.id,status:row.configured===false?'not_configured':row.status||'on_selection'}]));
   for(const [key,value] of status)rows.set(key,value);
   return [...rows.values()].map(row=>({...row,usage:providerUsage.get(row.id)||null}));
 }
-export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_000,fetcher=fetch,format='json',timeoutMs=16000}={}) {
+export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_000,fetcher=fetch,format='json',timeoutMs=16000,sharedCache=true}={}) {
   const parsed=new URL(url);
   if(parsed.protocol!=='https:'||!hosts.has(parsed.hostname)||parsed.username||parsed.password)throw new RangeError('Source address is not permitted');
   if(!['json','text'].includes(format))throw new RangeError('Unsupported source format');
@@ -81,7 +82,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
   };
   const task=(async()=>{
     try {
-      const value=cloudEnabled()&&fetcher===fetch?await store().cached('provider#'+key,ttl,produce):await produce();
+      const value=sharedCache&&cloudEnabled()&&fetcher===fetch?await store().cached('provider#'+key,ttl,produce):await produce();
       failureStreak.delete(parsed.hostname);
       if(cache.size>200)cache.delete(cache.keys().next().value);
       cache.set(key,{until:Date.now()+ttl*1000,value});
