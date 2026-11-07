@@ -13,6 +13,7 @@ import {normalizeExecutionControls} from './execution-research.mjs';
 import {contractEvidence} from './evidence.mjs';
 import {evidenceModelContext} from './evidence-model-context.mjs';
 import {parsePositionReview,reviewPaperPosition} from './position-review.mjs';
+import {forecastSourceAllowed} from './forecast-source-policy.mjs';
 
 export function publicResearch(value){
   const music=value.extensions?.music;
@@ -29,7 +30,7 @@ export function publicResearch(value){
   return {ticker:value.ticker,title:value.title,as_of:value.as_of,status:value.status,summary:value.summary,opinion:value.opinion,
     account_balances_available:false,units:{forecast_probability:'P(YES), 0 to 1; multiply by 100 for percent',candidate_probability:'Win probability of the candidate side, 0 to 1',price:'USD per $1 binary payout contract',quantity:'Number of contracts, never an account balance'},
     forecast:value.forecast,decision,drivers:value.drivers,rules:value.rules,paper_scenarios:value.paper_scenarios,market_signal:value.market_signal,
-    sources:(value.sources||[]).filter(s=>!s.url?.includes('api.spotify.com')),
+    sources:(value.sources||[]).filter(s=>forecastSourceAllowed(s.url)),
     errors:value.errors,extensions:{sports:value.extensions?.sports,music:music?{scope:music.scope,comparability:music.comparability,
       forecast:music.forecast,persistence:music.persistence,source_updated:music.apple?.source_updated,scope_note:music.apple?.note}:undefined}};
 }

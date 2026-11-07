@@ -6,7 +6,9 @@ import {socialEvidenceEnabled,socialSourceDisabled} from './social-policy.mjs';
 
 const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map(),failureStreak=new Map();
 const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','www.reddit.com','reddit.com','kworb.net','www.federalreserve.gov','www.nhc.noaa.gov','hn.algolia.com']);
-const publicProviders={'www.federalreserve.gov':'federal_reserve','www.nhc.noaa.gov':'nhc','hn.algolia.com':'hacker_news'};
+const publicProviders={'site.api.espn.com':'espn','rss.marketingtools.apple.com':'apple_music','api.x.com':'x','api.spotify.com':'spotify',
+  'accounts.spotify.com':'spotify','www.reddit.com':'reddit','reddit.com':'reddit','kworb.net':'kworb',
+  'www.federalreserve.gov':'federal_reserve','www.nhc.noaa.gov':'nhc','hn.algolia.com':'hacker_news'};
 const providerUsage=new Map();
 const causeCodes=new Set(['UPSTREAM_TIMEOUT','UPSTREAM_BODY_TIMEOUT','UPSTREAM_NETWORK_ERROR','UPSTREAM_BODY_ERROR','UPSTREAM_INVALID_JSON','UPSTREAM_HTML_RESPONSE','UPSTREAM_SCHEMA_ERROR','UPSTREAM_RESPONSE_TOO_LARGE','PROVIDER_COOLDOWN','PROVIDER_BUDGET_REACHED','SHARED_CACHE_UNAVAILABLE','CACHE_LEASE_BUSY','CACHE_LEASE_LOST']);
 export function sourceFailureDetails(error){
@@ -58,7 +60,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
     const configured=Number(process.env.PROVIDER_DAILY_REQUEST_LIMIT||1000),limit=Number.isInteger(configured)&&configured>=1?Math.min(12000,configured):1000;
     if(count>=limit)throw Object.assign(new Error('Provider daily allowance reached'),{status:429,code:'PROVIDER_BUDGET_REACHED'});
     providerUsage.set(id,{day,requests:count+1,limit});
-    const provider=publicProviders[parsed.hostname]||(parsed.hostname.includes('espn.com')?'espn':parsed.hostname.includes('apple.com')?'apple_music':parsed.hostname==='api.x.com'?'x':parsed.hostname.includes('spotify.com')?'spotify':parsed.hostname.includes('reddit.com')?'reddit':'kworb');
+    const provider=publicProviders[parsed.hostname];
     return observeProviderAttempt(provider,async()=>{
     let response;
     try{response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'PredictirResearch/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});}
