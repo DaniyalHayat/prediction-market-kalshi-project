@@ -4,24 +4,42 @@ import {createReadStream} from 'node:fs';
 import {resolve,extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isIP} from 'node:net';
+import {createHash} from 'node:crypto';
 import {monitorEventLoopDelay} from 'node:perf_hooks';
 import {GET,POST} from '../app/api/[...path]/route.js';
 import {sizePaperPosition} from '../lib/paper/risk.ts';
 import {marketFeed} from '../lib/cloud/feed.mjs';
+import {PublicBookFeed} from '../lib/cloud/public-book-feed.mjs';
 import {cloudEnabled,store} from '../lib/cloud/store.mjs';
 import {freezeForecast,listForecasts,ownerKey} from '../lib/cloud/journal.mjs';
 import {resolveContracts,marketFees} from '../lib/cloud/resolve.mjs';
-import {validateTicker} from '../lib/live.mjs';
-import {handleMCP} from '../lib/workspace/mcp.mjs';
-import {serviceAuthorized,reserveAssistant} from '../lib/workspace/assistant.mjs';
+import {authStatus,validateTicker} from '../lib/live.mjs';
+import {handleMCP,localResearchReadback} from '../lib/workspace/mcp.mjs';
+import {serviceAuthorized,reserveAssistant,parseAssistantInput} from '../lib/workspace/assistant.mjs';
+import {planResearchReadback} from '../lib/workspace/azure-research.mjs';
 import {isCountryAllowed} from '../lib/workspace/geo.mjs';
 import {traceContext} from '../lib/runtime-observability.mjs';
-import {runtimeTelemetry,observeProviderAttempt} from '../lib/runtime/telemetry.mjs';
+import {runtimeTelemetry,observeProviderAttempt,operationalRoute,throttleReason} from '../lib/runtime/telemetry.mjs';
 import {createLogPipeline,sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
 import {makeAccountHandler} from '../lib/workspace/account.mjs';
+import {azureMode,azureOrigin} from '../lib/workspace/azure-mode.mjs';
+import {createPaperScenarioActions,paperActionError} from '../lib/workspace/paper-actions.mjs';
+import {HEADLINE_REPLAY_MAX_BYTES} from '../lib/workspace/proxy.mjs';
 
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png'};
 const productionDefault=process.env.NODE_ENV==='production'||Boolean(process.env.RAILWAY_ENVIRONMENT_ID);
+const rateWindowMs=60000,azureHeavyRequestsPerWindow=12;
+const allowanceObservationMs=5*60*1000;
+class LocalThrottle extends Error {
+  constructor(message,reason){
+    super(message);this.status=429;this.reason=reason;
+  }
+}
+function foundryAllowance(){
+  const daily=Number(process.env.AZURE_FOUNDRY_DAILY_CALLS||0),monthly=Number(process.env.AZURE_FOUNDRY_MONTHLY_CALLS||0);
+  return process.env.AZURE_FOUNDRY_ENABLED==='1'&&Number.isInteger(daily)&&daily>=1&&daily<=30&&Number.isInteger(monthly)&&monthly>=daily&&monthly<=300
+    ? {daily,monthly} : null;
+}
 function json(res,value,status=200){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));}
 export function requestIdentity(req,edgeVerified=false){
   const claimed=String(req.headers['x-market-client-ip']||'').trim();
@@ -34,11 +52,14 @@ export async function readBody(req,maximum=16000){
   for await(const chunk of req){bytes+=chunk.length;if(bytes>maximum)throw Object.assign(new RangeError('Request exceeds the size limit'),{status:413});chunks.push(chunk);}
   return Buffer.concat(chunks).toString('utf8');
 }
-export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
+export function createMarketServer({feed:injectedFeed,storageEnabled=cloudEnabled,storage=store,now=Date.now,
   production=productionDefault,edgeSecret=process.env.MARKET_EDGE_SECRET,serviceSecret=process.env.ASSISTANT_SERVICE_SECRET,
-  getRoute=GET,postRoute=POST,mcp=handleMCP,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
+  getRoute=GET,postRoute=POST,mcp=handleMCP,researchReadback=localResearchReadback,publicRoot=resolve(process.env.MARKET_PUBLIC_DIR||fileURLToPath(new URL('../public',import.meta.url))),
   streamMonthlyMinutes=Number(process.env.MARKET_STREAM_MINUTES||18000),streamMonthlyBytes=Number(process.env.MARKET_STREAM_BYTE_LIMIT||60000000000),
+  streamMaxConnections=Number(process.env.MARKET_STREAM_MAX_CONNECTIONS||32),streamMaxPerIP=Number(process.env.MARKET_STREAM_MAX_PER_IP||8),
   monthlyAssistantDollars=Number(process.env.ASSISTANT_MONTHLY_BUDGET_USD||3),logger,telemetry=runtimeTelemetry,accountOptions={}}={}){
+  if(!Number.isInteger(streamMaxConnections)||streamMaxConnections<1||streamMaxConnections>128||
+    !Number.isInteger(streamMaxPerIP)||streamMaxPerIP<1||streamMaxPerIP>16||streamMaxPerIP>streamMaxConnections)throw new RangeError('Invalid streaming connection limits');
   const limits=new Map(),streamByIP=new Map();let connections=0,disabled=false,previousCpu=process.cpuUsage();
   const recentLogs=[],logPipeline=createLogPipeline({write:line=>{const record=JSON.parse(line);recentLogs.push(record);if(recentLogs.length>200)recentLogs.shift();if(production&&!logger)process.stdout.write(line+'\n');}});
   function recordLog(event,values){
@@ -46,7 +67,45 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     logger?.(event,safe);logPipeline.log(event,safe,level);
   }
   const eventLoop=monitorEventLoopDelay({resolution:20});
-  const allowedOrigins=new Set(['https://predictir.dev','https://www.predictir.dev']);
+  const isAzure=azureMode()==='live';
+  let lastAllowanceObservation=-Infinity, allowanceObservationActive=false;
+  async function usageAllowances(database,stamp=now()){
+    const as_of=new Date(stamp).toISOString(),month=as_of.slice(0,7),day=as_of.slice(0,10);
+    const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
+      ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
+      ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
+      ['daily_work','work#'+day,6000],['daily_cpu_ms','cpu-ms#'+day,1800000]];
+    const foundry=isAzure?foundryAllowance():null;
+    if(foundry)resources.push(['azure_foundry_calls_day','azure-assistant#foundry#'+day,foundry.daily],
+      ['azure_foundry_calls_month','azure-assistant#foundry#'+month,foundry.monthly]);
+    const {rows}=await database.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',
+      [resources.map(row=>row[1])]);
+    const used=new Map(rows.map(row=>[row.key,row.used]));
+    const allowances=resources.flatMap(([resource,key,limit])=>{
+      const value=used.get(key)??0;
+      return Number.isSafeInteger(limit)&&limit>=0&&Number.isSafeInteger(value)&&value>=0
+        ? [{resource,limit,used:value,remaining:Math.max(0,limit-value),warning:value>=limit*.8}] : [];
+    });
+    return {as_of,allowances,scope:'Reserved application allowances; provider invoices and included plan usage are separate.'};
+  }
+  async function observeAllowances(activeStorage){
+    const stamp=now();
+    if(allowanceObservationActive||stamp-lastAllowanceObservation<allowanceObservationMs)return;
+    allowanceObservationActive=true;
+    lastAllowanceObservation=stamp;
+    try{
+      if(activeStorage?.kind!=='postgres')return;
+      const snapshot=await usageAllowances(activeStorage.db,stamp);
+      if(!server.listening)return;
+      const record={event:'operator.allowances',...snapshot};
+      if(logger)logger(record.event,record);
+      else process.stdout.write(JSON.stringify(record)+'\n');
+    }catch{}finally{allowanceObservationActive=false;}
+  }
+  const publicFeed=!injectedFeed&&isAzure&&authStatus()!=='configured'?new PublicBookFeed({now,
+    reserve:stamp=>!disabled&&storageEnabled()&&storage().consume('azure-public-book-poll#'+new Date(stamp).toISOString().slice(0,10),2400,1,172800)}):null;
+  const feed=injectedFeed||publicFeed||marketFeed,quoteTransport=feed.transport||'exchange-websocket';
+  const allowedOrigins=new Set(isAzure?[azureOrigin()]:['https://predictir.dev','https://www.predictir.dev']);
   function validOrigin(origin){
     if(!origin)return true;if(allowedOrigins.has(origin))return true;
     if(!production){try{const u=new URL(origin);return u.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(u.hostname);}catch{}}
@@ -61,30 +120,30 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
     res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
   }
-  function allowed(identity){
-    const current=now(),slot=Math.floor(current/60000);
-    if(limits.size>2048)for(const [key,value] of limits)if(value.slot<slot)limits.delete(key);
-    const update=(key,maximum)=>{
-      let item=limits.get(key);if(!item||item.slot!==slot){if(limits.size>4096)return false;item={slot,used:0};limits.set(key,item);}
-      return ++item.used<=maximum;
-    };
-    return update('global',1200)&&update(identity,120);
-  }
-  const workLimits={work:6000,'paper-reads':3000,'paper-scans':3000,'research-reads':3000,'market-screens':3000,'stream-opens':3000};
-  const paperReadRoutes=new Set(['/api/book','/api/workspace/catalog','/api/workspace/markets','/api/workspace/portfolio-books','/api/workspace/context','/api/workspace/history','/api/workspace/sources']);
-  const researchReadWeights=new Map([['/api/workspace/research',5],['/api/workspace/evidence',5],['/api/workspace/evidence/search',4],['/api/workspace/search',2],['/api/workspace/attribution',3]]);
-  async function quota(weight=1,kind='work'){
-    if(disabled)throw Object.assign(new Error('Usage allowance reached; retry later'),{status:429});
-    const current=now(),day=new Date(current).toISOString().slice(0,10);
-    if(storageEnabled()&&!await storage().consume(kind+'#'+day,workLimits[kind],weight)){
-      const retryAfter=Math.ceil((Date.parse(day+'T00:00:00Z')+86400000-current)/1000);
-      throw Object.assign(new Error('Daily '+kind.replace('-',' ')+' allowance reached'),{status:429,retryAfter});
+  function withinLimit(key,maximum,slot){
+    let item=limits.get(key);
+    if(!item||item.slot!==slot){
+      if(limits.size>4096)return false;
+      item={slot,used:0};limits.set(key,item);
     }
+    return ++item.used<=maximum;
+  }
+  function allowed(identity){
+    const slot=Math.floor(now()/rateWindowMs);
+    if(limits.size>2048)for(const [key,value] of limits)if(value.slot<slot)limits.delete(key);
+    return withinLimit('global',1200,slot)&&withinLimit(identity,120,slot);
+  }
+  async function quota(weight=1){
+    if(disabled)throw new LocalThrottle('Usage allowance reached; retry later','throttle_runtime_disabled');
+    if(storageEnabled()&&!await storage().consume('work#'+new Date(now()).toISOString().slice(0,10),6000,weight))throw new LocalThrottle('Daily work allowance reached','throttle_daily_work');
   }
   async function sse(req,res,tickers,identity,multiplex=false){
     tickers=[...new Set(tickers.map(validateTicker))];
     if(!tickers.length||tickers.length>(multiplex?12:1))throw new RangeError('Choose one to twelve unique portfolio tickers');
-    if(connections>=16||(streamByIP.get(identity)||0)>=3)throw Object.assign(new Error('Streaming capacity is currently full'),{status:429});
+    if(connections>=streamMaxConnections||(streamByIP.get(identity)||0)>=streamMaxPerIP){
+      res.setHeader('Retry-After','15');
+      throw new LocalThrottle('Streaming capacity is currently full. Live snapshots remain available.','throttle_stream_capacity');
+    }
     if(!Number.isSafeInteger(streamMonthlyMinutes)||streamMonthlyMinutes<1||streamMonthlyMinutes>60000)throw new RangeError('Invalid streaming allowance');
     if(!Number.isSafeInteger(streamMonthlyBytes)||streamMonthlyBytes<65536||streamMonthlyBytes>100000000000)throw new RangeError('Invalid streaming byte allowance');
     connections++;streamByIP.set(identity,(streamByIP.get(identity)||0)+1);let countReleased=false;
@@ -98,13 +157,13 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
     const consumeMinute=()=>storageEnabled()?storage().consume('stream-minutes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyMinutes,1,45*86400):Promise.resolve(true);
     const consumeBytes=()=>storageEnabled()?storage().consume('stream-egress-bytes#'+new Date(now()).toISOString().slice(0,7),streamMonthlyBytes,65536,45*86400):Promise.resolve(true);
     try{
-      await quota(3,'stream-opens');
+      await quota(3);
       if(disconnected())return;
       const minuteAllowed=await consumeMinute();
       if(disconnected())return;
       const bytesAllowed=minuteAllowed&&await consumeBytes();
       if(disconnected())return;
-      if(!bytesAllowed)throw Object.assign(new Error('Monthly streaming allowance reached'),{status:429});
+      if(!bytesAllowed)throw new LocalThrottle('Monthly streaming allowance reached','throttle_stream_allowance');
     }
     catch(error){releaseCount();throw error;}
     req.setTimeout(0);res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();
@@ -123,19 +182,22 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(blockedSince&&now()-blockedSince>20000){res.destroy();return;}
       if(!blockedSince)for(const [ticker,value] of latest)if(send(value,multiplex?'book':null))latest.delete(ticker);else break;
       ticks++;
-      if(ticks%100===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:'exchange-websocket'},multiplex?'heartbeat':null);
+      if(ticks%100===0)send({kind:'heartbeat',status:feed.status,server_time:new Date(now()).toISOString(),transport:quoteTransport},multiplex?'heartbeat':null);
       if(ticks%600===0&&!checking){checking=true;try{if(!await consumeMinute())res.end();}catch{res.end();}finally{checking=false;}}
       if(disabled)res.end();
     },100);
-    const timeout=setTimeout(()=>res.end(),840000);res.on('close',cleanup);
+    const timeout=setTimeout(()=>res.end(),isAzure?215000:840000);res.on('close',cleanup);
     try{
       for(const ticker of tickers){
-        const remove=await feed.add(ticker,message=>{if(message.kind==='quote')latest.set(ticker,{...message,ticker});
-          else send(multiplex?{ticker,status:message.status,reason:message.reason}:message,multiplex?'status':null);});
+        const remove=await feed.add(ticker,message=>{
+          const value={...message,ticker,transport:message.transport||quoteTransport};
+          if(value.kind==='quote')latest.set(ticker,value);
+          else send(value,multiplex?'status':null);});
         if(closed){remove();break;}
         removers.push(remove);
       }
-    }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',reason:'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
+    }catch{for(const ticker of tickers)send({kind:'connection',ticker,status:'unavailable',transport:quoteTransport,
+      reason:publicFeed?'Public quote polling is unavailable. Direct snapshots remain available.':'The native stream is unavailable. REST snapshots remain available.'},multiplex?'status':null);res.end();}
   }
   async function serveStatic(req,res,path){
     if(req.method!=='GET'&&req.method!=='HEAD')return json(res,{error:'Method not allowed'},405);
@@ -153,8 +215,11 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
   }
   const server=createServer({maxHeaderSize:16384,headersTimeout:10000,requestTimeout:25000,keepAliveTimeout:5000},async(req,res)=>{
     headers(req,res);
-    const started=performance.now();let trace,route='unknown',reported=false;
-    const report=()=>{if(reported)return;reported=true;const durationMs=Math.round((performance.now()-started)*100)/100;telemetry.observeRequest({route,status:res.statusCode,durationMs});recordLog('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:durationMs,
+    const started=performance.now();let trace,route='other',reported=false,localThrottle;
+    const throttle=(reason,value)=>{localThrottle=reason;return json(res,value,429);};
+    const report=()=>{if(reported)return;reported=true;const durationMs=Math.round((performance.now()-started)*100)/100;
+      const errorCode=res.statusCode===429?throttleReason(localThrottle):undefined;
+      telemetry.observeRequest({route,status:res.statusCode,durationMs,errorCode});recordLog('request.finished',{method:req.method,route,status:res.statusCode,duration_ms:durationMs,error_code:errorCode,
       trace_id:trace?.traceId,span_id:trace?.spanId,parent_id:trace?.parentId,baggage_dropped:trace?.baggageDropped,open_streams:connections});};
     res.once('finish',report);res.once('close',report);
     try{
@@ -162,12 +227,12 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       const url=new URL(req.url,'http://localhost'),edgeVerified=serviceAuthorized(req.headers['x-market-edge-secret'],edgeSecret);
       trace=traceContext(req.headers,{trusted:edgeVerified||serviceAuthorized(req.headers.authorization,serviceSecret)});
       res.setHeader('traceparent',trace.traceparent);res.setHeader('tracestate',trace.tracestate);
-      route=/^\/(?:api\/[a-z/-]{1,60}|mcp|internal\/(?:diagnostics|assistant\/(?:reserve|settle)))$/.test(url.pathname)?url.pathname:'unknown';
+      route=operationalRoute(url.pathname);
       const identity=requestIdentity(req,edgeVerified);
-      if(!allowed(identity)){res.setHeader('Retry-After','60');return json(res,{error:'Rate limit reached. Retry in one minute.'},429);}
+      if(!allowed(identity)){res.setHeader('Retry-After','60');return throttle('throttle_general_admission',{error:'Rate limit reached. Retry in one minute.'});}
       if(!validOrigin(req.headers.origin))return json(res,{error:'This origin is not allowed'},403);
-      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:'Railway Node backend',market_data_only:true,
-        streaming:{connections,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
+      if(url.pathname==='/api/health')return json(res,{status:disabled?'limited':'ok',runtime:azureMode()==='live'?'Azure Container Apps':'Railway Node backend',market_data_only:true,
+        streaming:{connections,transport:quoteTransport,...(feed.metrics?.()||{})},performance:{event_loop_p99_ms:Number.isFinite(eventLoop.percentile(99))?Math.round(eventLoop.percentile(99)/1e4)/100:0}});
       const internal=url.pathname==='/mcp'||url.pathname.startsWith('/internal/');
       if(internal){
         if(!serviceAuthorized(req.headers.authorization,serviceSecret))return json(res,{error:'Service authorization required'},401);
@@ -178,23 +243,49 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
           if(input.operation==='runtime_snapshot')return json(res,{telemetry:telemetry.snapshot(),logs:recentLogs.slice(),log_filter:logPipeline.snapshot(),provider_duration_scope:'Public source retrieval includes body reads and decoding. Other HTTP adapter timings may stop at response headers. Supabase Auth measures SDK calls.'});
           if(input.operation==='runtime_metrics'){res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4; charset=utf-8','Cache-Control':'no-store'});return res.end(telemetry.prometheus());}
           if(!storageEnabled()||storage().kind!=='postgres')return json(res,{error:'The relational store is not configured'},503);
-          if(input.operation==='usage_allowances'){
-            const month=new Date(now()).toISOString().slice(0,7),day=new Date(now()).toISOString().slice(0,10);
-            const resources=[['stream_minutes','stream-minutes#'+month,streamMonthlyMinutes],['stream_egress_bytes','stream-egress-bytes#'+month,streamMonthlyBytes],
-              ['archive_bytes','archive-bytes#'+month,Number(process.env.ARCHIVE_MONTHLY_BYTE_LIMIT||1000000000)],
-              ['assistant_milliusd','assistant-reserved-milliusd#'+month,Math.floor(monthlyAssistantDollars*1000)],['x_post_reads','x-posts#'+month,Number(process.env.X_MONTHLY_POST_READ_LIMIT||1000)],
-              ...Object.entries(workLimits).map(([key,limit])=>['daily_'+key.replace('-','_'),key+'#'+day,limit]),
-              ['daily_cpu_ms','cpu-ms#'+day,1800000]];
-            const rows=(await storage().db.query('SELECT key,used::float8 FROM market_lab.quotas WHERE key=ANY($1::text[]) AND expires_at>now()',[resources.map(row=>row[1])])).rows;
-            const used=new Map(rows.map(row=>[row.key,row.used]));
-            return json(res,{as_of:new Date(now()).toISOString(),allowances:resources.map(([resource,key,limit])=>({resource,limit,used:used.get(key)||0,
-              remaining:Math.max(0,limit-(used.get(key)||0)),warning:(used.get(key)||0)>=limit*.8})),scope:'Reserved application allowances; provider invoices and included plan usage are separate.'});
-          }
+          if(input.operation==='usage_allowances')return json(res,await usageAllowances(storage().db));
           if(input.operation!=='database_latency'||!Number.isInteger(input.samples)||input.samples<1||input.samples>9)throw new RangeError('Choose usage_allowances or database_latency with one through nine samples');
           await quota(3);const milliseconds=[];
           for(let i=0;i<input.samples;i++){const start=performance.now();await observeProviderAttempt('postgres',()=>storage().db.query('SELECT 1'),telemetry);milliseconds.push(Math.round((performance.now()-start)*100)/100);}
           return json(res,{operation:'database_latency',samples_ms:milliseconds,mean_ms:milliseconds.reduce((a,b)=>a+b,0)/milliseconds.length,
             runtime_region:process.env.RAILWAY_REGION||'unknown',pool:{total:storage().db.totalCount,idle:storage().db.idleCount,waiting:storage().db.waitingCount}});
+        }
+        if(url.pathname==='/internal/assistant/reserve-azure'){
+          if(!isAzure)return json(res,{error:'Unknown service path'},404);
+          if(!/^[a-f0-9]{64}$/.test(input.fingerprint||'')||!['research','foundry'].includes(input.kind))throw new RangeError('Invalid Azure assistant quota request');
+          if(!storageEnabled())return json(res,{error:'Assistant quota storage is unavailable'},503);
+          const date=new Date(now()).toISOString(),day=date.slice(0,10),month=date.slice(0,7);
+          const consume=(key,limit,ttl)=>storage().consume('azure-assistant#'+key,limit,1,ttl);
+          if(input.kind==='research'){
+            await quota();
+            const allowed=await consume(day+'#'+input.fingerprint,30,172800);
+            return allowed?json(res,{allowed}):throttle('throttle_assistant_allowance',{allowed});
+          }
+          const foundry=foundryAllowance();
+          const allowed=Boolean(foundry)&&await consume('foundry#'+day,foundry.daily,172800)&&await consume('foundry#'+month,foundry.monthly,45*86400);
+          return json(res,{allowed});
+        }
+        if(url.pathname==='/internal/assistant/read-azure'){
+          if(!isAzure)return json(res,{error:'Unknown service path'},404);
+          if(!edgeVerified||!isIP(String(req.headers['x-market-client-ip']||''))||
+            !isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'Open the assistant from the app.'},403);
+          if(!storageEnabled())return json(res,{error:'Assistant quota storage is unavailable'},503);
+          const {messages,...scope}=parseAssistantInput(input),question=messages.at(-1).content.trim();
+          const fingerprint=createHash('sha256').update(serviceSecret+'\0'+identity).digest('hex');
+          const day=new Date(now()).toISOString().slice(0,10);
+          const tools=planResearchReadback(question,scope);
+          await quota(5+2*tools.length);
+          if(!await storage().consume('azure-assistant#'+day+'#'+fingerprint,30,1,172800)){
+            return throttle('throttle_assistant_allowance',{error:'The research assistant allowance is exhausted. Market data remains available.'});
+          }
+          const abort=new AbortController();
+          const cancel=()=>abort.abort();
+          res.once('close',cancel);
+          try {
+            const results=await researchReadback({...scope,question,signal:abort.signal});
+            if(!res.destroyed)return json(res,{results});
+          }finally{res.off('close',cancel);}
+          return;
         }
         if(url.pathname==='/internal/assistant/reserve')return json(res,await reserveAssistant(input.fingerprint,{storage:storageEnabled()?storage():null,monthlyDollars:monthlyAssistantDollars,now:now()}));
         if(url.pathname==='/internal/assistant/settle'){
@@ -206,17 +297,38 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
           const rawExecution=req.headers['x-market-execution'];
           if(rawExecution&&Buffer.byteLength(String(rawExecution))>2000)throw new RangeError('Execution controls exceed their limit');
           const executionScope=rawExecution?JSON.parse(rawExecution):undefined;
-          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope,executionScope});
+          let paperActions;
+          if(req.headers['x-market-paper-action']!==undefined){
+            if(!isAzure||req.headers['x-market-paper-action']!=='1'||!edgeVerified||!allowedOrigins.has(req.headers.origin)||
+              !isCountryAllowed(String(req.headers['x-market-country']||''))){
+              return json(res,{error:'Open the public application to access its paper workspace.'},403);
+            }
+            try{paperActions=createPaperScenarioActions({ticker,now,secure:production,cookie:req.headers.cookie,
+              secret:process.env.ACCOUNT_COOKIE_SECRET,storage:storageEnabled()?storage():null});}
+            catch(error){const result=paperActionError(error);return json(res,{error:result.error},result.status);}
+          }
+          await quota(2);return await mcp(req,res,input,{tickerScope:ticker,modelScope,executionScope,paperActions});
         }
         return json(res,{error:'Unknown service path'},404);
       }
       if(!url.pathname.startsWith('/api/'))return await serveStatic(req,res,decodeURIComponent(url.pathname));
-      if(production&&!edgeVerified)return json(res,{error:'Open the application at predictir.dev'},403);
+      if(production&&!edgeVerified)return json(res,{error:'Open the public application to access its API'},403);
       if(edgeVerified&&!isCountryAllowed(String(req.headers['x-market-country']||'')))return json(res,{error:'This service is unavailable in your region'},403);
       if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
       if(!['GET','POST','PUT'].includes(req.method))return json(res,{error:'Method not allowed'},405);
+      const fullEvidence=req.method==='GET'&&url.pathname==='/api/workspace/evidence'&&url.searchParams.get('preview')!=='1';
+      const headlineReplay=url.pathname==='/api/workspace/graphql';
+      const heavyWork=fullEvidence||(req.method==='POST'&&headlineReplay)||
+        (req.method==='GET'&&(url.pathname==='/api/workspace/execution-research'||url.pathname==='/api/workspace/recommendations'));
+      if(isAzure&&heavyWork){
+        const current=now(),slot=Math.floor(current/rateWindowMs);
+        if(!withinLimit('heavy#'+identity,azureHeavyRequestsPerWindow,slot)){
+          res.setHeader('Retry-After',String(Math.ceil(((slot+1)*rateWindowMs-current)/1000)));
+          return throttle('throttle_heavy_burst',{error:'Research requests are arriving too quickly. Retry shortly.'});
+        }
+      }
       if(url.pathname==='/api/session'||url.pathname.startsWith('/api/account/')){
-        await quota(2,req.method==='GET'?'paper-reads':'work');const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
+        await quota(2);const body=['POST','PUT'].includes(req.method)?await readBody(req,url.pathname==='/api/account/portfolio'?1500000:20000):undefined;
         const handler=makeAccountHandler({storage:storageEnabled()?storage():null,secret:process.env.ACCOUNT_COOKIE_SECRET||serviceSecret,secure:production,...accountOptions});
         const output=await handler(new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(body?{body}:{})}),url.pathname.slice(5));
         const outputHeaders=Object.fromEntries(output.headers),cookies=output.headers.getSetCookie();if(cookies.length)outputHeaders['set-cookie']=cookies;
@@ -226,10 +338,10 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       if(url.pathname==='/api/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);return await sse(req,res,[url.searchParams.get('ticker')],identity);}
       if(url.pathname==='/api/portfolio/stream'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);
         const raw=url.searchParams.get('tickers')||'';if(raw.length>1750)throw new RangeError('Portfolio watchlist is too long');return await sse(req,res,raw.split(','),identity,true);}
-      if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2,'paper-reads');return json(res,await resolveContracts(url.searchParams.get('q')));}
-      if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2,'paper-reads');return json(res,await marketFees(url.searchParams.get('ticker')));}
+      if(url.pathname==='/api/resolve'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await resolveContracts(url.searchParams.get('q')));}
+      if(url.pathname==='/api/fees'){if(req.method!=='GET')return json(res,{error:'Method not allowed'},405);await quota(2);return json(res,await marketFees(url.searchParams.get('ticker')));}
       if(req.method==='POST'&&!String(req.headers['content-type']||'').toLowerCase().startsWith('application/json'))return json(res,{error:'Use application/json'},415);
-      const raw=req.method==='POST'?await readBody(req):'';
+      const raw=req.method==='POST'?await readBody(req,headlineReplay?HEADLINE_REPLAY_MAX_BYTES:undefined):'';
       if(url.pathname==='/api/journal'){
         if(!storageEnabled())return json(res,{error:'The durable journal is not connected'},503);
         const token=String(req.headers.authorization||'').replace(/^Bearer /,'');if(!token)return json(res,{error:'A private journal token is required'},401);ownerKey(token);
@@ -240,24 +352,15 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
         if(req.method!=='POST')return json(res,{error:'Method not allowed'},405);
         await quota();return json(res,sizePaperPosition(JSON.parse(raw)));
       }
-      if(url.pathname==='/api/workspace/position-review')await quota(5,'paper-scans');
-      else if(req.method==='GET'&&paperReadRoutes.has(url.pathname))await quota(1,'paper-reads');
-      else if(req.method==='GET'&&researchReadWeights.has(url.pathname))await quota(researchReadWeights.get(url.pathname),'research-reads');
-      else if(req.method==='POST'&&url.pathname==='/api/workspace/execution-research')await quota(5,'research-reads');
-      else if(req.method==='GET'&&url.pathname==='/api/workspace/opinions'){
-        const count=(url.searchParams.get('tickers')||'').split(',',8).length;
-        await quota(Math.max(5,count),'market-screens');
-      }
-      else if(req.method==='GET'&&url.pathname==='/api/workspace/recommendations')await quota(12,'market-screens');
-      else await quota(url.pathname.includes('forward/start')?30:
-        url.pathname.includes('intelligence')?5:1);
+      await quota(url.pathname.includes('forward/start')?30:url.pathname.includes('/recommendations')?12:(headlineReplay||(isAzure&&fullEvidence))?6:url.pathname==='/api/workspace/position-review'?5:
+        url.pathname.includes('intelligence')||url.pathname.includes('/research')||url.pathname.includes('/execution-research')||url.pathname.includes('/opinions')?5:url.pathname.includes('/search')?2:1);
       const request=new Request('http://localhost'+req.url,{method:req.method,headers:req.headers,...(raw?{body:raw}:{})});
-      const context={params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
+      const context={privateRuntime:true,params:Promise.resolve({path:url.pathname.slice(5).split('/')})},output=req.method==='GET'?await getRoute(request,context):await postRoute(request,context);
       const buffer=Buffer.from(await output.arrayBuffer());if(buffer.byteLength>8e6)throw new Error('The response exceeds its size allowance');
       res.writeHead(output.status,Object.fromEntries(output.headers));res.end(buffer);
     }catch(error){
       if(res.headersSent)return res.end();
-      if(error.status===429&&Number.isSafeInteger(error.retryAfter)&&error.retryAfter>0)res.setHeader('Retry-After',error.retryAfter);
+      if(error instanceof LocalThrottle)return throttle(error.reason,{error:error.message});
       const status=error.name==='ConditionalCheckFailedException'?409:error.status||(error instanceof SyntaxError||error instanceof RangeError||error instanceof URIError?400:503);
       const message=error instanceof SyntaxError?'Request body must be valid JSON':error.name==='ConditionalCheckFailedException'?'A forecast for this contract is already registered in this journal':
         status<500?error.message:'The data service is temporarily unavailable. Try again shortly.';
@@ -270,9 +373,11 @@ export function createMarketServer({feed=marketFeed,storageEnabled=cloudEnabled,
       const memory=process.memoryUsage();let pool;try{pool=storageEnabled()?storage().db:null;}catch{}
       recordLog('runtime.health',{event_loop_p99_ms:Math.round(eventLoop.percentile(99)/1e4)/100,heap_mb:Math.round(memory.heapUsed/1048576),rss_mb:Math.round(memory.rss/1048576),open_streams:connections,pool_total:pool?.totalCount,pool_idle:pool?.idleCount,pool_waiting:pool?.waitingCount});eventLoop.reset();
       if(!storageEnabled())return;
-    try{const stop=await storage().get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await storage().consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
+    let activeStorage;
+    try{activeStorage=storage();const stop=await activeStorage.get('config#cost');disabled=Boolean(stop?.disabled)||used>0&&!await activeStorage.consume('cpu-ms#'+new Date(now()).toISOString().slice(0,10),1800000,Math.min(used,1800000));}
     catch{disabled=true;}
-  },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();});
+    if(isAzure&&production)await observeAllowances(activeStorage);
+  },30000);monitor.unref();server.on('listening',()=>eventLoop.enable());server.on('close',()=>{clearInterval(monitor);eventLoop.disable();publicFeed?.close();});
   return server;
 }
 export const server=createMarketServer();

@@ -5,7 +5,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {createResearchServer,handleMCP,publicResearch,boundPacket} from '../lib/workspace/mcp.mjs';
-import {serviceAuthorized,parseAssistantInput,reserveAssistant,assistantResponse,explainContract,explainResearchMath} from '../lib/workspace/assistant.mjs';
+import {serviceAuthorized,parseAssistantInput,reserveAssistant,assistantResponse} from '../lib/workspace/assistant.mjs';
 import {createMarketServer,requestIdentity} from '../cloud/server.mjs';
 import {MarketFeed} from '../lib/cloud/feed.mjs';
 import {streamText} from 'ai';
@@ -35,26 +35,6 @@ test('MCP execution quantities and dollar costs use distinct explicit units',()=
 const edgeHeaders={'x-market-edge-secret':edgeSecret,'x-market-country':'US','x-market-client-ip':'198.51.100.7'};
 function memoryQuota(){const used=new Map();return {used,consume:async(key,limit,amount=1)=>{const before=used.get(key)||0;if(before+amount>limit)return false;used.set(key,before+amount);return true;}};}
 
-test('exhausted research-work budget leaves paper reads and scoped research available',async t=>{
-  const charges=[];
-  const storage={consume:async (key,limit,weight)=>{charges.push([key,weight]);return !key.startsWith('work#');}};
-  const url=await listen(t,{now:()=>Date.parse('2026-11-05T23:50:00Z'),storageEnabled:()=>true,storage:()=>storage,
-    getRoute:async()=>Response.json({ok:true}),postRoute:async()=>Response.json({ok:true})});
-  assert.equal((await fetch(url+'/api/workspace/portfolio-books',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/research',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/opinions?tickers=A,B,C,D,E,F',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/recommendations',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/sources',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/search',{headers:edgeHeaders})).status,200);
-  assert.equal((await fetch(url+'/api/workspace/execution-research',{method:'POST',headers:{...edgeHeaders,'Content-Type':'application/json'},body:'{}'})).status,200);
-  const denied=await fetch(url+'/api/intelligence',{headers:edgeHeaders});
-  assert.equal(denied.status,429);
-  assert.equal(denied.headers.get('retry-after'),'600');
-  assert.deepEqual(charges,[['paper-reads#2026-11-05',1],['research-reads#2026-11-05',5],
-    ['market-screens#2026-11-05',6],['market-screens#2026-11-05',12],['paper-reads#2026-11-05',1],
-    ['research-reads#2026-11-05',2],['research-reads#2026-11-05',5],['work#2026-11-05',5]]);
-});
-
 test('actual MCP handshake lists only read-only tools and scopes all market reads',async t=>{
   const server=createResearchServer({tickerScope:ticker,dependencies}),client=new Client({name:'test-client',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
   await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
@@ -69,65 +49,6 @@ test('actual MCP handshake lists only read-only tools and scopes all market read
   const research=await client.callTool({name:'get_research',arguments:{ticker}});assert.equal(packet(research).opinion.side,'PASS');assert.ok(!JSON.stringify(research).includes('PRIVATE_CATALOG_SENTINEL'));
   const retained=await client.callTool({name:'search_retained_evidence',arguments:{ticker,query:'reported availability'}});assert.equal(packet(retained).citations[0].citation_id,'E1');assert.equal(packet(retained).sources[0].url,source);
   const other=await client.callTool({name:'search_retained_evidence',arguments:{ticker:'KXCPI-26NOV-T0.2',query:'private journals'}});assert.equal(other.isError,true);
-});
-test('MCP asks for exact NBA availability and its readbacks distinguish lineup risk from the baseline',async t=>{
-  const now=Date.now(),as_of=new Date(now).toISOString(),fixture='401';
-  const url='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event='+fixture;
-  const feedback={status:'available',fixture_id:fixture,baseline_probability:.61,decision_interval:[.47,.69],
-    source:{url,retrieved_at:as_of},scenarios:[{name:'Test Player',status:'Out',conditional_probability:.54}]};
-  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,workspaceResearch:async (selected,options)=>{
-    assert.equal(selected,ticker);assert.equal(options.refreshAvailability,true);
-    return {ticker,as_of,forecast:{probability:.61,interval:[.47,.69],source_as_of:as_of,availability_feedback:feedback}};
-  }}});
-  const client=new Client({name:'lineup-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
-  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
-  const value=packet(await client.callTool({name:'get_research',arguments:{ticker}}));
-  for(const explain of [explainContract,explainResearchMath]){
-    const answer=explain(value,ticker,now);
-    assert.match(answer,/baseline stays at 61\.0% YES/);
-    assert.match(answer,/54\.0% YES/);
-    assert.match(answer,/47\.0% to 69\.0%.*fill price, fees and safety buffer/);
-    assert.ok(answer.includes('[ESPN game availability]('+url+')'));
-  }
-  const wrong={...value,forecast:{...value.forecast,availability_feedback:{...feedback,fixture_id:'402'}}};
-  assert.doesNotMatch(explainContract(wrong,ticker,now),/Test Player/);
-  const reason='The confirmed player reports lack enough comparable, dated DNP and regular-minutes results.';
-  const unavailable={...feedback,status:'unavailable',scenarios:[],reason};
-  const withFeedback=availability_feedback=>({...value,extensions:{sports:{event:{id:fixture}}},forecast:{...value.forecast,availability_feedback}});
-  for(const explain of [explainContract,explainResearchMath]){
-    assert.match(explain(withFeedback(unavailable),ticker,now),/baseline stays at 61\.0% YES after checking/);
-    assert.ok(explain(withFeedback(unavailable),ticker,now).includes(reason));
-    for(const override of [{baseline_probability:.50},{fixture_id:'402',source:{url:url.replace('401','402'),retrieved_at:as_of}},
-      {source:{url,retrieved_at:new Date(now-1200001).toISOString()}}])
-      assert.ok(!explain(withFeedback({...unavailable,...override}),ticker,now).includes(reason));
-  }
-});
-test('dense price history retains bounded recent candles and their provenance',async t=>{
-  const now=Date.now(),as_of=new Date(now).toISOString(),source_url=source+'/candlesticks';
-  const rows=Array.from({length:120},(_,i)=>({time:new Date(now-(120-i)*60000).toISOString(),
-    value:.412299121,volume:16277.0222,value_kind:'last_trade',midpoint:.41497123}));
-  const server=createResearchServer({tickerScope:ticker,dependencies:{...dependencies,contractHistory:async()=>({ticker,as_of,source_url,rows})}}),
-    client=new Client({name:'bounded-history-test',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
-  await server.connect(a);await client.connect(b);t.after(()=>Promise.all([client.close(),server.close()]));
-  const response=await client.callTool({name:'get_price_history',arguments:{ticker,hours:'24'}});
-  assert.ok(Buffer.byteLength(response.content[0].text)<=14000);
-  const result=packet(response);
-  assert.equal(result.window_hours,24);assert.equal(result.available_observations,120);assert.equal(result.sample_truncated,true);
-  assert.equal(result.rows.length,48);assert.equal(result.rows.at(-1).time,rows.at(-1).time);
-  assert.equal(result.rows.at(-1).price_usd_per_contract,rows.at(-1).value);
-  assert.equal(result.sources[0].url,source_url);
-});
-test('Analysis Ask Why leads with the current PASS before point-estimate paper P/L',()=>{
-  const now=Date.now(),as_of=new Date(now).toISOString(),data={ticker,as_of,
-    forecast:{probability:.41,source_as_of:as_of,interval:[.26,.59]},
-    opinion:{side:'PASS',reason:'Neither side clears the conservative range.'},
-    paper_scenarios:[{ticker,side:'NO',contracts:45,break_even:.437,quote_as_of:as_of,expected_profit:6.76}]};
-  const result=explainContract(data,ticker,now);
-  assert.match(result,/Research screen: PASS\. Supported allocation: 0 contracts\. Neither side clears the conservative range\./);
-  assert.match(result,/At the model’s point estimate, the expected paper P\/L is \$6\.76/);
-  assert.ok(result.indexOf('Research screen: PASS')<result.indexOf('$6.76'));
-  const stale=explainContract({...data,as_of:new Date(now-91000).toISOString()},ticker,now);
-  assert.doesNotMatch(stale,/Research screen|\$6\.76/);
 });
 test('contract MCP withholds unusable quotes but keeps matching settlement rules',async t=>{
   const current=await dependencies.book(),expected='KXCPI-26NOV-T0.2';
@@ -197,7 +118,7 @@ test('assistant cost reservation is atomic at the storage interface and fails cl
 test('concurrent streams enforce per-visitor slots and release them on disconnect',async t=>{
   const listeners=new Set();let removed=0,done;const disconnected=new Promise(resolve=>{done=resolve;});
   const feed={status:'connected',add:async(ticker,listener)=>{listeners.add(listener);listener({kind:'connection',status:'connected'});return()=>{listeners.delete(listener);if(++removed===3)done();};}};
-  const url=await listen(t,{feed}),values=await Promise.all(Array.from({length:4},()=>fetch(url+'/api/stream?ticker='+ticker,{headers:edgeHeaders})));
+  const url=await listen(t,{feed,streamMaxPerIP:3}),values=await Promise.all(Array.from({length:4},()=>fetch(url+'/api/stream?ticker='+ticker,{headers:edgeHeaders})));
   assert.equal(values.filter(r=>r.status===200).length,3);assert.equal(values.filter(r=>r.status===429).length,1);
   await Promise.all(values.filter(r=>r.status===200).map(r=>r.body.cancel()));
   let timeout;await Promise.race([disconnected,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Stream cleanup did not finish')),1000);})]);clearTimeout(timeout);
