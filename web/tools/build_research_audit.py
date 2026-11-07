@@ -4,7 +4,6 @@ import html
 import hashlib
 import json
 import re
-import shutil
 import subprocess
 from reportlab.lib import colors
 from reportlab import Version as REPORTLAB_VERSION
@@ -68,7 +67,7 @@ SOURCES = [
 ]
 
 def text(value):
-    value = str(value).replace("Predictir", "Predictir").replace("\u2014", " - ").replace("\u2013", "-").replace("\u2011", "-")
+    value = str(value).replace("Kalshi Market Lab", "Predictir").replace("\u2014", " - ").replace("\u2013", "-").replace("\u2011", "-")
     value = value.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"').replace("\u201d", '"').replace("\u2192", " -> ")
     replacements = {"\u2212":"-", "\u2264":"<=", "\u2265":">=", "\u00b1":"+/-", "\u00d7":"x", "\u0394":"Delta", "\u03a3":"sum", "\u03bb":"lambda", "\u03b1":"alpha", "\u03b2":"beta", "\u03bc":"mu", "\u03c3":"sigma", "\u03a6":"Phi", "\u221e":"infinity", "\u2013":"-", "\u2026":"...", "\u2022":"-", "\u2009":" ", "\u00a0":" "}
     for original, replacement in replacements.items(): value = value.replace(original, replacement)
@@ -211,6 +210,9 @@ def bars(label, values):
     return drawing
 
 def build(destination,verification_path):
+    destination=Path(destination).resolve()
+    if destination.is_relative_to((BASE/"public").resolve()):
+        raise ValueError("Research audit exports must remain outside public assets.")
     nba=json.loads((BASE/"docs/nba-challenger-validation.json").read_text())
     live=json.loads((BASE/"docs/nba-inplay-validation.json").read_text())
     runtime=json.loads((BASE/"docs/runtime-benchmark.json").read_text())
@@ -251,7 +253,7 @@ def build(destination,verification_path):
            P("The sizing curve parses and sorts the book once, builds quantity/notional/fee prefixes, then answers a quantity query by binary search. Construction is O(L log L) including sorting plus O(L) prefix work; subsequent fill queries are O(log L). This saves repeated parsing during sizing and risk enumeration. It is not a claim that the whole website became hundreds of times faster."),
            P("Audit and reproduction checklist","H1Audit"),
            P("Inspect the frozen source hashes and split dates; reproduce native model training; verify Python/JavaScript parity; run the PostgreSQL and pgTAP checks; replay the independent cash-flow tests; review the full runtime query plans; compare hosted latency before/after region changes; and inspect a paper entry, live mark, close and confirmed settlement. Use the deployment guide for private environment setup. Credentials and private journals are excluded from this report."),
-           P("Pinned PDF regeneration: create a Python environment, install tools/report-requirements.txt, then run python tools/build_research_audit.py --output /chosen/path/Research_Audit.pdf. Add --public-copy public/research/research-audit.pdf only when updating the local public artifact too. No private artifact package is required.")]
+           P("Pinned private PDF regeneration: create a Python environment, install tools/report-requirements.txt, then run python tools/build_research_audit.py --output /chosen/private/path/Research_Audit.pdf. Research audit exports stay outside the website's public assets. No private artifact package is required.")]
     story += [PageBreak(),P("Implementation scope at the original review","H1Audit"),
               P("V3 adds a neutral black interface; separate analysis/news reading modes; explicit selected-contract evidence loading; source access and pricing limits; auditable $20,000 paper accounts; cash additions/decreases; browser-scoped guest sessions; owner account synchronization with conflict preservation; and optional consent-gated analytics. Runtime, protocol and mathematical experiments are documented separately from the production data path."),
               P("The current forecasting estimates continue to require exact event/outcome matching, fresh source timestamps and explicit uncertainty. Source reputation, social votes, a smoothed context score, embedding similarity or a critic preference is never silently converted into a trading probability. A more readable long-form explanation is not stronger statistical evidence."),
@@ -282,6 +284,4 @@ def build(destination,verification_path):
     print(str(destination.resolve()))
 
 if __name__=="__main__":
-    parser=argparse.ArgumentParser();parser.add_argument("--output",type=Path,default=REPO/"output/pdf/Predictir_Research_Audit.pdf");parser.add_argument("--public-copy",type=Path);parser.add_argument("--verification",type=Path,default=BASE/"docs/V3_VERIFICATION.md");args=parser.parse_args();build(args.output,args.verification)
-    if args.public_copy:
-        args.public_copy.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(args.output,args.public_copy);print(str(args.public_copy.resolve()))
+    parser=argparse.ArgumentParser();parser.add_argument("--output",type=Path,default=REPO/"output/pdf/Predictir_Research_Audit.pdf");parser.add_argument("--verification",type=Path,default=BASE/"docs/V3_VERIFICATION.md");args=parser.parse_args();build(args.output,args.verification)
