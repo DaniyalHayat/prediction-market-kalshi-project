@@ -10,6 +10,12 @@ variable "keep_apps_warm" {
   default     = false
 }
 
+variable "enable_saved_logs" {
+  description = "Opt in to Azure Monitor console and system log storage for the live edition. Retention is 30 days with a 0.05 GB daily ingestion quota and a $5 monthly review reserve. Azure daily quotas can overshoot and are not a hard billing cap."
+  type        = bool
+  default     = false
+}
+
 variable "profile" {
   description = "Replay runs the embedded fixture without a database or external provider credentials. Live enables the private PostgreSQL foundation."
   type        = string
@@ -144,14 +150,13 @@ variable "postgres_admin_password_version" {
 variable "live_secrets" {
   description = "Existing RBAC-enabled Key Vault and references to runtime secrets. Use an application database login in DATABASE_URL, separate from the provisioning administrator."
   type = object({
-    vault_resource_id        = string
-    edge_secret_uri          = string
-    assistant_secret_uri     = string
-    account_secret_uri       = string
-    database_url_uri         = string
-    database_ca_uri          = string
-    provider_secret_uris     = optional(map(string), {})
-    reddit_data_api_approved = optional(bool, false)
+    vault_resource_id    = string
+    edge_secret_uri      = string
+    assistant_secret_uri = string
+    account_secret_uri   = string
+    database_url_uri     = string
+    database_ca_uri      = string
+    provider_secret_uris = optional(map(string), {})
   })
   default = null
 
@@ -174,18 +179,11 @@ variable "live_secrets" {
   validation {
     condition = var.live_secrets == null ? true : (
       alltrue([for name in keys(var.live_secrets.provider_secret_uris) : contains([
-        "spotify-client-id", "spotify-client-secret", "x-bearer-token", "reddit-client-id", "reddit-client-secret",
-        "reddit-access-token", "reddit-refresh-token", "reddit-user-agent",
+        "spotify-client-id", "spotify-client-secret", "x-bearer-token",
       ], name)]) &&
-      contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-id") == contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-secret") &&
-      contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-id") == contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret") &&
-      (!contains(keys(var.live_secrets.provider_secret_uris), "reddit-refresh-token") || contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret")) &&
-      (var.live_secrets.reddit_data_api_approved ? (
-        contains(keys(var.live_secrets.provider_secret_uris), "reddit-user-agent") &&
-        (contains(keys(var.live_secrets.provider_secret_uris), "reddit-access-token") || contains(keys(var.live_secrets.provider_secret_uris), "reddit-client-secret"))
-      ) : !anytrue([for name in keys(var.live_secrets.provider_secret_uris) : startswith(name, "reddit-")]))
+      contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-id") == contains(keys(var.live_secrets.provider_secret_uris), "spotify-client-secret")
     )
-    error_message = "Provide complete Spotify or approved Reddit credential sets and use only supported backend provider references."
+    error_message = "Only supported Spotify and X provider secret references are accepted."
   }
 }
 

@@ -34,6 +34,8 @@ run "default_is_zero_azure_resources" {
       length(terraform_data.release_approval) == 0 &&
       length(azurerm_resource_group.edition) == 0 &&
       length(azurerm_container_app_environment.edition) == 0 &&
+      length(azurerm_log_analytics_workspace.runtime) == 0 &&
+      length(azurerm_monitor_diagnostic_setting.runtime) == 0 &&
       length(azurerm_container_app.front) == 0 &&
       length(azurerm_container_app.backend) == 0 &&
       length(azurerm_postgresql_flexible_server.live) == 0 &&
@@ -41,6 +43,91 @@ run "default_is_zero_azure_resources" {
     )
     error_message = "Default replay must create no guard, resource group, compute or database."
   }
+}
+
+run "saved_logs_do_not_create_resources_when_azure_is_disabled" {
+  command = plan
+
+  variables {
+    enable_saved_logs = true
+  }
+
+  assert {
+    condition = (
+      !output.profile.saved_logs &&
+      output.saved_logs == null &&
+      length(azurerm_log_analytics_workspace.runtime) == 0 &&
+      length(azurerm_monitor_diagnostic_setting.runtime) == 0
+    )
+    error_message = "A disabled deployment must create no saved-log resources even when the option is selected."
+  }
+}
+
+run "replay_keeps_streaming_only_when_saved_logs_are_selected" {
+  command = plan
+
+  variables {
+    azure_enabled     = true
+    enable_saved_logs = true
+  }
+
+  assert {
+    condition = (
+      !output.profile.saved_logs &&
+      azurerm_container_app_environment.edition[0].logs_destination == null &&
+      output.saved_logs == null &&
+      length(azurerm_log_analytics_workspace.runtime) == 0 &&
+      length(azurerm_monitor_diagnostic_setting.runtime) == 0
+    )
+    error_message = "Saved logs must remain isolated to an enabled live edition."
+  }
+}
+
+run "live_saved_logs_are_bounded_and_use_azure_identity" {
+  command = plan
+
+  variables {
+    azure_enabled           = true
+    profile                 = "live"
+    enable_saved_logs       = true
+    postgres_admin_password = "isolated-mock-input-not-a-secret"
+    spend_approval = {
+      approved_monthly_usd     = 25
+      reviewed_monthly_usd     = 25
+      accepts_metered_overages = true
+    }
+  }
+
+  assert {
+    condition = (
+      output.profile.saved_logs &&
+      azurerm_container_app_environment.edition[0].logs_destination == "azure-monitor" &&
+      length(azurerm_log_analytics_workspace.runtime) == 1 &&
+      length(azurerm_monitor_diagnostic_setting.runtime) == 1 &&
+      azurerm_log_analytics_workspace.runtime[0].sku == "PerGB2018" &&
+      azurerm_log_analytics_workspace.runtime[0].retention_in_days == 30 &&
+      azurerm_log_analytics_workspace.runtime[0].daily_quota_gb == 0.05 &&
+      !azurerm_log_analytics_workspace.runtime[0].local_authentication_enabled &&
+      !azurerm_log_analytics_workspace.runtime[0].allow_resource_only_permissions &&
+      one(azurerm_monitor_diagnostic_setting.runtime[0].enabled_log).category_group == "allLogs" &&
+      azurerm_monitor_diagnostic_setting.runtime[0].log_analytics_destination_type == "Dedicated" &&
+      output.saved_logs.monthly_review_usd == 5
+    )
+    error_message = "Live console and system logs require 30-day retention, bounded ingestion, reviewed spend, and workspace authorization."
+  }
+}
+
+run "saved_logs_require_the_additional_reviewed_reserve" {
+  command = plan
+
+  variables {
+    azure_enabled           = true
+    profile                 = "live"
+    enable_saved_logs       = true
+    postgres_admin_password = "isolated-mock-input-not-a-secret"
+  }
+
+  expect_failures = [terraform_data.release_approval]
 }
 
 run "hosted_replay_consumption_and_private_backend" {
@@ -78,6 +165,11 @@ run "hosted_replay_consumption_and_private_backend" {
       azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].path == "/" &&
       azurerm_container_app.front[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
       azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].success_count_threshold == 1 &&
+      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].port == 8780 &&
+      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].path == "/api/health" &&
+      azurerm_container_app.backend[0].template[0].container[0].readiness_probe[0].interval_seconds == 15 &&
+      azurerm_container_app.backend[0].template[0].container[0].liveness_probe[0].interval_seconds == 15 &&
+      contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_SHUTDOWN_TIMEOUT_MS") &&
       !contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_KEEP_CATALOG_WARM") &&
       !contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_DATABASE_HOST")
     )
@@ -146,6 +238,8 @@ run "live_foundation_does_not_launch_apps" {
   assert {
     condition = (
       !output.profile.apps &&
+      !output.profile.saved_logs &&
+      output.saved_logs == null &&
       azurerm_postgresql_flexible_server.live[0].version == "17" &&
       azurerm_postgresql_flexible_server.live[0].sku_name == "B_Standard_B1ms" &&
       !azurerm_postgresql_flexible_server.live[0].public_network_access_enabled &&
@@ -224,23 +318,20 @@ run "live_runtime_uses_referenced_secrets" {
         spotify-client-id     = "https://fixturevault.vault.azure.net/secrets/spotify-id/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         spotify-client-secret = "https://fixturevault.vault.azure.net/secrets/spotify-secret/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         x-bearer-token        = "https://fixturevault.vault.azure.net/secrets/x-token/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        reddit-access-token   = "https://fixturevault.vault.azure.net/secrets/reddit-token/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        reddit-user-agent     = "https://fixturevault.vault.azure.net/secrets/reddit-agent/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
-      reddit_data_api_approved = true
     }
   }
 
   assert {
     condition = (
       length(azurerm_user_assigned_identity.app) == 2 &&
-      length(azurerm_role_assignment.key_vault_secret) == 12 &&
+      length(azurerm_role_assignment.key_vault_secret) == 10 &&
       toset([for s in azurerm_container_app.front[0].secret : s.name]) == toset(["edge", "assistant"]) &&
-      toset([for s in azurerm_container_app.backend[0].secret : s.name]) == toset(["edge", "assistant", "account", "database", "database-ca", "spotify-client-id", "spotify-client-secret", "x-bearer-token", "reddit-access-token", "reddit-user-agent"]) &&
+      toset([for s in azurerm_container_app.backend[0].secret : s.name]) == toset(["edge", "assistant", "account", "database", "database-ca", "spotify-client-id", "spotify-client-secret", "x-bearer-token"]) &&
       contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_DATABASE_HOST") &&
-      toset([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name if env.secret_name != null && env.secret_name != ""]) == toset(["MARKET_EDGE_SECRET", "ASSISTANT_SERVICE_SECRET", "ACCOUNT_COOKIE_SECRET", "DATABASE_URL", "DATABASE_CA_CERT", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "X_BEARER_TOKEN", "REDDIT_ACCESS_TOKEN", "REDDIT_USER_AGENT"]) &&
+      toset([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name if env.secret_name != null && env.secret_name != ""]) == toset(["MARKET_EDGE_SECRET", "ASSISTANT_SERVICE_SECRET", "ACCOUNT_COOKIE_SECRET", "DATABASE_URL", "DATABASE_CA_CERT", "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "X_BEARER_TOKEN"]) &&
       one([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.value if env.name == "X_MONTHLY_COST_CENTS"]) == "150" &&
-      one([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.value if env.name == "REDDIT_DATA_API_APPROVED"]) == "true"
+      contains([for env in azurerm_container_app.backend[0].template[0].container[0].env : env.name], "PREDICTIR_SHUTDOWN_TIMEOUT_MS")
     )
     error_message = "Live secrets must be Key Vault references scoped to the relevant app identity."
   }

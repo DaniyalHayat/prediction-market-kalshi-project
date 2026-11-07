@@ -28,7 +28,7 @@ locals {
     contains(keys(local.backend_secrets), "x-bearer-token") ? {
       X_MONTHLY_POST_READ_LIMIT = "250"
       X_MONTHLY_COST_CENTS      = "150"
-  } : {}, try(local.live && var.live_secrets.reddit_data_api_approved, false) ? { REDDIT_DATA_API_APPROVED = "true" } : {})
+  } : {})
 
   secret_environment = {
     edge                  = "MARKET_EDGE_SECRET"
@@ -39,11 +39,6 @@ locals {
     spotify-client-id     = "SPOTIFY_CLIENT_ID"
     spotify-client-secret = "SPOTIFY_CLIENT_SECRET"
     x-bearer-token        = "X_BEARER_TOKEN"
-    reddit-client-id      = "REDDIT_CLIENT_ID"
-    reddit-client-secret  = "REDDIT_CLIENT_SECRET"
-    reddit-access-token   = "REDDIT_ACCESS_TOKEN"
-    reddit-refresh-token  = "REDDIT_REFRESH_TOKEN"
-    reddit-user-agent     = "REDDIT_USER_AGENT"
   }
 }
 
@@ -113,6 +108,11 @@ resource "azurerm_container_app" "backend" {
       cpu    = local.live ? 0.5 : 0.25
       memory = local.live ? "1Gi" : "0.5Gi"
 
+      env {
+        name  = "PREDICTIR_SHUTDOWN_TIMEOUT_MS"
+        value = "25000"
+      }
+
       dynamic "env" {
         for_each = local.backend_environment
 
@@ -135,8 +135,9 @@ resource "azurerm_container_app" "backend" {
         transport               = "HTTP"
         port                    = 8780
         path                    = "/api/health"
-        interval_seconds        = 3
-        timeout                 = 2
+        initial_delay           = 5
+        interval_seconds        = 15
+        timeout                 = 3
         failure_count_threshold = 20
       }
 
@@ -144,18 +145,21 @@ resource "azurerm_container_app" "backend" {
         transport               = "HTTP"
         port                    = 8780
         path                    = "/api/health"
-        interval_seconds        = 3
-        timeout                 = 2
+        initial_delay           = 5
+        interval_seconds        = 15
+        timeout                 = 3
         failure_count_threshold = 5
         success_count_threshold = 1
       }
 
       liveness_probe {
-        transport        = "HTTP"
-        port             = 8780
-        path             = "/api/health"
-        interval_seconds = 20
-        timeout          = 3
+        transport               = "HTTP"
+        port                    = 8780
+        path                    = "/api/health"
+        initial_delay           = 5
+        interval_seconds        = 15
+        timeout                 = 3
+        failure_count_threshold = 3
       }
     }
   }

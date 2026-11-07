@@ -6,7 +6,19 @@ output "profile" {
     apps       = local.apps
     postgresql = local.live
     bootstrap  = local.bootstrap
+    saved_logs = local.saved_logs
   }
+}
+
+output "saved_logs" {
+  description = "Authorized workspace coordinates for retained console and system logs. Azure ingestion may lag and daily quotas may overshoot."
+  value = local.saved_logs ? {
+    workspace_resource_id = azurerm_log_analytics_workspace.runtime[0].id
+    workspace_id          = azurerm_log_analytics_workspace.runtime[0].workspace_id
+    retention_days        = azurerm_log_analytics_workspace.runtime[0].retention_in_days
+    daily_quota_gb        = azurerm_log_analytics_workspace.runtime[0].daily_quota_gb
+    monthly_review_usd    = local.saved_logs_reserve_usd
+  } : null
 }
 
 output "bootstrap_job_name" {

@@ -4,11 +4,13 @@ locals {
   apps       = var.azure_enabled && (var.profile == "replay" || var.launch_live_apps)
   identities = local.live || (local.apps && var.existing_acr != null)
   bootstrap  = local.live && var.live_bootstrap != null
+  saved_logs = local.live && var.enable_saved_logs
 
   postgres_monthly_base_usd = var.location == "centralus" ? 18.69 : 16.59
   minimum_approval_usd      = var.profile == "live" ? 25 : 1
   warm_compute_idle_usd     = 730 * 3600 * (local.live ? 2.25 : 1.5) * 0.000003
-  reviewed_base_usd         = (local.live ? local.postgres_monthly_base_usd : 0) + (local.apps && var.keep_apps_warm ? local.warm_compute_idle_usd : 0)
+  saved_logs_reserve_usd    = local.saved_logs ? 5 : 0
+  reviewed_base_usd         = (local.live ? local.postgres_monthly_base_usd : 0) + (local.apps && var.keep_apps_warm ? local.warm_compute_idle_usd : 0) + local.saved_logs_reserve_usd
 
   unresolved_image = "invalid.invalid/release-required@sha256:0000000000000000000000000000000000000000000000000000000000000000"
   images = var.images == null ? {
@@ -50,7 +52,7 @@ resource "terraform_data" "release_approval" {
         var.spend_approval.reviewed_monthly_usd >= local.reviewed_base_usd &&
         var.spend_approval.reviewed_monthly_usd <= var.spend_approval.approved_monthly_usd
       )
-      error_message = "The estimate must fit a reviewed release limit of at least $1 for replay or $25 for live and cover the database, DNS and idle compute base as applicable. Choose usage-based billing or attest a verified credit-only subscription with its spending limit enabled."
+      error_message = "The estimate must fit a reviewed release limit of at least $1 for replay or $25 for live and cover the database, DNS, idle compute and optional $5 saved-log reserve as applicable. Choose usage-based billing or attest a verified credit-only subscription with its spending limit enabled."
     }
 
     precondition {
@@ -116,7 +118,7 @@ resource "azurerm_container_app_environment" "edition" {
   infrastructure_subnet_id       = local.live ? azurerm_subnet.apps[0].id : null
   internal_load_balancer_enabled = local.live ? false : null
   public_network_access          = "Enabled"
-  logs_destination               = null
+  logs_destination               = local.saved_logs ? "azure-monitor" : null
   tags                           = local.tags
 
   workload_profile {
