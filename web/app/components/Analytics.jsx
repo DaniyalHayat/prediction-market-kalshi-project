@@ -1,28 +1,28 @@
 'use client';
 import Script from 'next/script';
 import {useEffect,useRef,useState} from 'react';
-import {ANALYTICS_CONSENT_KEY,deniedConsent,sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,analyticsProvider} from './analytics-policy.mjs';
+import {ANALYTICS_CONSENT_KEY,deniedConsent,applyAnalyticsConsent,sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,analyticsProvider} from './analytics-policy.mjs';
 import './analytics.css';
 
 const provider=analyticsProvider({gtm:process.env.NEXT_PUBLIC_GTM_CONTAINER_ID||'',ga:process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||''});
 const measurementID=provider?.kind==='ga'?provider.id:null;
 const knownMeasurementID=/^G-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||'')?process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID:null;
-export default function Analytics() {
+export default function Analytics({nonce}) {
   const [consent,setConsent]=useState('unknown'),[open,setOpen]=useState(false),[privacySignal,setPrivacySignal]=useState(false),[storageError,setStorageError]=useState(false);
   const enabled=useRef(false),configured=useRef(false),pageSent=useRef(false),scriptReady=useRef(false);
   function prepare(){
     if(!provider)return;
-    enabled.current=true;if(knownMeasurementID)window['ga-disable-'+knownMeasurementID]=false;
+    enabled.current=true;
     window.dataLayer=window.dataLayer||[];
     window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
     if(!configured.current){
       window.gtag('consent','default',deniedConsent);
       window.gtag('set','ads_data_redaction',true);window.gtag('set','url_passthrough',false);
-      window.gtag('consent','update',{...deniedConsent,analytics_storage:'granted'});
+      applyAnalyticsConsent(window,true,knownMeasurementID);
       const context=analyticsConfig(window.location.href,document.referrer);
       if(provider.kind==='gtm'){window.dataLayer.push({...context,'gtm.start':Date.now(),event:'gtm.js'});}
       else{window.gtag('js',new Date());window.gtag('config',measurementID,context);}configured.current=true;
-    }else window.gtag('consent','update',{...deniedConsent,analytics_storage:'granted'});
+    }else applyAnalyticsConsent(window,true,knownMeasurementID);
     if(scriptReady.current)sendPage();
   }
   function sendPage(){
@@ -37,7 +37,7 @@ export default function Analytics() {
   }
   function stop(){
     enabled.current=false;if(!provider)return;
-    window.gtag?.('consent','update',deniedConsent);if(knownMeasurementID)window['ga-disable-'+knownMeasurementID]=true;
+    applyAnalyticsConsent(window,false,knownMeasurementID);
     for(const entry of document.cookie.split(';')){
       const name=entry.split('=')[0].trim();if(!/^_ga(?:_|$)/.test(name))continue;
       for(const domain of ['',window.location.hostname,'.'+window.location.hostname])document.cookie=`${name}=; Max-Age=0; Path=/; SameSite=Lax; Secure${domain?'; Domain='+domain:''}`;
@@ -71,7 +71,7 @@ export default function Analytics() {
     setConsent(value);setOpen(false);
   }
   return <>
-    {consent==='allowed'&&provider&&<Script id={provider.kind==='gtm'?'market-lab-gtm':'market-lab-ga4'} src={provider.kind==='gtm'?'https://www.googletagmanager.com/gtm.js?id='+provider.id:'https://www.googletagmanager.com/gtag/js?id='+measurementID} strategy="afterInteractive" onReady={()=>{scriptReady.current=true;sendPage();}}/>}
+    {consent==='allowed'&&provider&&<Script nonce={nonce} id={provider.kind==='gtm'?'market-lab-gtm':'market-lab-ga4'} src={provider.kind==='gtm'?'https://www.googletagmanager.com/gtm.js?id='+provider.id:'https://www.googletagmanager.com/gtag/js?id='+measurementID} strategy="afterInteractive" onReady={()=>{scriptReady.current=true;sendPage();}}/>}
     <button type="button" className="analytics-settings" aria-expanded={open} aria-controls="analytics-consent" onClick={()=>setOpen(value=>!value)}>Analytics settings</button>
     {open&&<section id="analytics-consent" className="analytics-consent" aria-label="Analytics preferences">
       <strong>Optional analytics</strong><p>{provider?'Allow visit counts, public market selections and use of research and paper tools. Balances, trade amounts, chat, journals and account details stay private.':'Analytics is not configured for this deployment. No Google Analytics is loaded.'}</p>
