@@ -6,6 +6,9 @@ import {WEEKLY_TSA_SERIES, estimateWeeklyTsa, weeklyTsaContract} from "./weekly-
 import {CRYPTO_MINUTE_SERIES, cryptoMinuteSource, estimateMinuteCrypto, minuteCryptoContract} from "./crypto-minute.mjs";
 import weeklyTsaReplay from "../../public/research/weekly-tsa.json" with {type:"json"};
 import cryptoMinuteReplay from "../../public/research/crypto-minute.json" with {type:"json"};
+import {estimateWeatherSettlement, weatherMosSource} from "./weather-settlement.mjs";
+import weatherSettlementArchive from "../../research-data/weather-settlement-archive.json" with {type:"json"};
+import weatherSettlementReplay from "../../public/research/weather-settlement.json" with {type:"json"};
 
 const state = globalThis[Symbol.for("kalshi.independent.reports.v1")] ||= {cache:new Map(),inflight:new Map()};
 export { CATEGORIES };
@@ -14,14 +17,15 @@ export async function sourceBundle(id, exactSeries) {
   if(exactSeries && !category.series.includes(exactSeries)) throw new RangeError("Unsupported contract series for this research family");
   const series=exactSeries ? [exactSeries] : category.series;
   const tasks=id==="travel" ? [tsaSource] : ["inflation","labor"].includes(id) ? [()=>macroSource(id)] :
-    id==="weather" ? series.map(ticker=>()=>weatherSource(ticker)) :
+    id==="weather" ? [...series.map(ticker=>()=>weatherSource(ticker)),
+      ...(exactSeries && weatherSettlementReplay.by_series[exactSeries] ? [()=>weatherMosSource(exactSeries)] : [])] :
     series.map(ticker=>Object.hasOwn(CRYPTO_MINUTE_SERIES,ticker) ? ()=>cryptoMinuteSource(ticker) : ()=>cryptoSource(ticker==="KXBTC" ? "BTC" : "ETH"));
   const sources=[],errors=[];
   // Bound simultaneous requests; datasets are independently cached and failures are never synthesized.
   for(let start=0;start<tasks.length;start+=2) {
     const results=await Promise.allSettled(tasks.slice(start,start+2).map(task=>task()));
     for(const result of results) {
-      if(result.status==="fulfilled")sources.push(result.value);
+      if(result.status==="fulfilled"){if(result.value)sources.push(result.value);}
       else errors.push(result.reason.message);
     }
   }
@@ -53,7 +57,8 @@ function prepareModels(category, sources) {
 export function distribution(market, category, bundle, models, now=Date.now()) {
   if(category.id==="travel" && market.series===WEEKLY_TSA_SERIES)
     return estimateWeeklyTsa(market,bundle.sources[0],now,{holdout:weeklyTsaReplay.holdout,
-      brier_gain_interval_95:weeklyTsaReplay.holdout_brier_gain_95, release_eligible:weeklyTsaReplay.release_eligible});
+      brier_gain_interval_95:weeklyTsaReplay.holdout_brier_gain_vs_both_95,
+      release_eligible:weeklyTsaReplay.release_eligible, release_reason:weeklyTsaReplay.release_reason});
   if(category.id==="crypto" && Object.hasOwn(CRYPTO_MINUTE_SERIES,market.series))
     return estimateMinuteCrypto(market,bundle.sources.find(source=>source.series===market.series),now,
       cryptoMinuteReplay.by_series[market.series]);
@@ -86,7 +91,11 @@ export function distribution(market, category, bundle, models, now=Date.now()) {
         "No demonstrated out-of-sample Kalshi-contract or net-P&L advantage."]};
   }
   if(id==="weather") {
-    const source=bundle.sources.find(row=>row.series===market.series), site=WEATHER_SITES[market.series];
+    const replay=weatherSettlementReplay.by_series[market.series];
+    const mos=bundle.sources.find(row=>row.series===market.series && row.weather_mos);
+    const backtested=replay && estimateWeatherSettlement(market,market.series,mos,weatherSettlementArchive.by_series[market.series].events,replay,now);
+    if(backtested)return backtested;
+    const source=bundle.sources.find(row=>row.series===market.series && !row.weather_mos), site=WEATHER_SITES[market.series];
     if(!source || !site)return {reason:"Station-specific NWS data unavailable."};
     if(!site.rule.test(`${market.rules_primary || ""} ${market.rules_secondary || ""}`))return {reason:`The rules must explicitly match ${site.name}; station mapping is not assumed.`};
     if(!source.updated_at || now-Date.parse(source.updated_at)>6*3600000)return {reason:"NWS forecast is more than six hours old."};

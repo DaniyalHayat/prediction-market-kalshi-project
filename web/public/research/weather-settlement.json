@@ -1,0 +1,119 @@
+{
+  "version": "weather-settlement-replay-v1",
+  "independent_forecast": true,
+  "archive_sha256": "4d2445864d0d5ecd69006d914fc0fc421e1eba2c2a374e1fd5f9bdf5090821b4",
+  "origin_utc": "06:00",
+  "holdout_start": "2026-09-01",
+  "window_end": "2026-11-07",
+  "by_series": {
+    "KXHIGHNY": {
+      "station": "KNYC",
+      "matched_events": 81,
+      "missing_forecast_contracts": 6,
+      "prior_history_missing_events": 31,
+      "earlier": {
+        "events": 0,
+        "contracts": 0,
+        "brier": null,
+        "baseline_brier": null,
+        "raw_mos_brier": null,
+        "log_loss": null,
+        "baseline_log_loss": null
+      },
+      "holdout": {
+        "events": 50,
+        "contracts": 300,
+        "brier": 0.11707902371293155,
+        "baseline_brier": 0.11611839704776723,
+        "raw_mos_brier": 0.12250899744259208,
+        "log_loss": 0.39882927835740717,
+        "baseline_log_loss": 0.3964435032440384
+      },
+      "weighted_vs_pooled_brier_gain_95": [
+        -0.0021005379518789606,
+        0.00015122869252755713
+      ],
+      "pooled_vs_raw_brier_gain_95": [
+        -0.0003639559251953633,
+        0.011465819643684812
+      ],
+      "release_eligible": false,
+      "release_reason": "The station replay has no cross-season or contemporaneous market-price and execution validation."
+    },
+    "KXHIGHCHI": {
+      "station": "KMDW",
+      "matched_events": 81,
+      "missing_forecast_contracts": 6,
+      "prior_history_missing_events": 31,
+      "earlier": {
+        "events": 0,
+        "contracts": 0,
+        "brier": null,
+        "baseline_brier": null,
+        "raw_mos_brier": null,
+        "log_loss": null,
+        "baseline_log_loss": null
+      },
+      "holdout": {
+        "events": 50,
+        "contracts": 300,
+        "brier": 0.1203277144404913,
+        "baseline_brier": 0.11973229976262444,
+        "raw_mos_brier": 0.1275307321321795,
+        "log_loss": 0.4038118794474838,
+        "baseline_log_loss": 0.4020453022674224
+      },
+      "weighted_vs_pooled_brier_gain_95": [
+        -0.0022110268441495216,
+        0.0011934282064762706
+      ],
+      "pooled_vs_raw_brier_gain_95": [
+        -0.00009352148884236362,
+        0.015797139106539872
+      ],
+      "release_eligible": false,
+      "release_reason": "The station replay has no cross-season or contemporaneous market-price and execution validation."
+    },
+    "KXHIGHMIA": {
+      "station": "KMIA",
+      "matched_events": 81,
+      "missing_forecast_contracts": 6,
+      "prior_history_missing_events": 31,
+      "earlier": {
+        "events": 0,
+        "contracts": 0,
+        "brier": null,
+        "baseline_brier": null,
+        "raw_mos_brier": null,
+        "log_loss": null,
+        "baseline_log_loss": null
+      },
+      "holdout": {
+        "events": 50,
+        "contracts": 300,
+        "brier": 0.11271583295901945,
+        "baseline_brier": 0.11281197701284483,
+        "raw_mos_brier": 0.1229683933744506,
+        "log_loss": 0.3643697632958612,
+        "baseline_log_loss": 0.36532302994276045
+      },
+      "weighted_vs_pooled_brier_gain_95": [
+        -0.0005436157159154506,
+        0.0006329317448364972
+      ],
+      "pooled_vs_raw_brier_gain_95": [
+        0.0018726614895015568,
+        0.01889678847459429
+      ],
+      "release_eligible": false,
+      "release_reason": "The station replay has no cross-season or contemporaneous market-price and execution validation."
+    }
+  },
+  "protocol": [
+    "Select the archived 00Z NWS GFS MOS daily maximum and wait until 06Z to allow publication.",
+    "Use only exact exchange contracts open at the origin and official finalized binary outcomes. The forecast receives no exchange price.",
+    "Fit residuals only with earlier settlements available before the origin. Compare warmth and recency weighting to an unweighted residual pool and a fixed 2.5 F Gaussian.",
+    "Average scores within each day, then across dates. Resample seven-day circular blocks for paired Brier gain uncertainty.",
+    "Archive issue time and settlement reporting delay are conservative assumptions. There is no venue-price or fill benchmark for this replay."
+  ]
+}
