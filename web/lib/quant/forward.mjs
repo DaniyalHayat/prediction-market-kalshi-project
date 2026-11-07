@@ -7,6 +7,7 @@ import { researchReport } from "../intelligence/index.mjs";
 import { categoryById } from "../intelligence/catalog.mjs";
 import { STRATEGY_VERSION, STRATEGIES, bookState, normalizeCandles, minuteRidge, irregularOU, relativeValueSurface, signalTargets, freezeDecision, scoreMarkout, summarizeForward } from "./signals.mjs";
 import {cloudEnabled,store} from '../cloud/store.mjs';
+import {readBoundedTextFile} from '../runtime/bounded-file.mjs';
 
 export const BALANCED_UNIVERSE=["crypto","weather","labor","inflation","travel"];
 const directory=join(tmpdir(),"kalshi-quant-forward-v2");
@@ -88,9 +89,7 @@ export async function readForward(id) {
     return forwardDocument(id,entries);
   }
   try {
-    const info=await fs.stat(path);
-    if(info.size>4000000)throw new ForwardError("Cohort exceeds archive bound",503);
-    text=await fs.readFile(path,"utf8");
+    text=await readBoundedTextFile(path,4000000,"Cohort exceeds archive bound");
   } catch(error) {
     if(error.code==="ENOENT")throw new ForwardError("Cohort is not available on this server instance. Import/export is local; no shared cloud store is configured.",404);
     throw error;

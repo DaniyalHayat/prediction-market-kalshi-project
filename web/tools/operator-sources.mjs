@@ -1,5 +1,6 @@
 import {execFile} from 'node:child_process';
-import {open, readFile, stat} from 'node:fs/promises';
+import {open} from 'node:fs/promises';
+import {readBoundedTextFile} from '../lib/runtime/bounded-file.mjs';
 import {promisify} from 'node:util';
 import {sanitizeOperationalRecord} from '../lib/runtime/log-pipeline.mjs';
 import {OPERATOR_SEARCH_SCOPE} from '../lib/runtime/operator-search.mjs';
@@ -34,9 +35,7 @@ export function azureSearchToken({cli = runAzure, now = Date.now} = {}) {
 }
 
 export async function readOperatorFile(path, limit = maximumBytes) {
-  const info = await stat(path);
-  if (!info.isFile() || info.size > limit) throw new Error('Operator input exceeds the local inspection limit.');
-  return readFile(path, 'utf8');
+  return readBoundedTextFile(path,limit,'Operator input exceeds the local inspection limit.');
 }
 
 function decodeRows(text) {

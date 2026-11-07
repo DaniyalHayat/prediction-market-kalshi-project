@@ -4,6 +4,7 @@ import {marketFeed} from '../cloud/feed.mjs';
 import {workspaceResearch} from './router.mjs';
 import {usableForecast} from './positions.mjs';
 import {executionResearch,normalizeExecutionControls} from './execution-research.mjs';
+import {forecastSourceAllowed} from './forecast-source-policy.mjs';
 
 export function parseExecutionRequest(input){
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>!['ticker','controls','model'].includes(key)))throw new RangeError('Review the execution lab request');
@@ -44,7 +45,7 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
       clock:'Local monotonic receipt time; arrival clustering describes quote updates, not trade or news arrival intensity.',
       reason:recent&&!aligned?'The current book does not match the retained event window. Flow adjustments are withheld until an aligned sequence is available.':recent?null:'No recent continuous live sequence is retained for this exact contract. Open live streaming and rerun after updates arrive.'},
     account_balances_available:false,paper_only:true,independent_forecast_unchanged:true,
-    sources:[{label:'Kalshi public order book',url:depth.source_url,as_of:depth.as_of},...(research.sources||[]).filter(row=>typeof row.url==='string'&&!row.url.includes('api.spotify.com')).slice(0,3)],
+    sources:[{label:'Kalshi public order book',url:depth.source_url,as_of:depth.as_of},...(research.sources||[]).filter(row=>forecastSourceAllowed(row.url)).slice(0,3)],
     scope:'Separate experimental execution and risk model. It cannot place orders, read balances or replace the released outcome forecast.'};
 }
 

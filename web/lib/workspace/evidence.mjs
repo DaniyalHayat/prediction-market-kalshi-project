@@ -7,9 +7,10 @@ import {nflContractIdentity} from './nfl-source.mjs';
 import {fetchContractHeadlines,fetchPreviewHeadlines,sportsNewsContext} from '../intelligence/brief.mjs';
 import {collectOfficialEvidence} from './public-evidence.mjs';
 import {socialEvidenceEnabled,socialDisabledResult} from './social-policy.mjs';
+import {htmlText} from '../runtime/html-text.mjs';
 
 const sportFeeds={nfl:['football/nfl','NFL'],nba:['basketball/nba','NBA'],epl:['soccer/eng.1','Premier League']};
-const cleanText=(value,limit=350)=>String(value||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,limit);
+const cleanText=(value,limit=350)=>htmlText(value||'',limit);
 export async function sportsNews(topic,{get=sourceJSON,sports}={}){
   const feed=sportFeeds[topic];
   if(!feed)return {status:'not_applicable',articles:[]};

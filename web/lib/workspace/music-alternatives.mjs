@@ -1,17 +1,17 @@
 import {permittedPublicPage} from './public-pages.mjs';
-const decode=value=>String(value||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&#39;|&apos;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/&#(\d+);/g,(_,n)=>Number(n)<=0x10ffff?String.fromCodePoint(Number(n)):'').trim();
-const norm=value=>decode(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+import {htmlDocument,htmlElements,htmlAttribute,htmlNodeText} from '../runtime/html-text.mjs';
+const norm=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function parseKworbUS(html,now=Date.now()){
   if(typeof html!=='string'||html.length>1_000_000||!/Spotify Daily Chart - United States/.test(html))throw new Error('US Spotify song chart identity was not established');
   const date=html.match(/Spotify Daily Chart - United States - (\d{4})\/(\d{2})\/(\d{2})/),measurement=date?date.slice(1).join('-'):null;
   if(!measurement||!Number.isFinite(Date.parse(measurement))||new Date(measurement).toISOString().slice(0,10)!==measurement||Date.parse(measurement)>now)throw new Error('US song chart measurement date was not established');
-  const table=html.match(/<table\b[^>]*id="spotifydaily"[^>]*>([\s\S]*?)<\/table>/i)?.[1];
-  if(!table||!/<th[^>]*>Streams<\/th>/.test(table))throw new Error('US song stream-count columns were not established');
-  const tracks=[...table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].flatMap(match=>{
-    const cells=[...match[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(m=>m[1]);if(cells.length<11)return [];
-    const rank=Number(decode(cells[0])),streamText=decode(cells[6]),links=[...cells[2].matchAll(/<a\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)],artist=links.find(l=>/\/artist\//.test(l[1])),track=links.find(l=>/\/track\//.test(l[1])),id=track?.[1].match(/\/([A-Za-z0-9]{22})\.html$/)?.[1];
+  const table=[...htmlElements(htmlDocument(html),'table')].find(node=>htmlAttribute(node,'id')==='spotifydaily');
+  if(!table||![...htmlElements(table,'th')].some(node=>htmlNodeText(node)==='Streams'))throw new Error('US song stream-count columns were not established');
+  const tracks=[...htmlElements(table,'tr')].flatMap(row=>{
+    const cells=(row.childNodes||[]).filter(node=>node.tagName==='td');if(cells.length<11)return [];
+    const rank=Number(htmlNodeText(cells[0])),streamText=htmlNodeText(cells[6]),links=[...htmlElements(cells[2],'a')].map(node=>({href:htmlAttribute(node,'href')||'',text:htmlNodeText(node)})),artist=links.find(l=>/\/artist\//.test(l.href)),track=links.find(l=>/\/track\//.test(l.href)),id=track?.href.match(/\/([A-Za-z0-9]{22})\.html$/)?.[1];
     if(!Number.isInteger(rank)||rank<1||rank>200||!id||!artist||!/^\d[\d,]*$/.test(streamText))return [];
-    return [{id,rank,name:decode(track[2]),artist:decode(artist[2]),streams:Number(streamText.replaceAll(',','')),url:'https://open.spotify.com/track/'+id,unit:'reported daily song streams',territory:'US',measurement_date:measurement}];
+    return [{id,rank,name:track.text,artist:artist.text,streams:Number(streamText.replaceAll(',','')),url:'https://open.spotify.com/track/'+id,unit:'reported daily song streams',territory:'US',measurement_date:measurement}];
   });
   if(tracks.length<50||new Set(tracks.map(r=>r.id)).size!==tracks.length||new Set(tracks.map(r=>r.rank)).size!==tracks.length)throw new Error('US song chart coverage is incomplete or duplicated');
   return {tracks,measurement_date:measurement,scope:'US daily Spotify song chart, as reported by Kworb',unit:'reported daily song streams',publisher:'Kworb',source_tier:'secondary_measurement',stale:now-Date.parse(measurement)>4*86400000,

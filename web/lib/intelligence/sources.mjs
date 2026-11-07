@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import fredSnapshot from "./data/fred-snapshot.json" with {type:"json"};
+import {htmlDocument,htmlElements,htmlNodeText} from '../runtime/html-text.mjs';
 
 const hosts = new Set(["www.tsa.gov","fred.stlouisfed.org","api.weather.gov","api.coinbase.com","api.exchange.coinbase.com","mesonet.agron.iastate.edu"]);
 const state = globalThis[Symbol.for("kalshi.independent.sources.v1")] ||= {cache:new Map(),inflight:new Map()};
@@ -52,9 +53,9 @@ const provenance = (response, name, rows, unit, extra={}) => ({
 
 export function parseTsa(html, now = Date.now()) {
   const rows = new Map();
-  for (const table of html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)) {
-    for (const match of table[1].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
-      const cells = [...match[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(cell=>cell[1].replace(/<[^>]*>/g,"").replace(/&nbsp;|&#160;/g," ").trim());
+  for (const table of htmlElements(htmlDocument(html),'table')) {
+    for (const row of htmlElements(table,'tr')) {
+      const cells=(row.childNodes||[]).filter(cell=>['td','th'].includes(cell.tagName)).map(cell=>htmlNodeText(cell,100));
       const date = cells[0]?.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       if (!date || !/^[\d,]+$/.test(cells[1] || "")) continue;
       const day = `${date[3]}-${date[1].padStart(2,"0")}-${date[2].padStart(2,"0")}`, value = Number(cells[1].replaceAll(",",""));

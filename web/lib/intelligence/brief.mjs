@@ -5,13 +5,14 @@ import { selectedResearch, modelEvidence } from './index.mjs';
 import { executionEstimate } from './math.mjs';
 import { evidenceEntities,evidenceTopicGroups,sportsEvidenceClaim,sportsTeamMention,topicWords } from '../workspace/source-ranking.mjs';
 import { nflContractIdentity } from '../workspace/nfl-source.mjs';
+import {htmlText} from '../runtime/html-text.mjs';
 
 const NEWS_ENDPOINT = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const RSS_ENDPOINT = 'https://news.google.com/rss/search';
 const NEWS_WINDOW = 7 * 86400000;
 const newsState = { cache: new Map(), inflight: new Map(), retryAt: 0 };
 const clean = (value, maximum = 6000) => typeof value === 'string'
-  ? value.replace(/<[^>]*>/g, '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, maximum) : '';
+  ? htmlText(value,maximum) : '';
 function publicURL(value) {
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
