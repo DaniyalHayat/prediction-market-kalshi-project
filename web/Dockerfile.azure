@@ -1,4 +1,4 @@
-FROM node:26.12.1-bookworm-slim AS build
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS build
 WORKDIR /app
 ARG PREDICTIR_BUILD_MODE=replay
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -9,11 +9,11 @@ RUN case "$PREDICTIR_BUILD_MODE" in replay|live) ;; *) exit 1 ;; esac \
     && PREDICTIR_MODE="$PREDICTIR_BUILD_MODE" npm run build \
     && printf '%s\n' "$PREDICTIR_BUILD_MODE" > .predictir-edition
 
-FROM node:26.12.1-bookworm-slim AS geography
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS geography
 ADD --checksum=sha256:75fe430010f6d38a8c4331c202bf0df6ce3221a6e6d823b9e5a6d951e4cf9758 https://download.db-ip.com/free/dbip-country-lite-2026-11.mmdb.gz /country.mmdb.gz
 RUN node -e "const fs = require('node:fs'); fs.writeFileSync('/country.mmdb', require('node:zlib').gunzipSync(fs.readFileSync('/country.mmdb.gz')))"
 
-FROM node:26.12.1-bookworm-slim AS front
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS front
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 ENV AZURE_COUNTRY_DB=/app/country.mmdb
@@ -22,19 +22,22 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.predictir-edition ./.predictir-edition
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chown=node:node cloud/azure-front.mjs ./cloud/azure-front.mjs
 COPY --chown=node:node lib/workspace/azure-mode.mjs ./lib/workspace/azure-mode.mjs
 USER node
 EXPOSE 3000
 CMD ["node", "cloud/azure-front.mjs"]
 
-FROM node:26.12.1-bookworm-slim AS backend
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS backend
 WORKDIR /app
 ENV NODE_ENV=production PORT=8780 SEMANTIC_MODEL_CACHE_DIR=/tmp/market-lab-models
 COPY package.json package-lock.json ./
 RUN npm pkg delete dependencies.next dependencies.react dependencies.react-dom dependencies.lucide-react dependencies.uplot dependencies.payload 'dependencies.@payloadcms/db-sqlite' \
-    && npm ci --omit=dev --ignore-scripts && npm cache clean --force \
-    && mkdir -p /tmp/market-lab-models && chown node:node /tmp/market-lab-models
+    && npm ci --omit=dev --ignore-scripts \
+    && npm cache clean --force \
+    && mkdir -p /tmp/market-lab-models && chown node:node /tmp/market-lab-models \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --chown=node:node app/api ./app/api
 COPY --chown=node:node lib ./lib
 COPY --chown=node:node cloud ./cloud
