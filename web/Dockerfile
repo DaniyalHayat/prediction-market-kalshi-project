@@ -9,6 +9,7 @@ COPY --chown=node:node lib ./lib
 COPY --chown=node:node cloud ./cloud
 COPY --chown=node:node public ./public
 COPY --chown=node:node database ./database
+COPY --chown=node:node research-data/weather-settlement-archive.json ./research-data/weather-settlement-archive.json
 RUN mkdir -p /tmp/market-lab-models && chown node:node /tmp/market-lab-models
 USER node
 EXPOSE 8780
