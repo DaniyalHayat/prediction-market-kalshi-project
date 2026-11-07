@@ -98,7 +98,7 @@ export function operationalRoute(path) {
   return operationalRoutes.has(path) ? path : 'other';
 }
 export const runtimeTelemetry = createRuntimeTelemetry({routes: [...operationalRoutes],
-  providers: ['kalshi', 'espn', 'apple_music', 'x', 'spotify', 'reddit', 'kworb', 'supabase_auth', 'postgres']});
+  providers: ['kalshi', 'espn', 'apple_music', 'x', 'spotify', 'reddit', 'kworb', 'federal_reserve', 'nhc', 'hacker_news', 'supabase_auth', 'postgres']});
 
 export async function observeProviderAttempt(provider, run, telemetry = runtimeTelemetry) {
   const started = performance.now(); let failed = true;
