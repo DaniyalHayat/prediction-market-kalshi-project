@@ -1,5 +1,6 @@
 'use client';
 import Script from 'next/script';
+import {usePathname} from 'next/navigation';
 import {useEffect,useRef,useState} from 'react';
 import {ANALYTICS_CONSENT_KEY,deniedConsent,applyAnalyticsConsent,sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,analyticsProvider} from './analytics-policy.mjs';
 import './analytics.css';
@@ -9,6 +10,10 @@ const provider=analyticsProvider({gtm:process.env.NEXT_PUBLIC_GTM_CONTAINER_ID||
 const measurementID=provider?.kind==='ga'?provider.id:null;
 const knownMeasurementID=/^G-[A-Z0-9]+$/.test(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||'')?process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID:null;
 export default function Analytics({nonce}) {
+  const pathname=usePathname();
+  return pathname==='/access'?null:<AnalyticsControls nonce={nonce}/>;
+}
+function AnalyticsControls({nonce}) {
   const [consent,setConsent]=useState('unknown'),[open,setOpen]=useState(false),[privacySignal,setPrivacySignal]=useState(false),[storageError,setStorageError]=useState(false);
   const enabled=useRef(false),configured=useRef(false),pageSent=useRef(false),scriptReady=useRef(false);
   function prepare(){
