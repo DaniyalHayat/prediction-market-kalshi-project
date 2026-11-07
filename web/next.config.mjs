@@ -1,6 +1,8 @@
 import {contentSecurityPolicy} from './lib/security-policy.mjs';
 const policy=contentSecurityPolicy({development:process.env.NODE_ENV==='development'});
 export default {output:'standalone',poweredByHeader:false,
+  experimental:{cpus:1},
+  typescript:{ignoreBuildErrors:process.env.PREDICTIR_SEPARATE_TYPECHECK==='1'},
   async redirects(){return ['/dashboard','/dashboard/index.html'].map(source=>({source,destination:'/',permanent:false}));},
   async headers(){return [{source:'/:path*',headers:[
   {key:'Content-Security-Policy',value:policy},{key:'X-Content-Type-Options',value:'nosniff'},

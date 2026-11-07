@@ -6,7 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY . .
 RUN case "$PREDICTIR_BUILD_MODE" in replay|live) ;; *) exit 1 ;; esac \
-    && PREDICTIR_MODE="$PREDICTIR_BUILD_MODE" npm run build \
+    && NODE_OPTIONS=--max-old-space-size=1024 PREDICTIR_MODE="$PREDICTIR_BUILD_MODE" node node_modules/next/dist/bin/next typegen \
+    && NODE_OPTIONS=--max-old-space-size=1024 npm run typecheck -- --incremental false
+RUN NODE_OPTIONS=--max-old-space-size=1024 PREDICTIR_SEPARATE_TYPECHECK=1 PREDICTIR_MODE="$PREDICTIR_BUILD_MODE" npm run build \
     && printf '%s\n' "$PREDICTIR_BUILD_MODE" > .predictir-edition
 
 FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS geography
