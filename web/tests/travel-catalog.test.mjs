@@ -42,9 +42,9 @@ test('Travel includes open weekly TSA and airport markets when daily series are 
   }
 });
 
-test('Weekly TSA and airport markets never receive the daily TSA forecast',async()=>{
+test('Airport markets are never assigned the nationwide TSA research family',async()=>{
   let dailyCalls=0;
-  for(const series of openTravelSeries){
+  for(const series of openTravelSeries.filter(series=>series!=='KXTSAW')){
     const market=travelMarket(series);
     const brief=await marketBrief(market.ticker,{},{
       marketDetails:async()=>({market,source_url:exchange+'/markets/'+market.ticker,as_of:new Date().toISOString()}),
@@ -60,5 +60,6 @@ test('Weekly TSA and airport markets never receive the daily TSA forecast',async
     assert.equal(brief.decision.side,'insufficient_edge');
   }
   assert.equal(inferResearchFamily(travelMarket('KXTSAD').ticker),'travel');
+  assert.equal(inferResearchFamily(travelMarket('KXTSAW').ticker),'travel');
   assert.equal(dailyCalls,0);
 });

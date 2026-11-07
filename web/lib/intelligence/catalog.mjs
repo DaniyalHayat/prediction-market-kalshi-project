@@ -1,11 +1,11 @@
 import { request } from "../live.mjs";
 
 export const CATEGORIES = [
-  {id:"travel", name:"TSA travel", short:"Travel", series:["KXTSAD","KXTSA"], source:"TSA checkpoint counts", model:"Weekday seasonal ensemble", unit:"passengers", reason:"Numeric daily outcomes, a directly observable resolution source and repeated same-weekday samples."},
+  {id:"travel", name:"TSA travel", short:"Travel", series:["KXTSAD","KXTSA","KXTSAW"], source:"TSA checkpoint counts", model:"Weekday seasonal ensemble", unit:"passengers", reason:"Daily counts and weekly averages are modeled separately from the same TSA observations."},
   {id:"weather", name:"Daily temperature", short:"Weather", series:["KXHIGHNY","KXHIGHCHI","KXHIGHMIA"], source:"National Weather Service", model:"Hourly forecast + observed daily maximum", unit:"°F", reason:"Short forecast horizons and physical measurements; forecast uncertainty and station mismatch must be priced."},
   {id:"inflation", name:"US inflation", short:"Inflation", series:["KXCPI"], source:"FRED / Bureau of Labor Statistics", model:"Regularized change ensemble", unit:"% MoM", reason:"A numerical release, long public history and a coherent ladder of thresholds; revisions limit historical validation."},
   {id:"labor", name:"US unemployment", short:"Labor", series:["KXU3"], source:"FRED / Bureau of Labor Statistics", model:"Regularized change ensemble", unit:"%", reason:"A repeated numerical release with long public history. Regime changes and revisions are explicit risks."},
-  {id:"crypto", name:"Bitcoin & Ether", short:"Crypto", series:["KXBTC","KXETH"], source:"Coinbase public candles", model:"EWMA return distribution", unit:"USD", reason:"Free, frequent price observations enable realized-volatility estimates. Coinbase is a proxy, not the Kalshi settlement index."}
+  {id:"crypto", name:"Bitcoin & Ether", short:"Crypto", series:["KXBTC","KXETH","KXBTC15M","KXETH15M"], source:"Coinbase public candles", model:"Terminal and minute return distributions", unit:"USD", reason:"Completed Coinbase candles support independent terminal and 15-minute scenarios. CF Benchmarks supplies the named settlement index."}
 ];
 export function categoryById(id) {
   const category = CATEGORIES.find(item => item.id === id);
