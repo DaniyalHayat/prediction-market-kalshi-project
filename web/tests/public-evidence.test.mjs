@@ -121,6 +121,9 @@ test('exact contract evidence exposes public checks and opted-in technology disc
   assert.equal(communityCalls,1);
   await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true}, {...dependencies,redditEvidence:async()=>({status:'available',posts:[]})});
   assert.equal(communityCalls,1);
+  const unmapped=await contractEvidence(tech,{...options,selectedTicker:tech.ticker,redditEnabled:true}, {...dependencies,redditEvidence:async()=>({status:'not_applicable',posts:[]})});
+  assert.deepEqual(unmapped.community_items,[community]);
+  assert.equal(communityCalls,2);
   await contractEvidence(tech,{...options,headlineMode:'official',news:{provider:'fixture'},selectedTicker:tech.ticker},dependencies);
-  assert.equal(officialCalls,3);
+  assert.equal(officialCalls,4);
 });

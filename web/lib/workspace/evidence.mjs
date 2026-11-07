@@ -116,7 +116,7 @@ export async function contractEvidence(market,{enabled=false,selectedTicker,redd
   const entities=evidenceEntities(market,{sports:context});
   const redditRequest=redditEnabled?getReddit(market,{enabled:true,selectedTicker,sports:context}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'opt_in',posts:[],reason:'Enable Reddit to check public discussion for this contract.'});
   const publicRequest=headlineMode==='full'?(dependencies.collectOfficialEvidence||collectOfficialEvidence)(market,{now:dependencies.now?.()??Date.now()}):null;
-  const communityRequest=redditRequest.then(result=>redditEnabled&&['not_configured','unavailable','access_blocked','cooldown'].includes(result.status)?
+  const communityRequest=redditRequest.then(result=>redditEnabled&&['not_applicable','not_configured','unavailable','access_blocked','cooldown'].includes(result.status)?
     (dependencies.collectCommunityContext||collectCommunityContext)(market,{now:dependencies.now?.()??Date.now()}):null);
   const [publisher,x,reddit,alternative,headlines,references,official,community]=await Promise.all([
     getNews(topic,{sports:context}).catch(()=>({status:'unavailable',articles:[]})),includeX?getX({topic,entities:evidenceSearchTerms(market,{sports:context}),enabled:true}).catch(()=>({status:'unavailable',posts:[]})):Promise.resolve({status:'opt_in',posts:[],reason:'Enable X to check curated public accounts.'}),
