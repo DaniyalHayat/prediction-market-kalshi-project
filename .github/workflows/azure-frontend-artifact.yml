@@ -1,0 +1,66 @@
+name: Build exact Azure frontend artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Reviewed full commit SHA to build'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-frontend:
+    if: github.ref == 'refs/heads/azure-edition'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_REVISION: ${{ inputs.revision }}
+    steps:
+      - name: Require an exact source revision
+        run: '[[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.revision }}
+          persist-credentials: false
+      - name: Check the reviewed source and build boundary
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          test -f web/.dockerignore
+          test ! -f web/public/research/research-audit.pdf
+          test -z "$(git ls-files web | grep -E '(^|/)(\.env($|\.)|credentials\.json$|accessTokens\.json$)|\.(pem|key)$' || true)"
+      - name: Build the live frontend with full typechecking
+        run: |
+          docker build --platform linux/amd64 --target front \
+            --build-arg PREDICTIR_BUILD_MODE=live \
+            --label "org.opencontainers.image.revision=$SOURCE_REVISION" \
+            --file web/Dockerfile.azure \
+            --tag "predictir-frontend:ci-$SOURCE_REVISION" web
+      - name: Verify the minimal runtime
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges \
+            "predictir-frontend:ci-$SOURCE_REVISION" -e '
+            const fs=require("node:fs"),assert=require("node:assert/strict");
+            assert.equal(process.getuid(),65532);
+            for(const path of ["/usr/lib/libz.so.1","/usr/lib/x86_64-linux-gnu/libz.so.1","/var/lib/dpkg/status.d/zlib1g","/var/lib/dpkg/status.d/libssl3t64","/bin/sh","/usr/local/bin/npm","/app/public/research/research-audit.pdf"])assert.equal(fs.existsSync(path),false,path);
+            assert.ok(fs.existsSync("/etc/ssl/certs/ca-certificates.crt"));
+            assert.ok(fs.existsSync("/app/server.js"));
+            assert.equal(fs.readFileSync("/app/.predictir-edition","utf8").trim(),"live");
+            console.log(JSON.stringify({node:process.version,uid:process.getuid(),systemZlibAbsent:true,caBundle:true,edition:"live"}));'
+      - name: Export the exact image and provenance
+        run: |
+          mkdir image-artifact
+          docker save "predictir-frontend:ci-$SOURCE_REVISION" | gzip -1 > image-artifact/predictir-frontend.tar.gz
+          docker image inspect "predictir-frontend:ci-$SOURCE_REVISION" --format '{{.Id}}' > image-artifact/image-id.txt
+          printf '%s\n' "$SOURCE_REVISION" > image-artifact/source-revision.txt
+          sha256sum image-artifact/predictir-frontend.tar.gz > image-artifact/checksums.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: predictir-frontend-image
+          path: image-artifact/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
