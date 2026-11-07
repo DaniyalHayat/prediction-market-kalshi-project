@@ -25,7 +25,7 @@ export function shareCookieAuthorized(header,env=process.env,now=Date.now()){
   try{
     const payload=JSON.parse(Buffer.from(encoded,'base64url').toString('utf8'));
     return Object.keys(payload).length===3&&payload.v===1&&typeof payload.h==='string'&&
-      sameBytes(Buffer.from(payload.h),Buffer.from(config.hash))&&Number.isSafeInteger(payload.exp)&&payload.exp>Math.floor(now/1000)&&payload.exp<=Math.floor(now/1000)+SHARE_COOKIE_SECONDS;
+      sameBytes(Buffer.from(payload.h),Buffer.from(config.hash))&&Number.isSafeInteger(payload.exp)&&payload.exp>Math.floor(now/1000)&&payload.exp<=Math.floor(now/1000)+SHARE_COOKIE_SECONDS+60;
   }catch{return false;}
 }
 export function shareCookieForward(header){
