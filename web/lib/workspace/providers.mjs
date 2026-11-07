@@ -2,10 +2,10 @@ import {createHash} from 'node:crypto';
 import {readJSON} from '../transport.mjs';
 import {cloudEnabled,store} from '../cloud/store.mjs';
 import {observeProviderAttempt} from '../runtime/telemetry.mjs';
-import {redditAuthConfigured} from './reddit-oauth.mjs';
+import {socialEvidenceEnabled,socialSourceDisabled} from './social-policy.mjs';
 
 const cache=new Map(),inflight=new Map(),status=new Map(),cooldowns=new Map(),failureStreak=new Map();
-const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','oauth.reddit.com','www.reddit.com','kworb.net','www.federalreserve.gov','www.nhc.noaa.gov','hn.algolia.com']);
+const hosts=new Set(['site.api.espn.com','rss.marketingtools.apple.com','api.x.com','api.spotify.com','accounts.spotify.com','www.reddit.com','reddit.com','kworb.net','www.federalreserve.gov','www.nhc.noaa.gov','hn.algolia.com']);
 const publicProviders={'www.federalreserve.gov':'federal_reserve','www.nhc.noaa.gov':'nhc','hn.algolia.com':'hacker_news'};
 const providerUsage=new Map();
 const causeCodes=new Set(['UPSTREAM_TIMEOUT','UPSTREAM_BODY_TIMEOUT','UPSTREAM_NETWORK_ERROR','UPSTREAM_BODY_ERROR','UPSTREAM_INVALID_JSON','UPSTREAM_HTML_RESPONSE','UPSTREAM_SCHEMA_ERROR','UPSTREAM_RESPONSE_TOO_LARGE','PROVIDER_COOLDOWN','PROVIDER_BUDGET_REACHED','SHARED_CACHE_UNAVAILABLE','CACHE_LEASE_BUSY','CACHE_LEASE_LOST']);
@@ -39,14 +39,15 @@ export function providerStatus(){
     {id:'Apple Music US chart',detail:'US song-rank snapshots; not artist stream totals or Spotify charts.'},
     {id:'Spotify catalog references',detail:'Display-only artist references; excluded from AI and forecasting.',configured:Boolean(process.env.SPOTIFY_CLIENT_ID&&process.env.SPOTIFY_CLIENT_SECRET)},
     {id:'X public chart news',status:'opt_in',detail:'Opt in for curated public accounts. Reads share a cached allowance.',configured:Boolean(process.env.X_BEARER_TOKEN)},
-    {id:'Reddit selected-trade context',status:'opt_in',configured:redditAuthConfigured(),detail:'Opt in on a contract. When provider access is blocked, open the targeted search directly.'}];
+    {id:'Reddit public web search',status:'opt_in',detail:'Opt in on a contract. Public listing metadata is retrieved only when robots policy permits.'}];
   const rows=new Map(defaults.map(row=>[row.id,{...row,name:row.id,status:row.configured===false?'not_configured':row.status||'on_selection'}]));
   for(const [key,value] of status)rows.set(key,value);
-  return [...rows.values()].map(row=>({...row,usage:providerUsage.get(row.id)||null}));
+  return [...rows.values()].map(row=>({...row,...(!socialEvidenceEnabled()&&(row.id.startsWith('X ')||row.id.startsWith('Reddit '))?{status:'disabled',configured:false,detail:'Social evidence retrieval is disabled for this deployment.'}:{}),usage:providerUsage.get(row.id)||null}));
 }
 export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_000,fetcher=fetch,format='json',timeoutMs=16000,sharedCache=true}={}) {
   const parsed=new URL(url);
   if(parsed.protocol!=='https:'||!hosts.has(parsed.hostname)||parsed.port||parsed.username||parsed.password)throw new RangeError('Source address is not permitted');
+  if(socialSourceDisabled(parsed.hostname))throw Object.assign(new Error('Social evidence retrieval is disabled'),{status:503,code:'PROVIDER_DISABLED'});
   if(!['json','text'].includes(format))throw new RangeError('Unsupported source format');
   const key=id+'#'+format+'#'+url,hit=cache.get(key);
   if(hit&&hit.until>Date.now())return hit.value;
@@ -60,7 +61,7 @@ export async function sourceJSON(id,url,{ttl=900,headers={},maximumBytes=8_000_0
     const provider=publicProviders[parsed.hostname]||(parsed.hostname.includes('espn.com')?'espn':parsed.hostname.includes('apple.com')?'apple_music':parsed.hostname==='api.x.com'?'x':parsed.hostname.includes('spotify.com')?'spotify':parsed.hostname.includes('reddit.com')?'reddit':'kworb');
     return observeProviderAttempt(provider,async()=>{
     let response;
-    try{response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'KalshiMarketLab/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});}
+    try{response=await fetcher(url,{headers:{Accept:'application/json','User-Agent':'PredictirResearch/4.0 public-research',...headers},redirect:'error',signal:AbortSignal.timeout(timeoutMs)});}
     catch(error){throw upstreamFailure(error,'request');}
     if(response.status===429||response.status===402||response.status>=500){
       cooldowns.set(parsed.hostname,Date.now()+retryDelay(response.headers,response.status));

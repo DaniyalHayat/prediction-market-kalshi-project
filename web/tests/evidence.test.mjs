@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {contractEvidence,sportsNews} from '../lib/workspace/evidence.mjs';
 import {rankEvidence} from '../lib/workspace/source-ranking.mjs';
-import {filterRedditPosts,redditEvidence,publicXFeed} from '../lib/workspace/social.mjs';
+import {parseRedditSearchHTML,redditEvidence,publicXFeed} from '../lib/workspace/social.mjs';
 import {robotsAllowed,permittedPublicPage} from '../lib/workspace/public-pages.mjs';
 import {parseKworbUS} from '../lib/workspace/music-alternatives.mjs';
 import {parsePlayerStats,playerEvidence} from '../lib/workspace/sports.mjs';
@@ -49,7 +49,7 @@ test('NFL brief distinguishes the exact matchup, related team reports and offici
   assert.match(value.news_summary,/quarterback change/);
   assert.deepEqual(value.news_sections.slice(0,2).map(section=>section.heading),['What changed','Why it matters']);
   assert.equal(value.source_links[1].url,'https://www.nfl.com/injuries/league/2026/reg9');
-  assert.ok(value.feeds.some(feed=>feed.kind==='reddit'&&feed.status==='opt_in'));
+  assert.ok(value.feeds.some(feed=>feed.kind==='reddit'&&feed.status==='disabled'));
 });
 test('without dated reports, category sources and settlement checks remain usable',async()=>{
   const cpi={ticker:'KXCPI-26NOV',title:'US Consumer Price Index',rules_primary:'The contract settles on the October CPI release.'};
@@ -71,11 +71,13 @@ test('ranked context requires exact entity tokens, bounded fresh dates and diver
     {...row,title:'Boston Celtics injury update tomorrow',as_of:'2026-11-06',url:'https://example.org/future'}],market,{sports,now:NOW});
   assert.equal(items.length,2);assert.ok(items.every(r=>r.score<=100&&r.score>=0));assert.ok(items.every(r=>r.limitations.join(' ').includes('not a probability')));assert.equal(items.find(i=>i.author)?.confidence,'attributed_report');
 });
-test('Reddit quality screen excludes likely automation, downvoted posts, opinions and duplicates without certifying survivors',()=>{
-  const post={name:'t3_abc123',title:'Los Angeles Lakers confirm updated injury report before tonight',author:'sportsreporter',created_utc:NOW/1000-60,permalink:'/r/nba/comments/abc123/update/',url:'https://www.espn.com/nba/story/123',score:12,upvote_ratio:.9,subreddit:'nba',num_comments:4};
-  const rows=[post,{...post,author:'AutoModerator'},{...post,score:-2},{...post,is_self:true},{...post,title:'I think the Los Angeles Lakers are a guaranteed lock tonight'},{...post,name:'t3_other'}];
-  const result=filterRedditPosts({data:{children:rows.map(data=>({data}))}},{now:NOW});
-  assert.equal(result.posts.length,1);assert.equal(result.rejected.automation_heuristic,1);assert.equal(result.rejected.low_vote_support,1);assert.equal(result.rejected.opinion_or_low_evidence,2);assert.equal(result.rejected.duplicate,1);assert.match(result.posts[0].limitations[0],/not certified human/);
+test('Reddit public HTML parser filters untrusted, stale and nonmatching cards without collecting authors or body text',()=>{
+  const card=(id,title,extra='')=>`<shreddit-post id="${id}" subreddit-name="nba" post-title="${title}" created-timestamp="${new Date(NOW-60000).toISOString()}" score="12" comment-count="4" permalink="/r/nba/comments/${id}/update/" ${extra}></shreddit-post>`;
+  const result=parseRedditSearchHTML(card('abc123','Los Angeles Lakers confirm updated injury report before tonight')+
+    card('bad456','Los Angeles Lakers injury update','is-nsfw="true" author="secret-name" post-body="private body"')+
+    card('off789','Los Angeles budget update'),{now:NOW,community:'nba',entities:['Los Angeles Lakers','Boston Celtics']});
+  assert.equal(result.posts.length,1);assert.equal(result.rejected.unavailable_or_unsuitable,1);assert.equal(result.rejected.entity_mismatch,1);
+  assert.equal(Object.hasOwn(result.posts[0],'author'),false);assert.doesNotMatch(JSON.stringify(result),/secret-name|private body/);assert.match(result.posts[0].limitations[0],/not evidence/);
 });
 test('matched player availability can qualify team news while city-only headlines remain excluded',()=>{
   const value=rankEvidence([{title:'LeBron James ruled out with injury',url:'https://www.espn.com/nba/story/lebron',as_of:new Date(NOW-60000).toISOString()},
@@ -107,22 +109,15 @@ test('a newly indexed historical or different-opponent game page is excluded fro
     {...base,title:'Washington Wizards reported player availability update',url:'https://www.espn.com/nba/story/availability'}],selected,{sports:context,now:NOW});
   assert.equal(result.length,2);assert.ok(result.every(row=>!row.url.includes('cha')));assert.ok(result.some(row=>row.title.includes('availability')));
 });
-test('Reddit without approved OAuth returns a focused search without calling the provider or reserving quota',async()=>{
+test('Reddit public web search is exact-contract opt-in and robots-gated',async()=>{
   let calls=0;
-  const deps={env:{},store:{cached:async()=>{calls++;}},now:()=>NOW,sourceJSON:async()=>{calls++;}};
+  const card=`<shreddit-post id="abc123" subreddit-name="nba" post-title="Los Angeles Lakers confirm updated injury report" created-timestamp="${new Date(NOW-60000).toISOString()}" score="8" comment-count="3" permalink="/r/nba/comments/abc123/update/"></shreddit-post>`;
+  const deps={env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1'},now:()=>NOW,permittedPublicPage:async(name,url,options)=>{calls++;assert.equal(new URL(url).origin,'https://www.reddit.com');assert.equal(new URL(url).pathname,'/r/nba/search/');assert.equal(options.maximumBytes,250000);assert.equal(options.checkGPTBot,false);return {status:'available',as_of:new Date(NOW).toISOString(),source_url:url,data:{text:card}};}};
   assert.equal((await redditEvidence(market,{enabled:true,selectedTicker:'OTHER',sports},deps)).status,'not_queried');
-  const options={enabled:true,selectedTicker:market.ticker,sports};
-  const result=await redditEvidence(market,options,deps);
-  assert.equal(calls,0);assert.equal(result.status,'not_configured');assert.match(result.search_url,/^https:\/\/www\.reddit\.com\/r\/nba\/search\//);
-});
-test('approved Reddit queries share one bounded provider read across outcomes with the same entities',async()=>{
-  const durable=memoryStore();let calls=0;
-  const deps={env:{REDDIT_DATA_API_APPROVED:'true',REDDIT_ACCESS_TOKEN:'fixture',REDDIT_USER_AGENT:'fixture'},store:durable,now:()=>NOW,
-    sourceJSON:async(id,url,options)=>{calls++;assert.equal(new URL(url).hostname,'oauth.reddit.com');assert.equal(options.timeoutMs,3500);
-      return {data:{data:{children:[]}},as_of:new Date(NOW).toISOString()};}};
-  const other={...market,ticker:market.ticker.replace(/LAL$/,'BOS')};
-  const results=await Promise.all([market,other].map(value=>redditEvidence(value,{enabled:true,selectedTicker:value.ticker,sports},deps)));
-  assert.equal(calls,1);assert.ok(results.every(row=>row.status==='empty'));
+  const result=await redditEvidence(market,{enabled:true,selectedTicker:market.ticker,sports},deps);
+  assert.equal(calls,1);assert.equal(result.status,'available');assert.equal(result.posts.length,1);assert.equal(result.posts[0].publisher,'r/nba');
+  const blocked=await redditEvidence(market,{enabled:true,selectedTicker:market.ticker,sports},{...deps,permittedPublicPage:async()=>({status:'robots_blocked',reason:'robots disallow'})});
+  assert.equal(blocked.status,'robots_blocked');assert.equal(blocked.posts.length,0);
 });
 test('Ethereum alias reports are retained as asset context and stronger syndicated sources win deduplication',()=>{
   const selected={ticker:'KXETH-26NOV0517-B2240',title:'Ethereum price at 5pm?',yes_sub_title:'$2,240 or above'};
@@ -141,7 +136,7 @@ test('robots matching honors specific agent groups, path allowance and blocks pa
 });
 test('X reserves shared paid post and lookup costs before reading, caches public feeds and closes on quota denial',async()=>{
   const durable=memoryStore();let calls=0;
-  const deps={env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;const name=url.split('/').at(-1);return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:name}}:{data:[{id:'111',text:'Los Angeles Lakers updated availability',created_at:new Date(NOW-60000).toISOString()}]}};}};
+  const deps={env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;const name=url.split('/').at(-1);return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:name}}:{data:[{id:'111',text:'Los Angeles Lakers updated availability',created_at:new Date(NOW-60000).toISOString()}]}};}};
   await publicXFeed({topic:'nba',enabled:true},deps);await publicXFeed({topic:'nba',enabled:true},deps);
   assert.equal(calls,4);assert.equal(durable.quotas.get('x-posts#2026-11'),10);assert.equal(durable.quotas.get('x-cost-milliusd#2026-11'),70);
   const denied={...memoryStore(),consume:async()=>false};calls=0;
@@ -150,7 +145,7 @@ test('X reserves shared paid post and lookup costs before reading, caches public
 test('Postgres X cursors use fenced producer publication and budget failures cannot poison identity caches',async()=>{
   const durable=memoryStore(),cache=new Map();let allowed=false,published=0,calls=0;durable.kind='postgres';durable.consume=async()=>allowed;
   durable.cached=async(key,ttl,producer)=>{if(cache.has(key))return cache.get(key);const task=Promise.resolve().then(()=>producer({publishRecord:async item=>{published++;await durable.save(item);}}));cache.set(key,task);try{return await task;}catch(error){cache.delete(key);throw error;}};
-  const deps={env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}};
+  const deps={env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}};
   assert.equal((await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},deps)).status,'budget_reached');assert.equal(calls,0);assert.equal(cache.size,0);
   cache.set('x-user#ShamsCharania',Promise.resolve({unavailable:true}));
   allowed=true;assert.equal((await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},deps)).status,'available');assert.equal(calls,2);assert.equal(published,1);assert.equal((await durable.get('x-cursor#ShamsCharania')).newest_id,'111');assert.ok(cache.has('x-user-v2#ShamsCharania'));
@@ -158,12 +153,12 @@ test('Postgres X cursors use fenced producer publication and budget failures can
 test('a lost Postgres lease cannot publish an X cursor or trigger a provider rate-limit cooldown',async()=>{
   const durable=memoryStore();durable.kind='postgres';let calls=0;
   durable.cached=async(key,ttl,producer)=>producer({publishRecord:async()=>{throw Object.assign(new Error('Lost synthetic lease'),{status:429,code:'CACHE_LEASE_LOST'});}});
-  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}});
+  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async(_,url)=>{calls++;return {as_of:new Date(NOW).toISOString(),data:url.includes('/by/username/')?{data:{id:'123',username:url.split('/').at(-1)}}:{data:[{id:'111',text:'Los Angeles Lakers availability update',created_at:new Date(NOW-60000).toISOString()}]}};}});
   assert.equal(calls,2);assert.equal(value.status,'refreshing');assert.equal(await durable.get('x-cursor#ShamsCharania'),undefined);assert.equal(await durable.get('x-public-cooldown'),undefined);
 });
 test('a busy shared X refresh is not an upstream rate limit and cannot create a global cooldown',async()=>{
   const durable=memoryStore();let calls=0;durable.cached=async()=>{throw Object.assign(new Error('Synthetic shared refresh contention'),{status:429,code:'CACHE_LEASE_BUSY'});};
-  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{calls++;}});
+  const value=await publicXFeed({topic:'nba',maximumAccounts:1,enabled:true},{env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{calls++;}});
   assert.equal(value.status,'refreshing');assert.equal(calls,0);assert.equal(await durable.get('x-public-cooldown'),undefined);
 });
 test('provider waits preserve HTTP-date and X-reset backoff rather than hammering retries',()=>{
@@ -172,7 +167,7 @@ test('provider waits preserve HTTP-date and X-reset backoff rather than hammerin
 });
 test('X persists a longer upstream retry deadline across processes',async()=>{
   const durable=memoryStore(),until=NOW+7200000;
-  await publicXFeed({topic:'nba',enabled:true,maximumAccounts:1},{env:{X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{throw Object.assign(new Error('rate limited'),{status:429,retry_at:new Date(until).toISOString()});}});
+  await publicXFeed({topic:'nba',enabled:true,maximumAccounts:1},{env:{PREDICTIR_SOCIAL_EVIDENCE_ENABLED:'1',X_BEARER_TOKEN:'fixture-never-live'},store:durable,now:()=>NOW,sourceJSON:async()=>{throw Object.assign(new Error('rate limited'),{status:429,retry_at:new Date(until).toISOString()});}});
   assert.equal((await durable.get('x-public-cooldown')).until,until);
 });
 test('secondary music chart preserves date, territory, measured counts and rejects identity/schema drift',()=>{
