@@ -221,5 +221,5 @@
         description:"Hypothetical calculations derived from public book snapshots and your assumptions. Read-only research; no trading keys or order submission."}, body);
     };
   }
-  root.KalshiResearch = {levels, simulate, sizePosition, createWorkbench};
+  root.PredictirResearch = {levels, simulate, sizePosition, createWorkbench};
 })(globalThis);

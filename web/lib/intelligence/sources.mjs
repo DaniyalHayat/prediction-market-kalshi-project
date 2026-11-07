@@ -17,7 +17,7 @@ export async function sourceText(url, ttl = 300000, fetcher = fetch) {
   if(failed && Date.now()-failed.at<60000)throw new Error(failed.message);
   if (state.inflight.has(url)) return state.inflight.get(url);
   const task = (async()=>{
-    const response = await fetcher(url, {headers:{Accept:"application/json,text/csv,text/html", "User-Agent":"KalshiMarketLab/3.0 (read-only quantitative research)"},signal:AbortSignal.timeout(16000),redirect:"error",cache:"no-store"});
+    const response = await fetcher(url, {headers:{Accept:"application/json,text/csv,text/html", "User-Agent":"Predictir/3.0 (read-only quantitative research)"},signal:AbortSignal.timeout(16000),redirect:"error",cache:"no-store"});
     if (!response.ok) throw new Error(`${parsed.hostname} returned HTTP ${response.status}`);
     if (Number(response.headers.get("content-length")) > 6000000) throw new Error("Source response too large");
     const reader = response.body.getReader(), parts = [];

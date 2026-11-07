@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {paperCapital} from '../ui/paper-capital.mjs';
 import {adjustPaperCash,initializePaperAccount,DEFAULT_PAPER_BALANCE} from '../ui/paper-state.mjs';
 import '../public/dashboard/paper.js';
-const engine=globalThis.KalshiPaper;
+const engine=globalThis.PredictirPaper;
 const execution=(action,cash,filled=10)=>({action,cash,filled,ticker:'KXTEST-26NOV-X',side:'yes',notional:cash,fee:0,assumptions:{coefficient:0}});
 
 test('cash capacity reconciles purchases and partial/full close proceeds without double-counting released basis',()=>{

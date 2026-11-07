@@ -3,6 +3,7 @@ import {useEffect,useSyncExternalStore} from 'react';
 import {fetchJSON} from '../lib/transport.mjs';
 import {PAPER_STORAGE,PAPER_EVENT,initializePaperAccount} from './paper-state.mjs';
 import {emitAnalytics} from '../app/components/analytics-policy.mjs';
+import {migratePredictirStorage} from './storage-migration.mjs';
 import {ACTIVE_ACCOUNT,GUEST_STORAGE,GUEST_DATA_LIFETIME,GUEST_INACTIVITY,guestExpired,purgeExpiredGuestData,switchPaperAccount,accountCacheKey} from './guest-session.mjs';
 const listeners=new Set(),initial={session:null,status:'loading',error:'',sync:'',conflict:null,watchlist:[]};
 let state=initial,loading=null,loadIntent=0,saveTimer=null,revision=0,synced=null,pendingSave=null,saving=false;
@@ -21,6 +22,7 @@ export async function loadAccountSession(force=false){
   loading=(async()=>{
     publish({status:'loading',error:''});
     try{
+      migratePredictirStorage(localStorage);
       const session=await accountAPI('/api/session',{signal:AbortSignal.timeout(15000)});
       if(intent!==loadIntent)return loading;
       if(session.kind==='owner'){

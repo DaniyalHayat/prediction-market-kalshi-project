@@ -4,7 +4,7 @@ import json
 import os
 import zipfile
 
-root = Path(os.getenv('MARKET_BUILD_DIR', '../.cloud-build/kalshi')).resolve()
+root = Path(os.getenv('MARKET_BUILD_DIR', '../.cloud-build/predictir')).resolve()
 if not (root / 'index.js').is_file() or not (root / 'worker.mjs').is_file():
     raise SystemExit('Build the cloud server before packaging')
 target = root.with_suffix('.zip')

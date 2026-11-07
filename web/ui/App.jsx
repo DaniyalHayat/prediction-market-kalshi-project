@@ -10,6 +10,7 @@ import Modal from './Modal.jsx';
 import useOpinions from './useOpinions.jsx';
 import Appearance from './Appearance.jsx';
 import {appearance,DEFAULT_PREFERENCES,PREFERENCE_KEY} from './preferences.mjs';
+import {migratePredictirStorage} from './storage-migration.mjs';
 import {mergeResearchRefresh,researchRefreshDelay} from './research-state.mjs';
 import {researchScreenOpinion,screenFreshness} from './screen-freshness.mjs';
 import ContractNews,{ReadMode,ReadText} from './ContractNews.jsx';
@@ -169,7 +170,7 @@ export default function App() {
   const selectResearch=useCallback(market=>{openMarket(market);setTab('research');},[openMarket]);
   function changeCategory(id){setMobileDetail(false);if(view==='portfolio')setView('markets');if(id===category)return;lookupRequest.current?.abort();listIntent.current++;dispatch({type:'clear'});setHistory(null);setCoverage(null);setResearchLoading(false);setAssistant(false);setPaperPreset(null);setMarkets([]);setQuery('');setRowLimit(marketPageSize);setCategory(id);}
   function updatePreferences(value){const next=appearance(value);setPreferences(next);try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify(next));setPreferenceError(false);}catch{setPreferenceError(true);}}
-  useEffect(()=>{try{setPreferences(appearance(localStorage.getItem(PREFERENCE_KEY)));}catch{setPreferenceError(true);}},[]);
+  useEffect(()=>{try{migratePredictirStorage(localStorage);setPreferences(appearance(localStorage.getItem(PREFERENCE_KEY)));}catch{setPreferenceError(true);}},[]);
   useEffect(()=>{document.documentElement.dataset.theme=preferences.theme;},[preferences.theme]);
   useEffect(()=>{const id=setInterval(()=>{if(!document.hidden&&activeView.current!=='ranked')setClock(Date.now());},1000);const key=e=>{if(e.key==='Escape'){setAssistant(false);setJournal(false);setSources(false);setAppearanceOpen(false);setArchiveOpen(false);}if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)&&!document.querySelector('.overlay,.assistant-panel')){e.preventDefault();setView('markets');setMobileDetail(false);requestAnimationFrame(()=>search.current?.focus());}};document.addEventListener('keydown',key);return()=>{clearInterval(id);document.removeEventListener('keydown',key);lookupRequest.current?.abort();};},[]);
   useEffect(()=>{

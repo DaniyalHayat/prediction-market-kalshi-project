@@ -3,7 +3,7 @@ import logging
 from typing import Dict
 from datetime import datetime
 import pandas as pd
-from .client import KalshiResearchClient
+from .client import PredictirResearchClient
 from .metrics import GamingLodgingMetricsEngine
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class EquityResearchPipeline:
     def __init__(self, output_dir: str = "outputs", use_live_api: bool = False):
         self.output_dir = output_dir
         self.use_live_api = use_live_api
-        self.client = KalshiResearchClient()
+        self.client = PredictirResearchClient()
         os.makedirs(self.output_dir, exist_ok=True)
 
     def fetch_data(self) -> pd.DataFrame:
@@ -58,8 +58,8 @@ class EquityResearchPipeline:
         sensitivity_df = GamingLodgingMetricsEngine.build_osb_sensitivity_table()
 
         timestamp = datetime.now().strftime("%Y%m%d")
-        csv_path = os.path.join(self.output_dir, f"kalshi_gaming_lodging_monitor_{timestamp}.csv")
-        excel_path = os.path.join(self.output_dir, "BofA_Gaming_Lodging_Kalshi_Tracker.xlsx")
+        csv_path = os.path.join(self.output_dir, f"predictir_gaming_lodging_monitor_{timestamp}.csv")
+        excel_path = os.path.join(self.output_dir, "Predictir_Gaming_Lodging_Tracker.xlsx")
 
         enriched_df.to_csv(csv_path, index=False)
         self._export_institutional_excel(enriched_df, sensitivity_df, excel_path)

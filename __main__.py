@@ -5,7 +5,7 @@ from .pipeline import EquityResearchPipeline
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Kalshi Prediction Market & Gaming/Lodging Equity Research Pipeline"
+        description="Predictir prediction market and gaming/lodging equity research pipeline"
     )
     parser.add_argument(
         "--live",

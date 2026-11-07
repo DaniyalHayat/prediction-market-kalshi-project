@@ -1,7 +1,7 @@
 import {build} from 'esbuild';
 import {mkdir,writeFile} from 'node:fs/promises';
 import {copyPublicAssets} from './public-assets.mjs';
-const out=process.env.MARKET_BUILD_DIR || '../.cloud-build/kalshi';
+const out=process.env.MARKET_BUILD_DIR || '../.cloud-build/predictir';
 await mkdir(out,{recursive:true});
 await copyPublicAssets(out+'/public');
 await build({entryPoints:['lib/paper/risk.ts'],outfile:out+'/public/risk-client.js',bundle:true,platform:'browser',target:'es2022',format:'esm',minify:true});

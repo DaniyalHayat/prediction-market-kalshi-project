@@ -51,7 +51,7 @@ test('a late session response cannot replace a newer verified account identity',
 });
 
 test('an explicit retry after initial 503 restores guest paper funds without resetting retained records',async()=>{
-  const engine=(globalThis as any).KalshiPaper;
+  const engine=(globalThis as any).PredictirPaper;
   for(const existing of [null,JSON.stringify(ledger(25))]){
     memory.clear();memory.set(ACTIVE_ACCOUNT,'guest:'+guest.guest.id);if(existing)memory.set(PAPER_STORAGE,existing);
     let calls=0;globalThis.fetch=async()=>++calls===1?json({error:'Temporarily unavailable'},503):json(guest);
@@ -69,6 +69,6 @@ test('an owner identity outage cannot initialize or switch to a guest paper acco
   memory.clear();const retained=JSON.stringify(ledger(75));memory.set(ACTIVE_ACCOUNT,'owner:'+owner.owner.email);memory.set(PAPER_STORAGE,retained);
   globalThis.fetch=async()=>json({error:'Identity provider temporarily unavailable'},503);
   assert.equal(await loadAccountSession(true),null);
-  assert.throws(()=>readVerifiedPaperLedger({engine:(globalThis as any).KalshiPaper,storage:localStorage,assertSession:assertPaperSession}),/loading/);
+  assert.throws(()=>readVerifiedPaperLedger({engine:(globalThis as any).PredictirPaper,storage:localStorage,assertSession:assertPaperSession}),/loading/);
   assert.equal(memory.get(ACTIVE_ACCOUNT),'owner:'+owner.owner.email);assert.equal(memory.get(PAPER_STORAGE),retained);
 });

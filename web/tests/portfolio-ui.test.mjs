@@ -8,7 +8,7 @@ import {paperCapital} from '../ui/paper-capital.mjs';
 import {mergeResearchRefresh,researchRefreshDelay} from '../ui/research-state.mjs';
 import {initialSelection,selectionReducer,refreshMarketRows} from '../ui/selection.mjs';
 import {automaticReviewSignal,duePositionReviews,positionReviewInput,REVIEW_INTERVAL_MS} from '../ui/position-review-state.mjs';
-const paper=globalThis.KalshiPaper,now=Date.parse('2026-11-04T17:00:00Z');
+const paper=globalThis.PredictirPaper,now=Date.parse('2026-11-04T17:00:00Z');
 const book={ticker:'KXTEST-YES',as_of:'2026-11-04T16:59:50Z',source_url:'https://api.elections.kalshi.com/trade-api/v2/markets/KXTEST-YES/orderbook',raw:{orderbook_fp:{yes_dollars:[['.35','100']],no_dollars:[['.6','100']]}}};
 const entry=()=>paper.estimate(book,book.ticker,'yes','buy',10,{now});
 const opened=()=>paper.applyOpen(paper.emptyLedger(),entry(),{id:'p',time:'2026-11-04T16:59:55Z'});

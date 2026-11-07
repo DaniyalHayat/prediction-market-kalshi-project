@@ -81,7 +81,7 @@ test("crypto volatility uses completed price observations and refuses unsupporte
 test("server execution estimates match the independently tested browser simulator",()=>{
   const raw={orderbook_fp:{yes_dollars:[[".35","40"]],no_dollars:[[".6","10"],[".6","5"],[".59","20"],[".5","100"]]}};
   for(const side of ["yes","no"]) {
-    const server=executionEstimate(raw,side,50,2,.07),client=globalThis.KalshiResearch.simulate(raw,side,50);
+    const server=executionEstimate(raw,side,50,2,.07),client=globalThis.PredictirResearch.simulate(raw,side,50);
     assert.equal(server.filled,client.filled);
     for(const [key,clientKey] of [["cost","cost"],["fee","fee"],["all_in","allIn"],["breakeven","breakeven"]])assert.ok(Math.abs(server[key]-client[clientKey])<1e-9,key);
   }
@@ -120,7 +120,7 @@ test("journal scoring uses paired first forecasts and cannot turn absent quotes 
     {ticker:"A",recorded_at:"2026-01-02",outcome:1,probability:.99,market_probability:.5},
     {ticker:"B",recorded_at:"2026-01-01",outcome:0,probability:.2,market_probability:null}
   ];
-  const scores=globalThis.KalshiIntelligence.paperScores(records);
+  const scores=globalThis.PredictirIntelligence.paperScores(records);
   assert.equal(scores.resolved,2);assert.equal(scores.paired,1);
   assert.ok(Math.abs(scores.model_brier-.09)<1e-10);assert.equal(scores.market_brier,.25);
 });

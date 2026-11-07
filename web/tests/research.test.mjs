@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import "../public/dashboard/research.js";
-const {simulate, sizePosition} = globalThis.KalshiResearch;
+const {simulate, sizePosition} = globalThis.PredictirResearch;
 const book = {orderbook_fp:{yes_dollars:[[".35","40"]], no_dollars:[[".60","10"],[".60","5"],[".59","20"],[".50","100"]]}};
 
 test("YES fills aggregate levels, honor the slippage cap, and separate fees", () => {
@@ -63,7 +63,7 @@ test("an empty market feed and absent model transfer never dereference a null pr
     useState:initial=>[typeof initial==="function" ? initial() : initial,()=>{}],
     useEffect:callback=>{const cleanup=callback();if(typeof cleanup==="function")cleanup();}
   };
-  const Workbench=globalThis.KalshiResearch.createWorkbench(react,{Button:()=>null,DataComponent:()=>null});
+  const Workbench=globalThis.PredictirResearch.createWorkbench(react,{Button:()=>null,DataComponent:()=>null});
   assert.doesNotThrow(()=>Workbench({selected:null,book:null,live:false,connector:"",contracts:100,
     setContracts:()=>{},download:()=>{},modelTransfer:null}));
 });

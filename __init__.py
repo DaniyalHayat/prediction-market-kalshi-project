@@ -1,6 +1,6 @@
 """Read-only prediction-market research. No account or trading endpoints."""
 """
-Kalshi High-Frequency Alternative Data & Gaming/Lodging Equity Research Pipeline.
+Predictir prediction market and gaming/lodging equity research pipeline.
 Tracks CFTC event contract liquidity, implied probability spreads vs. traditional OSB vig,
 and high-frequency macro/travel indicators for Gaming & Lodging coverage.
 """

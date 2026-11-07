@@ -106,7 +106,7 @@ function validateFinancialHistory(ledger){
 }
 export function validatePortfolio(input){
   if(!input||!Number.isSafeInteger(input.revision)||input.revision<0||input.revision>1e9||!input.ledger||input.ledger.version!==1||!Array.isArray(input.ledger.positions)||!Array.isArray(input.ledger.trades)||input.ledger.positions.length>1000||input.ledger.trades.length>5000||Buffer.byteLength(JSON.stringify(input))>1500000)throw fail('The paper portfolio exceeds its supported limits.');
-  let ledger;try{ledger=globalThis.KalshiPaper.readLedger(JSON.stringify(input.ledger));}catch{throw fail('The paper ledger contains invalid records.');}
+  let ledger;try{ledger=globalThis.PredictirPaper.readLedger(JSON.stringify(input.ledger));}catch{throw fail('The paper ledger contains invalid records.');}
   if(ledger.positions.length!==input.ledger.positions.length||ledger.trades.length!==input.ledger.trades.length||(ledger.cash_movements?.length||0)!==(input.ledger.cash_movements?.length||0))throw fail('The paper ledger contains invalid records.');
   const positions=new Map(ledger.positions.map(row=>[row.id,row]));
   if(positions.size!==ledger.positions.length||new Set(ledger.trades.map(row=>row.id)).size!==ledger.trades.length||ledger.trades.some(row=>positions.get(row.position_id)?.ticker!==row.ticker||row.side!==positions.get(row.position_id)?.side))throw fail('The paper ledger contains conflicting identifiers.');

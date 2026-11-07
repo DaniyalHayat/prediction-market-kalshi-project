@@ -172,7 +172,7 @@ async function fetchRssHeadlines(query, { fetcher, now, state, reason, timeoutMs
     let value;
     try {
       const response = await fetcher(key, { method: 'GET', headers: { Accept: 'application/rss+xml, application/xml, text/xml',
-        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
+        'User-Agent': 'Predictir/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
       if (response.status === 429) { state.rssRetryAt = now() + 600000; throw new Error('Google News returned HTTP 429; retries paused'); }
       if (!response.ok) throw new Error('Google News returned HTTP ' + response.status);
       const bytes = await boundedNewsBytes(response), articles = parseGoogleNewsRss(bytes.toString('utf8'), now());
@@ -219,7 +219,7 @@ export async function fetchHeadlines(query, { fetcher = fetch, now = Date.now, s
   const task = (async () => {
     try {
       const response = await fetcher(key, { method: 'GET', headers: { Accept: 'application/json',
-        'User-Agent': 'KalshiMarketLab/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
+        'User-Agent': 'Predictir/3.0 headline-metadata-research' }, signal: AbortSignal.timeout(timeoutMs), redirect: 'error', cache: 'no-store' });
       if (response.status === 429) { state.retryAt = now() + 600000; throw new Error('GDELT returned HTTP 429; retries paused'); }
       if (!response.ok) throw new Error('GDELT returned HTTP ' + response.status);
       const bytes = await boundedNewsBytes(response), articles = parseHeadlines(JSON.parse(bytes.toString('utf8')), now());

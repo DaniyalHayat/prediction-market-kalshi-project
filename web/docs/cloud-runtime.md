@@ -1,6 +1,6 @@
-# Predictir on AWS
+# Predictir: legacy AWS deployment reference
 
-[Predictir](https://predictir.dev/) is the main dashboard. The [AWS workbench](https://xgcpzl73zl4yxyr0.s28.lambda-web.us-east-2.on.aws/lab.html) keeps the live contract and private journal tools on their existing origin. Paste an official event URL or exact ticker, select a contract, inspect its rules and depth, supply your probability range and compare paper sizes. No exchange order, account position or balance route exists.
+[Predictir](https://predictir.dev/) is the current application. This document describes the legacy AWS implementation, which is not used by the current Vercel/Railway or Azure runtimes and is pending resource retirement. Existing AWS data has not been deleted. The standalone workbench accepts an event URL or exact ticker, inspects rules and depth, compares paper sizes and keeps a separate private journal. No exchange order, account position or balance route exists.
 
 ## Live data and prospective records
 
@@ -33,7 +33,7 @@ node tools/build_cloud.mjs
 python tools/package_cloud.py
 ```
 
-The build writes `../.cloud-build/kalshi.zip` and a SHA-256 deployment key in `../.cloud-build/package.json`. It includes the focused workbench, historical evidence and both server and worker bundles. The lockfile reproduces the server and sizing bundles. The legacy dashboard export is a separate local archive. In new packages, requests for `/dashboard/` and `/dashboard/index.html` go to the same-origin workbench at `/lab.html`. Browser journal access continues on that origin.
+The build writes `../.cloud-build/predictir.zip` and a SHA-256 deployment key in `../.cloud-build/package.json`. It includes the focused workbench, historical evidence and both server and worker bundles. The lockfile reproduces the server and sizing bundles. The legacy dashboard export is a separate local archive. In new packages, requests for `/dashboard/` and `/dashboard/index.html` go to the same-origin workbench at `/lab.html`. Browser journal access continues on that origin.
 
 Deploy the template first with an empty `CodeKey` to create storage, upload the ZIP to the returned private bucket under its generated `code/<sha256>.zip` key, then update the stack with that key and the SSM parameter name. For streaming, create/select an exchange key yourself and store `{ "id": "key-id", "pem": "private-key" }` in the named Standard SecureString outside Git. The app uses market-only operations even if a selected exchange key permits broader access. Never paste a private key into Figma or browser code.
 

@@ -3,6 +3,7 @@ import Script from 'next/script';
 import {useEffect,useRef,useState} from 'react';
 import {ANALYTICS_CONSENT_KEY,deniedConsent,applyAnalyticsConsent,sanitizeAnalyticsEvent,analyticsPageContext,analyticsConfig,analyticsProvider} from './analytics-policy.mjs';
 import './analytics.css';
+import {migratePredictirStorage} from '../../ui/storage-migration.mjs';
 
 const provider=analyticsProvider({gtm:process.env.NEXT_PUBLIC_GTM_CONTAINER_ID||'',ga:process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID||''});
 const measurementID=provider?.kind==='ga'?provider.id:null;
@@ -45,7 +46,7 @@ export default function Analytics({nonce}) {
   }
   useEffect(()=>{
     const signal=navigator.globalPrivacyControl===true||navigator.doNotTrack==='1';setPrivacySignal(signal);
-    let saved;try{saved=localStorage.getItem(ANALYTICS_CONSENT_KEY);}catch{setStorageError(true);}
+    let saved;try{migratePredictirStorage(localStorage);saved=localStorage.getItem(ANALYTICS_CONSENT_KEY);}catch{setStorageError(true);}
     if(signal||saved==='denied'){stop();setConsent('denied');}
     else if(saved==='allowed'&&provider){prepare();setConsent('allowed');}
     else {setOpen(Boolean(provider));setConsent('unknown');}

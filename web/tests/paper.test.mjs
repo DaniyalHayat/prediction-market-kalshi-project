@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/dashboard/paper.js';
-const {checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,markPosition,csv,createPanel}=globalThis.KalshiPaper;
+const {checkedBook,estimate,emptyLedger,readLedger,applyOpen,applyClose,markPosition,csv,createPanel}=globalThis.PredictirPaper;
 const now=Date.parse('2026-10-28T12:00:00Z');
 const depth={ticker:'KXTEST-YES',as_of:'2026-10-28T11:59:30Z',source_url:'https://example.test/public-book',raw:{orderbook_fp:{yes_dollars:[['.35','10'],['.34','20']],no_dollars:[['.60','10'],['.59','20'],['.50','100']]}}};
 const settings={now,live:true};

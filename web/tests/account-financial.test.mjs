@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {validatePortfolio} from '../lib/workspace/account.mjs';
 import {paperCapital} from '../ui/paper-capital.mjs';
 
-const engine=globalThis.KalshiPaper,ticker='KXTEST-YES',base=Date.UTC(2026,10,4,12),iso=seconds=>new Date(base+seconds*1000).toISOString();
+const engine=globalThis.PredictirPaper,ticker='KXTEST-YES',base=Date.UTC(2026,10,4,12),iso=seconds=>new Date(base+seconds*1000).toISOString();
 const book=(seconds,yes='.40',no='.55')=>({ticker,as_of:iso(seconds),source_url:'https://external-api.kalshi.com/trade-api/v2/markets/'+ticker,raw:{orderbook_fp:{yes_dollars:[[yes,'100']],no_dollars:[[no,'100']]}}});
 const check=ledger=>validatePortfolio({revision:0,watchlist:[],ledger}).ledger;
 test('the client and server can retain 48 open paper lots',()=>{

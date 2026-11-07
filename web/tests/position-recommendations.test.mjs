@@ -12,7 +12,7 @@ const position={ticker,side:'yes',remaining_quantity:10,remaining_basis:4.2,real
 test('prefix execution curve matches the independently retained paper engine across fractional price levels',()=>{
   for(const action of ['buy','sell'])for(const side of ['yes','no'])for(const quantity of [0.5,1,19,20.5,30,200]){
     const curve=executionCurve(book,ticker,side,action,{now});
-    const expected=globalThis.KalshiPaper.estimate(book,ticker,side,action,quantity,{now});
+    const expected=globalThis.PredictirPaper.estimate(book,ticker,side,action,quantity,{now});
     const result=curve.quote(quantity);
     for(const key of ['cash','fee','notional','filled','unfilled'])assert.ok(Math.abs(result[key]-expected[key])<1e-8,`${action}/${side}/${quantity}/${key}`);
   }
@@ -29,7 +29,7 @@ test('budget affordability and doubling are exact binary settlement calculations
 test('risk-constrained enumeration matches an independent exhaustive scalar Kelly calculation',()=>{
   const curve=executionCurve(book,ticker,'yes','buy',{now}),actual=riskConstrainedSize(curve,{bankroll:100,budget:20,probabilityLow:.7});
   const lambda=Math.log(.1)/Math.log(.8);let best=0,bestGrowth=0;
-  for(let q=1;q<=100;q++){const execution=globalThis.KalshiPaper.estimate(book,ticker,'yes','buy',q,{now}),cost=execution.cash;if(execution.unfilled||cost>20)continue;
+  for(let q=1;q<=100;q++){const execution=globalThis.PredictirPaper.estimate(book,ticker,'yes','buy',q,{now}),cost=execution.cash;if(execution.unfilled||cost>20)continue;
     const w=(100-cost+q)/100,l=(100-cost)/100,g=.7*Math.log(w)+.3*Math.log(l),moment=.7*w**(-lambda)+.3*l**(-lambda);
     if(moment<=1+1e-10&&g>bestGrowth+1e-12){best=q;bestGrowth=g;}}
   assert.equal(actual.contracts,best);assert.ok(actual.drawdown_moment<=1+1e-10);
@@ -64,7 +64,7 @@ test('multiple paper lots share bid depth and cannot duplicate the best price or
   assert.equal(partial.a.status,'partial');assert.equal(partial.b.status,'partial');assert.equal(partial.a.marked_value,null);assert.equal(partial.b.marked_value,null);
   const smaller=lots.map(row=>({...row,remaining_quantity:20}));
   const values=evaluatePaperPortfolio(smaller,{[ticker]:book},{[ticker]:research},{now});
-  const combined=globalThis.KalshiPaper.estimate(book,ticker,'yes','sell',40,{now});
+  const combined=globalThis.PredictirPaper.estimate(book,ticker,'yes','sell',40,{now});
   assert.ok(values.a.marked_value+values.b.marked_value<=combined.cash+1e-8);
   assert.ok(values.a.marked_value+values.b.marked_value<2*evaluatePaperPosition(smaller[0],book,research,{now}).marked_value);
   assert.ok(values.a.shared_lots===2&&values.b.shared_lots===2);

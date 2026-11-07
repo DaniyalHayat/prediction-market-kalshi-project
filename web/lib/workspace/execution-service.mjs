@@ -21,7 +21,7 @@ export async function workspaceExecutionResearch(ticker,{controls={},model='base
     outcomes:source.outcomes,expected_settlement_value:source.expected_settlement_value,settlement_value_interval:source.settlement_value_interval};
   const captured=deps.feed.researchSnapshot?.(ticker),rows=captured?.rows||deps.feed.observations?.(ticker)||[],lastRow=rows.at(-1),last=Date.parse(lastRow?.received_at||''),recent=Number.isFinite(last)&&last<=now+5000&&now-last<=90000;
   function matches(depth){
-    try{const checked=globalThis.KalshiPaper.checkedBook(depth,ticker,{now}),bid=checked.yes[0],no=checked.no[0];
+    try{const checked=globalThis.PredictirPaper.checkedBook(depth,ticker,{now}),bid=checked.yes[0],no=checked.no[0];
       return bid&&no&&Math.abs(lastRow.bid_price-bid.price)<1e-9&&Math.abs(lastRow.ask_price-(1-no.price))<1e-9&&Math.abs(lastRow.bid_size-bid.quantity)<1e-8&&Math.abs(lastRow.ask_size-no.quantity)<1e-8;
     }catch{return false;}
   }
