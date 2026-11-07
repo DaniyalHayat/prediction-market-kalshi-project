@@ -26,6 +26,8 @@ test('tampering, duplicate cookies, expiry, verifier rotation and signing-key ro
   const value=await cookie();
   assert.equal(shareCookieAuthorized(value+'x',env,now),false);
   assert.equal(shareCookieAuthorized(value+'; '+value,env,now),false);
+  assert.equal(shareCookieAuthorized(value,env,now-30000),true);
+  assert.equal(shareCookieAuthorized(value,env,now-61000),false);
   assert.equal(shareCookieAuthorized(value,env,now+SHARE_COOKIE_SECONDS*1000),false);
   assert.equal(shareCookieAuthorized(value,{...env,PREDICTIR_SHARE_TOKEN_HASH:'a'.repeat(64)},now),false);
   assert.equal(shareCookieAuthorized(value,{...env,MARKET_EDGE_SECRET:'replacement-fixture-key-'.repeat(3)},now),false);
