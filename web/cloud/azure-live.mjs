@@ -29,14 +29,6 @@ export function validateAzureLive(env = process.env) {
   } catch { throw new Error('Set the trusted Azure PostgreSQL CA certificate bundle'); }
   if (Boolean(env.KALSHI_API_KEY_ID) !== Boolean(env.KALSHI_PRIVATE_KEY)) throw new Error('Set both optional Kalshi stream credentials or neither');
   if (Boolean(env.SPOTIFY_CLIENT_ID) !== Boolean(env.SPOTIFY_CLIENT_SECRET)) throw new Error('Set both optional Spotify app credentials or neither');
-  const redditApp=Boolean(env.REDDIT_CLIENT_ID && env.REDDIT_CLIENT_SECRET);
-  const redditCredentials=Boolean(env.REDDIT_ACCESS_TOKEN || redditApp);
-  if (Boolean(env.REDDIT_CLIENT_ID) !== Boolean(env.REDDIT_CLIENT_SECRET) ||
-      (env.REDDIT_REFRESH_TOKEN && !redditApp) ||
-      ((redditCredentials || env.REDDIT_DATA_API_APPROVED === 'true') &&
-        (env.REDDIT_DATA_API_APPROVED !== 'true' || !env.REDDIT_USER_AGENT || !redditCredentials))) {
-    throw new Error('Set approved Reddit credentials and a descriptive backend user agent together');
-  }
   if (env.KALSHI_PRIVATE_KEY) {
     try { createPrivateKey(env.KALSHI_PRIVATE_KEY.replaceAll('\\n', '\n')); }
     catch { throw new Error('The optional Kalshi stream private key is invalid'); }

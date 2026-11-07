@@ -55,11 +55,7 @@ test('Azure live rejects admin, other databases, TLS overrides, weak keys and ha
   assert.throws(() => validateAzureLive({...backend, KALSHI_API_KEY_ID: 'only-id'}), /both optional/);
   assert.throws(() => validateAzureLive({...backend, KALSHI_API_KEY_ID: 'fixture-id', KALSHI_PRIVATE_KEY: 'invalid'}), /private key is invalid/);
   assert.throws(() => validateAzureLive({...backend, SPOTIFY_CLIENT_ID: 'fixture'}), /both optional Spotify/);
-  assert.throws(() => validateAzureLive({...backend, REDDIT_ACCESS_TOKEN: 'fixture'}), /approved Reddit/);
-  assert.throws(() => validateAzureLive({...backend, REDDIT_DATA_API_APPROVED: 'true', REDDIT_USER_AGENT: 'fixture', REDDIT_REFRESH_TOKEN: 'fixture'}), /approved Reddit/);
-  assert.equal(validateAzureLive({...backend, SPOTIFY_CLIENT_ID: 'fixture', SPOTIFY_CLIENT_SECRET: 'fixture',
-    X_BEARER_TOKEN: 'fixture', REDDIT_DATA_API_APPROVED: 'true', REDDIT_USER_AGENT: 'fixture',
-    REDDIT_CLIENT_ID: 'fixture', REDDIT_CLIENT_SECRET: 'fixture'}).host, host);
+  assert.equal(validateAzureLive(backend).host, host);
 });
 
 test('private DNS and database preflight reject public answers, absent TLS and nonrestricted roles', async () => {

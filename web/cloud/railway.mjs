@@ -16,10 +16,11 @@ if(process.env.PREDICTIR_MODE==='live'&&process.env.PREDICTIR_KEEP_CATALOG_WARM=
   };
   if(server.listening)start();else server.once('listening',start);
 }
+const shutdownTimeoutMs=Number(process.env.PREDICTIR_SHUTDOWN_TIMEOUT_MS||8000);
 let draining=false;
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,async()=>{
   if(draining)return;draining=true;
   clearInterval(catalogTimer);
-  try{await drainMarketRuntime({server,stopPipeline:stop,closeStorage:closeStore});process.exit(0);}
+  try{await drainMarketRuntime({server,stopPipeline:stop,closeStorage:closeStore,timeoutMs:shutdownTimeoutMs});process.exit(0);}
   catch{process.stderr.write('Backend shutdown could not fully drain.\n');process.exit(1);}
 });
