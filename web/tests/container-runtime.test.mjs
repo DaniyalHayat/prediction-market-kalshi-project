@@ -41,4 +41,8 @@ test('Azure frontend and backend preserve their startup scripts in minimal nonro
   assert.match(front, /CMD \["cloud\/azure-front\.mjs"\]/);
   assert.match(backend, /CMD \["--max-old-space-size=384", "cloud\/azure\.mjs"\]/);
   assert.match(backend, /COPY --from=backend-dependencies.*node_modules/);
+  assert.match(source, /next typegen[\s\S]*npm run typecheck -- --incremental false/);
+  assert.match(source, /npm run build -- --webpack/);
+  const configuration = await readFile(new URL('../next.config.mjs', import.meta.url), 'utf8');
+  assert.match(configuration, /PREDICTIR_SEPARATE_TYPECHECK==='1'\?\{webpackMemoryOptimizations:true\}/);
 });
